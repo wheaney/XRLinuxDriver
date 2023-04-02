@@ -158,6 +158,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	FusionAhrsInitialise(&(device->ahrs));
 	
 	const FusionAhrsSettings settings = {
+			.convention = FusionConventionNwu,
 			.gain = 0.5f,
 			.accelerationRejection = 10.0f,
 			.magneticRejection = 20.0f,
@@ -253,27 +254,27 @@ int device3_read(device3_type* device, int timeout) {
 	int32_t vel_z = pack24bit_signed(packet.angular_velocity_z);
 	
 	FusionVector gyroscope;
-	gyroscope.axis.x = vel_x * GYRO_SCALAR;
-	gyroscope.axis.y = vel_y * GYRO_SCALAR;
-	gyroscope.axis.z = vel_z * GYRO_SCALAR;
+	gyroscope.axis.x = (float) vel_x * GYRO_SCALAR;
+	gyroscope.axis.y = (float) vel_y * GYRO_SCALAR;
+	gyroscope.axis.z = (float) vel_z * GYRO_SCALAR;
 	
 	int32_t accel_x = pack24bit_signed(packet.acceleration_x);
 	int32_t accel_y = pack24bit_signed(packet.acceleration_y);
 	int32_t accel_z = pack24bit_signed(packet.acceleration_z);
 	
 	FusionVector accelerometer;
-	accelerometer.axis.x = accel_x * ACCEL_SCALAR;
-	accelerometer.axis.y = accel_y * ACCEL_SCALAR;
-	accelerometer.axis.z = accel_z * ACCEL_SCALAR;
+	accelerometer.axis.x = (float) accel_x * ACCEL_SCALAR;
+	accelerometer.axis.y = (float) accel_y * ACCEL_SCALAR;
+	accelerometer.axis.z = (float) accel_z * ACCEL_SCALAR;
 	
 	int16_t magnet_x = packet.magnetic_x;
 	int16_t magnet_y = packet.magnetic_y;
 	int16_t magnet_z = packet.magnetic_z;
 	
 	FusionVector magnetometer;
-	magnetometer.axis.x = magnet_x * MAGNO_SCALAR;
-	magnetometer.axis.y = magnet_y * MAGNO_SCALAR;
-	magnetometer.axis.z = magnet_z * MAGNO_SCALAR;
+	magnetometer.axis.x = (float) magnet_x * MAGNO_SCALAR;
+	magnetometer.axis.y = (float) magnet_y * MAGNO_SCALAR;
+	magnetometer.axis.z = (float) magnet_z * MAGNO_SCALAR;
 	
 	const FusionMatrix gyroscopeMisalignment = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 	const FusionVector gyroscopeSensitivity = { 1.0f, 1.0f, 1.0f };
@@ -281,9 +282,6 @@ int device3_read(device3_type* device, int timeout) {
 	const FusionMatrix accelerometerMisalignment = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 	const FusionVector accelerometerSensitivity = { 1.0f, 1.0f, 1.0f };
 	const FusionVector accelerometerOffset = { 0.0f, 0.0f, 0.0f };
-	const FusionMatrix magnetometerMisalignment = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
-	const FusionVector magnetometerSensitivity = { 1.0f, 1.0f, 1.0f };
-	const FusionVector magnetometerOffset = { 0.0f, 0.0f, 0.0f };
 	const FusionMatrix softIronMatrix = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 	const FusionVector hardIronOffset = { 0.0f, 0.0f, 0.0f };
 	
@@ -301,11 +299,10 @@ int device3_read(device3_type* device, int timeout) {
 			accelerometerOffset
 	);
 	
-	magnetometer = FusionCalibrationInertial(
+	magnetometer = FusionCalibrationMagnetic(
 			magnetometer,
-			magnetometerMisalignment,
-			magnetometerSensitivity,
-			magnetometerOffset
+			softIronMatrix,
+			hardIronOffset
 	);
 	
 	gyroscope = FusionOffsetUpdate(&(device->offset), gyroscope);
