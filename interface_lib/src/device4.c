@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <libusb-1.0/libusb.h>
+
 device4_type* device4_open(device4_event_callback callback) {
 	device4_type* device = (device4_type*) malloc(sizeof(device4_type));
 	
@@ -41,7 +43,7 @@ device4_type* device4_open(device4_event_callback callback) {
 	device->product_id 	= 0x0424;
 	device->callback 	= callback;
 	
-	if (0 != libusb_init(&(device->context))) {
+	if (0 != libusb_init((libusb_context**) &(device->context))) {
 		perror("No context!\n");
 		return device;
 	}

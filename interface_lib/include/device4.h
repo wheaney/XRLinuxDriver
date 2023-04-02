@@ -1,6 +1,6 @@
 #pragma once
 //
-// Created by thejackimonster on 30.03.23.
+// Created by thejackimonster on 29.03.23.
 //
 // Copyright (c) 2023 thejackimonster. All rights reserved.
 //
@@ -26,49 +26,55 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <Fusion/Fusion.h>
-#include <libusb-1.0/libusb.h>
+#define DEVICE4_ACTION_PASSIVE_POLL_START 	0b00010
+#define DEVICE4_ACTION_BRIGHTNESS_COMMAND 	0b00011
+#define DEVICE4_ACTION_MANUAL_POLL_CLICK 	0b00101
+#define DEVICE4_ACTION_ACTIVE_POLL 			0b01001
+#define DEVICE4_ACTION_PASSIVE_POLL_END 	0b10010
 
-struct __attribute__((__packed__)) device3_packet_t {
-	uint8_t signature [2];
-	uint8_t _padding0 [2];
-	uint64_t timestamp;
-	uint8_t _padding1 [6];
-	uint8_t angular_velocity_x [3];
-	uint8_t angular_velocity_y [3];
-	uint8_t angular_velocity_z [3];
-	uint8_t _padding2 [6];
-	uint8_t acceleration_x [3];
-	uint8_t acceleration_y [3];
-	uint8_t acceleration_z [3];
-	uint8_t _padding3 [6];
-	int16_t magnetic_x;
-	int16_t magnetic_y;
-	int16_t magnetic_z;
+#define DEVICE4_BUTTON_DISPLAY_TOGGLE 	0x1
+#define DEVICE4_BUTTON_BRIGHTNESS_UP 	0x2
+#define DEVICE4_BUTTON_BRIGHTNESS_DOWN 	0x3
+
+struct __attribute__((__packed__)) device4_packet_t {
+	uint8_t signature;
 	uint32_t checksum;
-	uint8_t _padding4 [6];
+	uint16_t length;
+	uint8_t _padding0 [4];
+	uint32_t timestamp;
+	uint8_t action;
+	uint8_t _padding1 [6];
+	union {
+		char text [42];
+		uint8_t data [42];
+	};
 };
 
-enum device3_event_t {
-	DEVICE3_EVENT_UNKNOWN 			= 0,
-	DEVICE3_EVENT_INIT 				= 1,
-	DEVICE3_EVENT_UPDATE 			= 2,
+enum device4_event_t {
+	DEVICE4_EVENT_UNKNOWN 			= 0,
+	DEVICE4_EVENT_SCREEN_ON 		= 1,
+	DEVICE4_EVENT_SCREEN_OFF 		= 2,
+	DEVICE4_EVENT_BRIGHTNESS_SET 	= 3,
+	DEVICE4_EVENT_BRIGHTNESS_UP 	= 4,
+	DEVICE4_EVENT_BRIGHTNESS_DOWN 	= 5,
+	DEVICE4_EVENT_MESSAGE 			= 6,
 };
 
-typedef struct device3_packet_t device3_packet_type;
-typedef enum device3_event_t device3_event_type;
-typedef void (*device3_event_callback)(
-		uint64_t timestamp,
-		device3_event_type event,
-		const FusionAhrs* ahrs
+typedef struct device4_packet_t device4_packet_type;
+typedef enum device4_event_t device4_event_type;
+typedef void (*device4_event_callback)(
+		uint32_t timestamp,
+		device4_event_type event,
+		uint8_t brightness,
+		const char* msg
 );
 
-struct device3_t {
+struct device4_t {
 	uint16_t vendor_id;
 	uint16_t product_id;
 	
-	libusb_context* context;
-	libusb_device_handle* handle;
+	void* context;
+	void* handle;
 	
 	uint8_t interface_number;
 	
@@ -80,19 +86,17 @@ struct device3_t {
 	
 	bool detached;
 	bool claimed;
+	bool active;
 	
-	uint64_t last_timestamp;
+	uint8_t brightness;
 	
-	FusionOffset offset;
-	FusionAhrs ahrs;
-	
-	device3_event_callback callback;
+	device4_event_callback callback;
 };
 
-typedef struct device3_t device3_type;
+typedef struct device4_t device4_type;
 
-device3_type* device3_open(device3_event_callback callback);
+device4_type* device4_open(device4_event_callback callback);
 
-int device3_read(device3_type* device, int timeout);
+int device4_read(device4_type* device, int timeout);
 
-void device3_close(device3_type* device);
+void device4_close(device4_type* device);

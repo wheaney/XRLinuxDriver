@@ -29,19 +29,17 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <Fusion/Fusion.h>
-
 void test3(uint64_t timestamp,
 		   device3_event_type event,
-		   const FusionAhrs* ahrs) {
+		   const device3_ahrs_type* ahrs) {
 	if (event != DEVICE3_EVENT_UPDATE) {
 		return;
 	}
 	
-	FusionQuaternion q = FusionAhrsGetQuaternion(ahrs);
-	FusionEuler e = FusionQuaternionToEuler(q);
+	device3_quat_type q = device3_get_orientation(ahrs);
+	device3_vec3_type e = device3_get_euler(q);
 	
-	printf("Pitch: %f; Roll: %f; Yaw: %f\n", e.angle.pitch, e.angle.roll, e.angle.yaw);
+	printf("Pitch: %f; Roll: %f; Yaw: %f\n", e.x, e.y, e.z);
 }
 
 void test4(uint32_t timestamp,
@@ -76,6 +74,28 @@ int main(int argc, const char** argv) {
 	
 	if (pid == 0) {
 		device3_type* dev3 = device3_open(test3);
+		
+		printf("Load calibration:\n");
+		device3_load_calibration(dev3, "nreal_air_calibration.dat");
+		
+		/*
+		printf("Calibrating...\n");
+		printf("Now hold the device steady!\n");
+		sleep(1);
+		
+		device3_calibrate(dev3, 200, true, false, false);
+		
+		printf("Calibrating...\n");
+		printf("Now rotate the device around!\n");
+		sleep(3);
+		
+		device3_calibrate(dev3, 20000, false, false, true);
+		
+		printf("Calibrating finished!\n");
+		
+		printf("Save calibration:\n");
+		device3_save_calibration(dev3, "nreal_air_calibration.dat");
+		*/
 		
 		while (dev3) {
 			if (device3_read(dev3, 0) < 0) {

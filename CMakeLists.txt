@@ -4,20 +4,23 @@ project(nrealAirLinuxDriver)
 set(CMAKE_C_STANDARD 17)
 
 add_subdirectory(modules/Fusion/Fusion)
+set(FUSION_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/modules/Fusion)
+set(FUSION_LIBRARY Fusion)
 
-find_package(PkgConfig REQUIRED)
-pkg_search_module(LIBUSB1 REQUIRED libusb-1.0)
+add_subdirectory(interface_lib)
 
 add_executable(nrealAirLinuxDriver
-		src/device3.c
-		src/device4.c
 		src/driver.c
 )
 
 target_include_directories(nrealAirLinuxDriver
-		SYSTEM BEFORE PRIVATE modules/Fusion ${LIBUSB1_INCLUDE_DIRS}
+		SYSTEM BEFORE PRIVATE ${FUSION_INCLUDE_DIR}
+)
+
+target_include_directories(nrealAirLinuxDriver
+		BEFORE PUBLIC ${NRA_INCLUDE_DIR}
 )
 
 target_link_libraries(nrealAirLinuxDriver
-		${LIBUSB1_LIBRARIES} Fusion m
+		${NRA_LIBRARY} ${FUSION_LIBRARY}
 )
