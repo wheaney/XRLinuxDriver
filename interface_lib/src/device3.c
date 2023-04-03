@@ -334,6 +334,66 @@ static void readIMU_from_packet(const device3_packet_type* packet,
 #define min(x, y) ((x) < (y)? (x) : (y))
 #define max(x, y) ((x) > (y)? (x) : (y))
 
+static void apply_calibration(const device3_type* device,
+							  FusionVector* gyroscope,
+							  FusionVector* accelerometer,
+							  FusionVector* magnetometer) {
+	FusionMatrix gyroscopeMisalignment;
+	FusionVector gyroscopeSensitivity;
+	FusionVector gyroscopeOffset;
+	
+	FusionMatrix accelerometerMisalignment;
+	FusionVector accelerometerSensitivity;
+	FusionVector accelerometerOffset;
+	
+	FusionMatrix softIronMatrix;
+	FusionVector hardIronOffset;
+	
+	if (device->calibration) {
+		gyroscopeMisalignment = device->calibration->gyroscopeMisalignment;
+		gyroscopeSensitivity = device->calibration->gyroscopeSensitivity;
+		gyroscopeOffset = device->calibration->gyroscopeOffset;
+		
+		accelerometerMisalignment = device->calibration->accelerometerMisalignment;
+		accelerometerSensitivity = device->calibration->accelerometerSensitivity;
+		accelerometerOffset = device->calibration->accelerometerOffset;
+		
+		softIronMatrix = device->calibration->softIronMatrix;
+		hardIronOffset = device->calibration->hardIronOffset;
+	} else {
+		gyroscopeMisalignment = FUSION_IDENTITY_MATRIX;
+		gyroscopeSensitivity = FUSION_VECTOR_ONES;
+		gyroscopeOffset = FUSION_VECTOR_ZERO;
+		
+		accelerometerMisalignment = FUSION_IDENTITY_MATRIX;
+		accelerometerSensitivity = FUSION_VECTOR_ONES;
+		accelerometerOffset = FUSION_VECTOR_ZERO;
+		
+		softIronMatrix = FUSION_IDENTITY_MATRIX;
+		hardIronOffset = FUSION_VECTOR_ZERO;
+	}
+	
+	*gyroscope = FusionCalibrationInertial(
+			*gyroscope,
+			gyroscopeMisalignment,
+			gyroscopeSensitivity,
+			gyroscopeOffset
+	);
+	
+	*accelerometer = FusionCalibrationInertial(
+			*accelerometer,
+			accelerometerMisalignment,
+			accelerometerSensitivity,
+			accelerometerOffset
+	);
+	
+	*magnetometer = FusionCalibrationMagnetic(
+			*magnetometer,
+			softIronMatrix,
+			hardIronOffset
+	);
+}
+
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
 	if (!device) {
 		perror("No device!\n");
@@ -392,6 +452,7 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 		FusionVector magnetometer;
 		
 		readIMU_from_packet(&packet, &gyroscope, &accelerometer, &magnetometer);
+		apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
 		
 		if (initialized) {
 			cal_gyroscope = FusionVectorAdd(cal_gyroscope, gyroscope);
@@ -399,9 +460,9 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 			cal_magnetometer[0].axis.x = min(cal_magnetometer[0].axis.x, magnetometer.axis.x);
 			cal_magnetometer[0].axis.y = min(cal_magnetometer[0].axis.y, magnetometer.axis.y);
 			cal_magnetometer[0].axis.z = min(cal_magnetometer[0].axis.z, magnetometer.axis.z);
-			cal_magnetometer[1].axis.x = min(cal_magnetometer[1].axis.x, magnetometer.axis.x);
-			cal_magnetometer[1].axis.y = min(cal_magnetometer[1].axis.y, magnetometer.axis.y);
-			cal_magnetometer[1].axis.z = min(cal_magnetometer[1].axis.z, magnetometer.axis.z);
+			cal_magnetometer[1].axis.x = max(cal_magnetometer[1].axis.x, magnetometer.axis.x);
+			cal_magnetometer[1].axis.y = max(cal_magnetometer[1].axis.y, magnetometer.axis.y);
+			cal_magnetometer[1].axis.z = max(cal_magnetometer[1].axis.z, magnetometer.axis.z);
 		} else {
 			cal_gyroscope = gyroscope;
 			cal_accelerometer = accelerometer;
@@ -415,23 +476,32 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 	
 	if (factor > 0.0f) {
 		if (gyro) {
-			device->calibration->gyroscopeOffset = FusionVectorMultiplyScalar(
-					cal_gyroscope,
-					factor
+			device->calibration->gyroscopeOffset = FusionVectorAdd(
+					device->calibration->gyroscopeOffset,
+					FusionVectorMultiplyScalar(
+							cal_gyroscope,
+							factor
+					)
 			);
 		}
 		
 		if (accel) {
-			device->calibration->accelerometerOffset = FusionVectorMultiplyScalar(
-					cal_accelerometer,
-					factor
+			device->calibration->accelerometerOffset = FusionVectorAdd(
+					device->calibration->accelerometerOffset,
+					FusionVectorMultiplyScalar(
+							cal_accelerometer,
+							factor
+					)
 			);
 		}
 		
 		if (magnet) {
-			device->calibration->hardIronOffset = FusionVectorMultiplyScalar(
-					FusionVectorAdd(cal_magnetometer[0], cal_magnetometer[1]),
-					0.5f
+			device->calibration->hardIronOffset = FusionVectorAdd(
+					device->calibration->hardIronOffset,
+					FusionVectorMultiplyScalar(
+							FusionVectorAdd(cal_magnetometer[0], cal_magnetometer[1]),
+							0.5f
+					)
 			);
 		}
 	}
@@ -499,61 +569,7 @@ int device3_read(device3_type* device, int timeout) {
 	FusionVector magnetometer;
 	
 	readIMU_from_packet(&packet, &gyroscope, &accelerometer, &magnetometer);
-	
-	FusionMatrix gyroscopeMisalignment;
-	FusionVector gyroscopeSensitivity;
-	FusionVector gyroscopeOffset;
-	
-	FusionMatrix accelerometerMisalignment;
-	FusionVector accelerometerSensitivity;
-	FusionVector accelerometerOffset;
-	
-	FusionMatrix softIronMatrix;
-	FusionVector hardIronOffset;
-	
-	if (device->calibration) {
-		gyroscopeMisalignment = device->calibration->gyroscopeMisalignment;
-		gyroscopeSensitivity = device->calibration->gyroscopeSensitivity;
-		gyroscopeOffset = device->calibration->gyroscopeOffset;
-		
-		accelerometerMisalignment = device->calibration->accelerometerMisalignment;
-		accelerometerSensitivity = device->calibration->accelerometerSensitivity;
-		accelerometerOffset = device->calibration->accelerometerOffset;
-		
-		softIronMatrix = device->calibration->softIronMatrix;
-		hardIronOffset = device->calibration->hardIronOffset;
-	} else {
-		gyroscopeMisalignment = FUSION_IDENTITY_MATRIX;
-		gyroscopeSensitivity = FUSION_VECTOR_ONES;
-		gyroscopeOffset = FUSION_VECTOR_ZERO;
-		
-		accelerometerMisalignment = FUSION_IDENTITY_MATRIX;
-		accelerometerSensitivity = FUSION_VECTOR_ONES;
-		accelerometerOffset = FUSION_VECTOR_ZERO;
-		
-		softIronMatrix = FUSION_IDENTITY_MATRIX;
-		hardIronOffset = FUSION_VECTOR_ZERO;
-	}
-	
-	gyroscope = FusionCalibrationInertial(
-			gyroscope,
-			gyroscopeMisalignment,
-			gyroscopeSensitivity,
-			gyroscopeOffset
-	);
-	
-	accelerometer = FusionCalibrationInertial(
-			accelerometer,
-			accelerometerMisalignment,
-			accelerometerSensitivity,
-			accelerometerOffset
-	);
-	
-	magnetometer = FusionCalibrationMagnetic(
-			magnetometer,
-			softIronMatrix,
-			hardIronOffset
-	);
+	apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
 	
