@@ -66,6 +66,12 @@ enum device3_event_t {
 struct device3_ahrs_t;
 struct device3_calibration_t;
 
+struct device3_filters_t {
+	float angular_velocity [3 * 4];
+	float acceleration [3 * 4];
+	float magnetic [3 * 4];
+};
+
 struct device3_vec3_t {
 	float x;
 	float y;
@@ -84,6 +90,7 @@ typedef enum device3_event_t device3_event_type;
 
 typedef struct device3_ahrs_t device3_ahrs_type;
 typedef struct device3_calibration_t device3_calibration_type;
+typedef struct device3_filters_t device3_filters_type;
 
 typedef struct device3_vec3_t device3_vec3_type;
 typedef struct device3_quat_t device3_quat_type;
@@ -119,6 +126,7 @@ struct device3_t {
 	
 	device3_event_callback callback;
 	device3_calibration_type* calibration;
+	device3_filters_type filters;
 };
 
 typedef struct device3_t device3_type;

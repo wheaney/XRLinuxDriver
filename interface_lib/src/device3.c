@@ -24,6 +24,7 @@
 
 #include "device3.h"
 
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +44,17 @@ struct device3_calibration_t {
 	FusionMatrix softIronMatrix;
 	FusionVector hardIronOffset;
 };
+
+static void reset_filter_v3(float* filter) {
+	for (uint8_t i = 0; i < 3; i++) {
+		const uint8_t i4 = i * 4;
+		
+		filter[i4 + 0] = -FLT_MAX;
+		filter[i4 + 1] = -FLT_MIN;
+		filter[i4 + 2] = +FLT_MAX;
+		filter[i4 + 3] = +FLT_MIN;
+	}
+}
 
 device3_type* device3_open(device3_event_callback callback) {
 	device3_type* device = (device3_type*) malloc(sizeof(device3_type));
@@ -178,6 +190,10 @@ device3_type* device3_open(device3_event_callback callback) {
 	
 	device->calibration = malloc(sizeof(device3_calibration_type));
 	device3_reset_calibration(device);
+	
+	reset_filter_v3(device->filters.angular_velocity);
+	reset_filter_v3(device->filters.acceleration);
+	reset_filter_v3(device->filters.magnetic);
 	
 	const FusionAhrsSettings settings = {
 			.convention = FusionConventionNwu,
@@ -522,6 +538,40 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 	return 0;
 }
 
+static void update_filter_v3(float* filter, FusionVector v3) {
+	for (uint8_t i = 0; i < 3; i++) {
+		const float v = v3.array[i];
+		const uint8_t i4 = i * 4;
+		
+		if (v <= -0.0f) {
+			filter[i4 + 0] = max(v, filter[i4 + 0]);
+			filter[i4 + 1] = min(v, filter[i4 + 1]);
+		}
+		
+		if (v >= +0.0f) {
+			filter[i4 + 2] = min(v, filter[i4 + 2]);
+			filter[i4 + 3] = max(v, filter[i4 + 3]);
+		}
+	}
+}
+
+static void apply_filter_v3(const float* filter, FusionVector* v3) {
+	for (uint8_t i = 0; i < 3; i++) {
+		float v = v3->array[i];
+		const uint8_t i4 = i * 4;
+		
+		if ((v <= -0.0f) && (filter[i4 + 1] < filter[i4 + 0])) {
+			v = (v - filter[i4 + 0]) * filter[i4 + 1] / (filter[i4 + 1] - filter[i4 + 0]);
+		}
+		
+		if ((v >= +0.0f) && (filter[i4 + 3] > filter[i4 + 2])) {
+			v = (v - filter[i4 + 2]) * filter[i4 + 3] / (filter[i4 + 3] - filter[i4 + 2]);
+		}
+		
+		v3->array[i] = v;
+	}
+}
+
 int device3_read(device3_type* device, int timeout) {
 	if (!device) {
 		perror("No device!\n");
@@ -585,6 +635,14 @@ int device3_read(device3_type* device, int timeout) {
 	apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
+	
+	update_filter_v3(device->filters.angular_velocity, gyroscope);
+	update_filter_v3(device->filters.acceleration, accelerometer);
+	update_filter_v3(device->filters.magnetic, magnetometer);
+	
+	apply_filter_v3(device->filters.angular_velocity, &gyroscope);
+	apply_filter_v3(device->filters.acceleration, &accelerometer);
+	apply_filter_v3(device->filters.magnetic, &magnetometer);
 	
 	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
 	
