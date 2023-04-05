@@ -29,17 +29,49 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <math.h>
+
 void test3(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
+	static device3_quat_type old;
+	static float dmax = -1.0f;
+	
 	if (event != DEVICE3_EVENT_UPDATE) {
 		return;
 	}
 	
 	device3_quat_type q = device3_get_orientation(ahrs);
+	
+	const float dx = (old.x - q.x) * (old.x - q.x);
+	const float dy = (old.y - q.y) * (old.y - q.y);
+	const float dz = (old.z - q.z) * (old.z - q.z);
+	const float dw = (old.w - q.w) * (old.w - q.w);
+	
+	const float d = sqrtf(dx*dx + dy*dy + dz*dz + dw*dw);
+	
+	if (dmax < 0.0f) {
+		dmax = 0.0f;
+	} else {
+		dmax = (d > dmax? d : dmax);
+	}
+	
 	device3_vec3_type e = device3_get_euler(q);
 	
-	printf("Pitch: %f; Roll: %f; Yaw: %f\n", e.x, e.y, e.z);
+	if (d >= 0.00005f) {
+		device3_vec3_type e0 = device3_get_euler(old);
+		
+		printf("Pitch: %f; Roll: %f; Yaw: %f\n", e0.x, e0.y, e0.z);
+		printf("Pitch: %f; Roll: %f; Yaw: %f\n", e.x, e.y, e.z);
+		printf("D = %f; ( %f )\n", d, dmax);
+		
+		printf("X: %f; Y: %f; Z: %f; W: %f;\n", old.x, old.y, old.z, old.w);
+		printf("X: %f; Y: %f; Z: %f; W: %f;\n", q.x, q.y, q.z, q.w);
+	} else {
+		printf("Pitch: %.2f; Roll: %.2f; Yaw: %.2f\n", e.x, e.y, e.z);
+	}
+	
+	old = q;
 }
 
 void test4(uint32_t timestamp,

@@ -210,6 +210,8 @@ void device3_reset_calibration(device3_type* device) {
 	device->calibration->accelerometerSensitivity = FUSION_VECTOR_ONES;
 	device->calibration->accelerometerOffset = FUSION_VECTOR_ZERO;
 	
+	device->calibration->accelerometerMisalignment.array[2][2] = -1.0f;
+	
 	device->calibration->softIronMatrix = FUSION_IDENTITY_MATRIX;
 	device->calibration->hardIronOffset = FUSION_VECTOR_ZERO;
 }
@@ -262,7 +264,6 @@ int device3_save_calibration(device3_type* device, const char* path) {
 	}
 	
 	size_t count = fwrite(device->calibration, 1, sizeof(device3_calibration_type), file);
-	printf("count: %lu : %lu\n", count, sizeof(device3_calibration_type));
 	
 	if (sizeof(device3_calibration_type) != count) {
 		perror("Not fully saved!\n");
@@ -291,6 +292,11 @@ static int32_t pack24bit_signed(const uint8_t* data) {
 	uint32_t unsigned_value = (data[0]) | (data[1] << 8) | (data[2] << 16);
 	if ((data[2] & 0x80) != 0) unsigned_value |= (0xFF << 24);
 	return (int32_t) unsigned_value;
+}
+
+static int16_t pack16bit_signed(const uint8_t* data) {
+	uint16_t unsigned_value = (data[0] << 8) | (data[1]);
+	return (int16_t) unsigned_value;
 }
 
 // based on 24bit signed int w/ FSR = +/-2000 dps, datasheet option
@@ -322,9 +328,9 @@ static void readIMU_from_packet(const device3_packet_type* packet,
 	accelerometer->axis.y = (float) accel_y * ACCEL_SCALAR;
 	accelerometer->axis.z = (float) accel_z * ACCEL_SCALAR;
 	
-	int16_t magnet_x = packet->magnetic_x;
-	int16_t magnet_y = packet->magnetic_y;
-	int16_t magnet_z = packet->magnetic_z;
+	int16_t magnet_x = pack16bit_signed(packet->magnetic_x);
+	int16_t magnet_y = pack16bit_signed(packet->magnetic_y);
+	int16_t magnet_z = pack16bit_signed(packet->magnetic_z);
 	
 	magnetometer->axis.x = (float) magnet_x * MAGNO_SCALAR;
 	magnetometer->axis.y = (float) magnet_y * MAGNO_SCALAR;
@@ -368,6 +374,8 @@ static void apply_calibration(const device3_type* device,
 		accelerometerMisalignment = FUSION_IDENTITY_MATRIX;
 		accelerometerSensitivity = FUSION_VECTOR_ONES;
 		accelerometerOffset = FUSION_VECTOR_ZERO;
+		
+		accelerometerMisalignment.array[2][2] = -1.0f;
 		
 		softIronMatrix = FUSION_IDENTITY_MATRIX;
 		hardIronOffset = FUSION_VECTOR_ZERO;
@@ -452,11 +460,18 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 		FusionVector magnetometer;
 		
 		readIMU_from_packet(&packet, &gyroscope, &accelerometer, &magnetometer);
-		apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
 		
 		if (initialized) {
 			cal_gyroscope = FusionVectorAdd(cal_gyroscope, gyroscope);
 			cal_accelerometer = FusionVectorAdd(cal_accelerometer, accelerometer);
+		} else {
+			cal_gyroscope = gyroscope;
+			cal_accelerometer = accelerometer;
+		}
+		
+		apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
+		
+		if (initialized) {
 			cal_magnetometer[0].axis.x = min(cal_magnetometer[0].axis.x, magnetometer.axis.x);
 			cal_magnetometer[0].axis.y = min(cal_magnetometer[0].axis.y, magnetometer.axis.y);
 			cal_magnetometer[0].axis.z = min(cal_magnetometer[0].axis.z, magnetometer.axis.z);
@@ -464,8 +479,6 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 			cal_magnetometer[1].axis.y = max(cal_magnetometer[1].axis.y, magnetometer.axis.y);
 			cal_magnetometer[1].axis.z = max(cal_magnetometer[1].axis.z, magnetometer.axis.z);
 		} else {
-			cal_gyroscope = gyroscope;
-			cal_accelerometer = accelerometer;
 			cal_magnetometer[0] = magnetometer;
 			cal_magnetometer[1] = magnetometer;
 			initialized = true;

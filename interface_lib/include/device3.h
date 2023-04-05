@@ -39,9 +39,9 @@ struct __attribute__((__packed__)) device3_packet_t {
 	uint8_t acceleration_y [3];
 	uint8_t acceleration_z [3];
 	uint8_t _padding3 [6];
-	int16_t magnetic_x;
-	int16_t magnetic_y;
-	int16_t magnetic_z;
+	uint8_t magnetic_x [2];
+	uint8_t magnetic_y [2];
+	uint8_t magnetic_z [2];
 	uint32_t checksum;
 	uint8_t _padding4 [6];
 };
