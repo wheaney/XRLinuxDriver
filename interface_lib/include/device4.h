@@ -23,8 +23,15 @@
 // THE SOFTWARE.
 //
 
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
+
+#ifndef __cplusplus
 #include <stdint.h>
+#else
+#include <cstdint.h>
+#endif
 
 #define DEVICE4_ACTION_PASSIVE_POLL_START 	0b00010
 #define DEVICE4_ACTION_BRIGHTNESS_COMMAND 	0b00011
@@ -35,6 +42,10 @@
 #define DEVICE4_BUTTON_DISPLAY_TOGGLE 	0x1
 #define DEVICE4_BUTTON_BRIGHTNESS_UP 	0x2
 #define DEVICE4_BUTTON_BRIGHTNESS_DOWN 	0x3
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct __attribute__((__packed__)) device4_packet_t {
 	uint8_t signature;
@@ -100,3 +111,7 @@ device4_type* device4_open(device4_event_callback callback);
 int device4_read(device4_type* device, int timeout);
 
 void device4_close(device4_type* device);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

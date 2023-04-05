@@ -23,8 +23,19 @@
 // THE SOFTWARE.
 //
 
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
+
+#ifndef __cplusplus
 #include <stdint.h>
+#else
+#include <cstdint.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct __attribute__((__packed__)) device3_packet_t {
 	uint8_t signature [2];
@@ -133,3 +144,7 @@ device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs);
 device3_vec3_type device3_get_euler(device3_quat_type quat);
 
 void device3_close(device3_type* device);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
