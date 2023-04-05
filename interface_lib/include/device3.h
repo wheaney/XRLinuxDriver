@@ -30,7 +30,7 @@
 #ifndef __cplusplus
 #include <stdint.h>
 #else
-#include <cstdint.h>
+#include <cstdint>
 #endif
 
 #ifdef __cplusplus
