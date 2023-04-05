@@ -45,6 +45,11 @@ struct device3_calibration_t {
 	FusionVector hardIronOffset;
 };
 
+struct device3_correction_t {
+	FusionQuaternion inverseDrift;
+	FusionQuaternion stable;
+};
+
 static void reset_filter_v3(float* filter) {
 	for (uint8_t i = 0; i < 3; i++) {
 		const uint8_t i4 = i * 4;
@@ -195,6 +200,10 @@ device3_type* device3_open(device3_event_callback callback) {
 	reset_filter_v3(device->filters.acceleration);
 	reset_filter_v3(device->filters.magnetic);
 	
+	device->correction = malloc(sizeof(device3_correction_type));
+	device->correction->inverseDrift = FUSION_IDENTITY_QUATERNION;
+	device->correction->stable = FUSION_IDENTITY_QUATERNION;
+	
 	const FusionAhrsSettings settings = {
 			.convention = FusionConventionNwu,
 			.gain = 0.5f,
@@ -249,8 +258,16 @@ int device3_load_calibration(device3_type* device, const char* path) {
 		return -3;
 	}
 	
-	size_t count = fread(device->calibration, 1, sizeof(device3_calibration_type), file);
+	size_t count;
+	count = fread(device->calibration, 1, sizeof(device3_calibration_type), file);
+	
 	if (sizeof(device3_calibration_type) != count) {
+		perror("Not fully loaded!\n");
+	}
+	
+	count = fread(&(device->filters), 1, sizeof(device3_filters_type), file);
+	
+	if (sizeof(device3_filters_type) != count) {
 		perror("Not fully loaded!\n");
 	}
 	
@@ -279,9 +296,16 @@ int device3_save_calibration(device3_type* device, const char* path) {
 		return -3;
 	}
 	
-	size_t count = fwrite(device->calibration, 1, sizeof(device3_calibration_type), file);
+	size_t count;
+	count = fwrite(device->calibration, 1, sizeof(device3_calibration_type), file);
 	
 	if (sizeof(device3_calibration_type) != count) {
+		perror("Not fully saved!\n");
+	}
+	
+	count = fwrite(&(device->filters), 1, sizeof(device3_filters_type), file);
+	
+	if (sizeof(device3_filters_type) != count) {
 		perror("Not fully saved!\n");
 	}
 	
@@ -295,13 +319,12 @@ int device3_save_calibration(device3_type* device, const char* path) {
 
 static void device3_callback(device3_type* device,
 							 uint64_t timestamp,
-							 device3_event_type event,
-							 const device3_ahrs_type* ahrs) {
+							 device3_event_type event) {
 	if (!device->callback) {
 		return;
 	}
 	
-	device->callback(timestamp, event, ahrs);
+	device->callback(timestamp, event, device->ahrs, device->correction);
 }
 
 static int32_t pack24bit_signed(const uint8_t* data) {
@@ -418,6 +441,23 @@ static void apply_calibration(const device3_type* device,
 	);
 }
 
+static void update_filter_v3(float* filter, FusionVector v3) {
+	for (uint8_t i = 0; i < 3; i++) {
+		const float v = v3.array[i];
+		const uint8_t i4 = i * 4;
+		
+		if (v <= -0.0f) {
+			filter[i4 + 0] = max(v, filter[i4 + 0]);
+			filter[i4 + 1] = min(v, filter[i4 + 1]);
+		}
+		
+		if (v >= +0.0f) {
+			filter[i4 + 2] = min(v, filter[i4 + 2]);
+			filter[i4 + 3] = max(v, filter[i4 + 3]);
+		}
+	}
+}
+
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
 	if (!device) {
 		perror("No device!\n");
@@ -487,6 +527,10 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 		
 		apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
 		
+		update_filter_v3(device->filters.angular_velocity, gyroscope);
+		update_filter_v3(device->filters.acceleration, accelerometer);
+		update_filter_v3(device->filters.magnetic, magnetometer);
+		
 		if (initialized) {
 			cal_magnetometer[0].axis.x = min(cal_magnetometer[0].axis.x, magnetometer.axis.x);
 			cal_magnetometer[0].axis.y = min(cal_magnetometer[0].axis.y, magnetometer.axis.y);
@@ -538,23 +582,6 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 	return 0;
 }
 
-static void update_filter_v3(float* filter, FusionVector v3) {
-	for (uint8_t i = 0; i < 3; i++) {
-		const float v = v3.array[i];
-		const uint8_t i4 = i * 4;
-		
-		if (v <= -0.0f) {
-			filter[i4 + 0] = max(v, filter[i4 + 0]);
-			filter[i4 + 1] = min(v, filter[i4 + 1]);
-		}
-		
-		if (v >= +0.0f) {
-			filter[i4 + 2] = min(v, filter[i4 + 2]);
-			filter[i4 + 3] = max(v, filter[i4 + 3]);
-		}
-	}
-}
-
 static void apply_filter_v3(const float* filter, FusionVector* v3) {
 	for (uint8_t i = 0; i < 3; i++) {
 		float v = v3->array[i];
@@ -569,6 +596,47 @@ static void apply_filter_v3(const float* filter, FusionVector* v3) {
 		}
 		
 		v3->array[i] = v;
+	}
+}
+
+static void apply_filter_drop_v3(const float* filter, FusionVector* v3) {
+	for (uint8_t i = 0; i < 3; i++) {
+		const float v = v3->array[i] * 1e-5f;
+		const uint8_t i4 = i * 4;
+		
+		if ((v >= filter[i4 + 0]) && (v <= filter[i4 + 2])) {
+			v3->array[i] = 0.0f;
+		} else {
+			v3->array[i] -= (filter[i4 + 0] + filter[i4 + 2]) * 0.5f;
+		}
+	}
+}
+
+static void update_correction_with_ahrs(device3_correction_type* correction,
+										const FusionAhrs* ahrs) {
+	FusionAhrsFlags flags = FusionAhrsGetFlags(ahrs);
+	
+	if (flags.magneticRejectionTimeout || flags.accelerationRejectionTimeout) {
+		FusionQuaternion unstable = FusionAhrsGetQuaternion(ahrs);
+		
+		const float u2 = (
+				unstable.element.w * unstable.element.w +
+				unstable.element.x * unstable.element.x +
+				unstable.element.y * unstable.element.y +
+				unstable.element.z * unstable.element.z
+		);
+		
+		unstable.element.w *= +1.0f / u2;
+		unstable.element.x *= -1.0f / u2;
+		unstable.element.y *= -1.0f / u2;
+		unstable.element.z *= -1.0f / u2;
+		
+		correction->inverseDrift = FusionQuaternionMultiply(unstable, correction->stable);
+	} else {
+		correction->stable = FusionQuaternionMultiply(
+				FusionAhrsGetQuaternion(ahrs),
+				correction->inverseDrift
+		);
 	}
 }
 
@@ -613,7 +681,7 @@ int device3_read(device3_type* device, int timeout) {
 	const uint64_t timestamp = packet.timestamp;
 	
 	if ((packet.signature[0] == 0xaa) && (packet.signature[1] == 0x53)) {
-		device3_callback(device, timestamp, DEVICE3_EVENT_INIT, device->ahrs);
+		device3_callback(device, timestamp, DEVICE3_EVENT_INIT);
 		return 0;
 	}
 	
@@ -644,9 +712,15 @@ int device3_read(device3_type* device, int timeout) {
 	apply_filter_v3(device->filters.acceleration, &accelerometer);
 	apply_filter_v3(device->filters.magnetic, &magnetometer);
 	
+	apply_filter_drop_v3(device->filters.angular_velocity, &gyroscope);
+	
 	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
 	
-	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE, device->ahrs);
+	if (device->correction) {
+		update_correction_with_ahrs(device->correction, (const FusionAhrs*) device->ahrs);
+	}
+	
+	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;
 }
 
@@ -668,8 +742,17 @@ device3_vec3_type device3_get_linear_acceleration(const device3_ahrs_type* ahrs)
 	return a;
 }
 
-device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs) {
+device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs,
+										  const device3_correction_type* correction) {
 	FusionQuaternion quaternion = FusionAhrsGetQuaternion((const FusionAhrs*) ahrs);
+	
+	if (correction) {
+		quaternion = FusionQuaternionMultiply(
+				quaternion,
+				correction->inverseDrift
+		);
+	}
+	
 	device3_quat_type q;
 	q.x = quaternion.element.x;
 	q.y = quaternion.element.y;
