@@ -3,7 +3,7 @@ project(nrealAirDebugD3 C)
 
 set(CMAKE_C_STANDARD 17)
 
-add_library(
+add_executable(
 		nrealAirDebugD3
 		src/debug.c
 )
