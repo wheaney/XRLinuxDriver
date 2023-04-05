@@ -24,5 +24,5 @@ target_link_libraries(nrealAirLibrary
 		${LIBUSB1_LIBRARIES} ${FUSION_LIBRARY} m
 )
 
-set(NRA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include PARENT_SCOPE)
+set(NRA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include PARENT_SCOPE)
 set(NRA_LIBRARY nrealAirLibrary PARENT_SCOPE)

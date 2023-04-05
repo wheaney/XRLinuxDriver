@@ -8,6 +8,7 @@ set(FUSION_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/modules/Fusion)
 set(FUSION_LIBRARY Fusion)
 
 add_subdirectory(interface_lib)
+add_subdirectory(examples)
 
 add_executable(nrealAirLinuxDriver
 		src/driver.c
