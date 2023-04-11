@@ -327,53 +327,68 @@ static void device3_callback(device3_type* device,
 	device->callback(timestamp, event, device->ahrs, device->correction);
 }
 
+static int32_t pack32bit_signed(const uint8_t* data) {
+	uint32_t unsigned_value = (data[0]) | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+	return ((int32_t) unsigned_value);
+}
+
 static int32_t pack24bit_signed(const uint8_t* data) {
 	uint32_t unsigned_value = (data[0]) | (data[1] << 8) | (data[2] << 16);
 	if ((data[2] & 0x80) != 0) unsigned_value |= (0xFF << 24);
-	return (int32_t) unsigned_value;
+	return ((int32_t) unsigned_value);
 }
 
 static int16_t pack16bit_signed(const uint8_t* data) {
-	uint16_t unsigned_value = (data[0] << 8) | (data[1]);
+	uint16_t unsigned_value = (data[0]) | (data[1] << 8);
 	return (int16_t) unsigned_value;
 }
 
-// based on 24bit signed int w/ FSR = +/-2000 dps, datasheet option
-#define GYRO_SCALAR (1.0f / 8388608.0f * 2000.0f)
+static int32_t pack32bit_signed_swap(const uint8_t* data) {
+	uint32_t unsigned_value = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3]);
+	return ((int32_t) unsigned_value);
+}
 
-// based on 24bit signed int w/ FSR = +/-16 g, datasheet option
-#define ACCEL_SCALAR (1.0f / 8388608.0f * 16.0f)
-
-// based on 16bit signed int w/ FSR = +/-16 gauss, datasheet option
-#define MAGNO_SCALAR (1.0f / 8388608.0f * 16.0f)
+static int16_t pack16bit_signed_swap(const uint8_t* data) {
+	uint16_t unsigned_value = (data[0] << 8) | (data[1]);
+	return (int16_t) unsigned_value;
+}
 
 static void readIMU_from_packet(const device3_packet_type* packet,
 								FusionVector* gyroscope,
 								FusionVector* accelerometer,
 								FusionVector* magnetometer) {
+	int32_t vel_m = pack16bit_signed(packet->angular_multiplier);
+	int32_t vel_d = pack32bit_signed(packet->angular_divisor);
+	
 	int32_t vel_x = pack24bit_signed(packet->angular_velocity_x);
 	int32_t vel_y = pack24bit_signed(packet->angular_velocity_y);
 	int32_t vel_z = pack24bit_signed(packet->angular_velocity_z);
 	
-	gyroscope->axis.x = (float) vel_x * GYRO_SCALAR;
-	gyroscope->axis.y = (float) vel_y * GYRO_SCALAR;
-	gyroscope->axis.z = (float) vel_z * GYRO_SCALAR;
+	gyroscope->axis.x = (float) vel_x * (float) vel_m / (float) vel_d;
+	gyroscope->axis.y = (float) vel_y * (float) vel_m / (float) vel_d;
+	gyroscope->axis.z = (float) vel_z * (float) vel_m / (float) vel_d;
+	
+	int32_t accel_m = pack16bit_signed(packet->acceleration_multiplier);
+	int32_t accel_d = pack32bit_signed(packet->acceleration_divisor);
 	
 	int32_t accel_x = pack24bit_signed(packet->acceleration_x);
 	int32_t accel_y = pack24bit_signed(packet->acceleration_y);
 	int32_t accel_z = pack24bit_signed(packet->acceleration_z);
 	
-	accelerometer->axis.x = (float) accel_x * ACCEL_SCALAR;
-	accelerometer->axis.y = (float) accel_y * ACCEL_SCALAR;
-	accelerometer->axis.z = (float) accel_z * ACCEL_SCALAR;
+	accelerometer->axis.x = (float) accel_x * (float) accel_m / (float) accel_d;
+	accelerometer->axis.y = (float) accel_y * (float) accel_m / (float) accel_d;
+	accelerometer->axis.z = (float) accel_z * (float) accel_m / (float) accel_d;
 	
-	int16_t magnet_x = pack16bit_signed(packet->magnetic_x);
-	int16_t magnet_y = pack16bit_signed(packet->magnetic_y);
-	int16_t magnet_z = pack16bit_signed(packet->magnetic_z);
+	int32_t magnet_m = pack16bit_signed_swap(packet->magnetic_multiplier);
+	int32_t magnet_d = pack32bit_signed_swap(packet->magnetic_divisor);
 	
-	magnetometer->axis.x = (float) magnet_x * MAGNO_SCALAR;
-	magnetometer->axis.y = (float) magnet_y * MAGNO_SCALAR;
-	magnetometer->axis.z = (float) magnet_z * MAGNO_SCALAR;
+	int16_t magnet_x = pack16bit_signed_swap(packet->magnetic_x);
+	int16_t magnet_y = pack16bit_signed_swap(packet->magnetic_y);
+	int16_t magnet_z = pack16bit_signed_swap(packet->magnetic_z);
+	
+	magnetometer->axis.x = (float) magnet_x * (float) magnet_m / (float) magnet_d;
+	magnetometer->axis.y = (float) magnet_y * (float) magnet_m / (float) magnet_d;
+	magnetometer->axis.z = (float) magnet_z * (float) magnet_m / (float) magnet_d;
 }
 
 #define min(x, y) ((x) < (y)? (x) : (y))
@@ -694,6 +709,10 @@ int device3_read(device3_type* device, int timeout) {
 	const float deltaTime = (float) ((double) delta / 1e9);
 	
 	device->last_timestamp = timestamp;
+	
+	int16_t temperature = pack16bit_signed(packet.temperature);
+	
+	device->temperature = (float) temperature;
 	
 	FusionVector gyroscope;
 	FusionVector accelerometer;

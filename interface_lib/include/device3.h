@@ -39,22 +39,25 @@ extern "C" {
 
 struct __attribute__((__packed__)) device3_packet_t {
 	uint8_t signature [2];
-	uint8_t _padding0 [2];
+	uint8_t temperature [2];
 	uint64_t timestamp;
-	uint8_t _padding1 [6];
+	uint8_t angular_multiplier [2];
+	uint8_t angular_divisor [4];
 	uint8_t angular_velocity_x [3];
 	uint8_t angular_velocity_y [3];
 	uint8_t angular_velocity_z [3];
-	uint8_t _padding2 [6];
+	uint8_t acceleration_multiplier [2];
+	uint8_t acceleration_divisor [4];
 	uint8_t acceleration_x [3];
 	uint8_t acceleration_y [3];
 	uint8_t acceleration_z [3];
-	uint8_t _padding3 [6];
+	uint8_t magnetic_multiplier [2];
+	uint8_t magnetic_divisor [4];
 	uint8_t magnetic_x [2];
 	uint8_t magnetic_y [2];
 	uint8_t magnetic_z [2];
 	uint32_t checksum;
-	uint8_t _padding4 [6];
+	uint8_t _padding [6];
 };
 
 enum device3_event_t {
@@ -124,6 +127,7 @@ struct device3_t {
 	bool claimed;
 	
 	uint64_t last_timestamp;
+	float temperature;
 	
 	void* offset;
 	device3_ahrs_type* ahrs;
