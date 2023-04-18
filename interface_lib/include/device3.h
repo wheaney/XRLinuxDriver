@@ -127,7 +127,7 @@ struct device3_t {
 	bool claimed;
 	
 	uint64_t last_timestamp;
-	float temperature;
+	float temperature; // (in °C)
 	
 	void* offset;
 	device3_ahrs_type* ahrs;

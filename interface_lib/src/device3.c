@@ -712,7 +712,8 @@ int device3_read(device3_type* device, int timeout) {
 	
 	int16_t temperature = pack16bit_signed(packet.temperature);
 	
-	device->temperature = (float) temperature;
+	// According to the ICM-42688-P datasheet: (offset: 25 °C, sensitivity: 132.48 LSB/°C)
+	device->temperature = ((float) temperature) / 132.48f + 25.0f;
 	
 	FusionVector gyroscope;
 	FusionVector accelerometer;
