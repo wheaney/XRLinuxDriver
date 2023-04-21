@@ -69,14 +69,6 @@ enum device3_event_t {
 struct device3_ahrs_t;
 struct device3_calibration_t;
 
-struct device3_filters_t {
-	float angular_velocity [3 * 4];
-	float acceleration [3 * 4];
-	float magnetic [3 * 4];
-};
-
-struct device3_correction_t;
-
 struct device3_vec3_t {
 	float x;
 	float y;
@@ -95,8 +87,6 @@ typedef enum device3_event_t device3_event_type;
 
 typedef struct device3_ahrs_t device3_ahrs_type;
 typedef struct device3_calibration_t device3_calibration_type;
-typedef struct device3_filters_t device3_filters_type;
-typedef struct device3_correction_t device3_correction_type;
 
 typedef struct device3_vec3_t device3_vec3_type;
 typedef struct device3_quat_t device3_quat_type;
@@ -104,8 +94,7 @@ typedef struct device3_quat_t device3_quat_type;
 typedef void (*device3_event_callback)(
 		uint64_t timestamp,
 		device3_event_type event,
-		const device3_ahrs_type* ahrs,
-		const device3_correction_type* correction
+		const device3_ahrs_type* ahrs
 );
 
 struct device3_t {
@@ -134,8 +123,6 @@ struct device3_t {
 	
 	device3_event_callback callback;
 	device3_calibration_type* calibration;
-	device3_filters_type filters;
-	device3_correction_type* correction;
 };
 
 typedef struct device3_t device3_type;
@@ -156,8 +143,7 @@ device3_vec3_type device3_get_earth_acceleration(const device3_ahrs_type* ahrs);
 
 device3_vec3_type device3_get_linear_acceleration(const device3_ahrs_type* ahrs);
 
-device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs,
-										  const device3_correction_type* correction);
+device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs);
 
 device3_vec3_type device3_get_euler(device3_quat_type quat);
 

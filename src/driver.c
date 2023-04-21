@@ -33,8 +33,7 @@
 
 void test3(uint64_t timestamp,
 		   device3_event_type event,
-		   const device3_ahrs_type* ahrs,
-		   const device3_correction_type* correction) {
+		   const device3_ahrs_type* ahrs) {
 	static device3_quat_type old;
 	static float dmax = -1.0f;
 	
@@ -42,7 +41,7 @@ void test3(uint64_t timestamp,
 		return;
 	}
 	
-	device3_quat_type q = device3_get_orientation(ahrs, correction);
+	device3_quat_type q = device3_get_orientation(ahrs);
 	
 	const float dx = (old.x - q.x) * (old.x - q.x);
 	const float dy = (old.y - q.y) * (old.y - q.y);

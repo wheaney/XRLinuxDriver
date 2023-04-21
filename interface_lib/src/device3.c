@@ -61,6 +61,8 @@ static void reset_filter_v3(float* filter) {
 	}
 }
 
+
+
 device3_type* device3_open(device3_event_callback callback) {
 	device3_type* device = (device3_type*) malloc(sizeof(device3_type));
 	
@@ -196,14 +198,6 @@ device3_type* device3_open(device3_event_callback callback) {
 	device->calibration = malloc(sizeof(device3_calibration_type));
 	device3_reset_calibration(device);
 	
-	reset_filter_v3(device->filters.angular_velocity);
-	reset_filter_v3(device->filters.acceleration);
-	reset_filter_v3(device->filters.magnetic);
-	
-	device->correction = malloc(sizeof(device3_correction_type));
-	device->correction->inverseDrift = FUSION_IDENTITY_QUATERNION;
-	device->correction->stable = FUSION_IDENTITY_QUATERNION;
-	
 	const FusionAhrsSettings settings = {
 			.convention = FusionConventionNwu,
 			.gain = 0.5f,
@@ -265,12 +259,6 @@ int device3_load_calibration(device3_type* device, const char* path) {
 		perror("Not fully loaded!\n");
 	}
 	
-	count = fread(&(device->filters), 1, sizeof(device3_filters_type), file);
-	
-	if (sizeof(device3_filters_type) != count) {
-		perror("Not fully loaded!\n");
-	}
-	
 	if (0 != fclose(file)) {
 		perror("No file closed!\n");
 		return -4;
@@ -303,12 +291,6 @@ int device3_save_calibration(device3_type* device, const char* path) {
 		perror("Not fully saved!\n");
 	}
 	
-	count = fwrite(&(device->filters), 1, sizeof(device3_filters_type), file);
-	
-	if (sizeof(device3_filters_type) != count) {
-		perror("Not fully saved!\n");
-	}
-	
 	if (0 != fclose(file)) {
 		perror("No file closed!\n");
 		return -4;
@@ -324,7 +306,7 @@ static void device3_callback(device3_type* device,
 		return;
 	}
 	
-	device->callback(timestamp, event, device->ahrs, device->correction);
+	device->callback(timestamp, event, device->ahrs);
 }
 
 static int32_t pack32bit_signed(const uint8_t* data) {
@@ -498,7 +480,7 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 	FusionVector cal_accelerometer;
 	FusionVector cal_magnetometer [2];
 	
-	const float factor = iterations > 0? 1.0f / iterations : 0.0f;
+	const float factor = iterations > 0? 1.0f / ((float) iterations) : 0.0f;
 	
 	while (iterations > 0) {
 		memset(&packet, 0, sizeof(device3_packet_type));
@@ -541,10 +523,6 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 		}
 		
 		apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
-		
-		update_filter_v3(device->filters.angular_velocity, gyroscope);
-		update_filter_v3(device->filters.acceleration, accelerometer);
-		update_filter_v3(device->filters.magnetic, magnetometer);
 		
 		if (initialized) {
 			cal_magnetometer[0].axis.x = min(cal_magnetometer[0].axis.x, magnetometer.axis.x);
@@ -627,34 +605,6 @@ static void apply_filter_drop_v3(const float* filter, FusionVector* v3) {
 	}
 }
 
-static void update_correction_with_ahrs(device3_correction_type* correction,
-										const FusionAhrs* ahrs) {
-	FusionAhrsFlags flags = FusionAhrsGetFlags(ahrs);
-	
-	if (flags.magneticRejectionTimeout || flags.accelerationRejectionTimeout) {
-		FusionQuaternion unstable = FusionAhrsGetQuaternion(ahrs);
-		
-		const float u2 = (
-				unstable.element.w * unstable.element.w +
-				unstable.element.x * unstable.element.x +
-				unstable.element.y * unstable.element.y +
-				unstable.element.z * unstable.element.z
-		);
-		
-		unstable.element.w *= +1.0f / u2;
-		unstable.element.x *= -1.0f / u2;
-		unstable.element.y *= -1.0f / u2;
-		unstable.element.z *= -1.0f / u2;
-		
-		correction->inverseDrift = FusionQuaternionMultiply(unstable, correction->stable);
-	} else {
-		correction->stable = FusionQuaternionMultiply(
-				FusionAhrsGetQuaternion(ahrs),
-				correction->inverseDrift
-		);
-	}
-}
-
 int device3_read(device3_type* device, int timeout) {
 	if (!device) {
 		perror("No device!\n");
@@ -724,21 +674,7 @@ int device3_read(device3_type* device, int timeout) {
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
 	
-	update_filter_v3(device->filters.angular_velocity, gyroscope);
-	update_filter_v3(device->filters.acceleration, accelerometer);
-	update_filter_v3(device->filters.magnetic, magnetometer);
-	
-	apply_filter_v3(device->filters.angular_velocity, &gyroscope);
-	apply_filter_v3(device->filters.acceleration, &accelerometer);
-	apply_filter_v3(device->filters.magnetic, &magnetometer);
-	
-	apply_filter_drop_v3(device->filters.angular_velocity, &gyroscope);
-	
 	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
-	
-	if (device->correction) {
-		update_correction_with_ahrs(device->correction, (const FusionAhrs*) device->ahrs);
-	}
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;
@@ -762,17 +698,8 @@ device3_vec3_type device3_get_linear_acceleration(const device3_ahrs_type* ahrs)
 	return a;
 }
 
-device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs,
-										  const device3_correction_type* correction) {
+device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs) {
 	FusionQuaternion quaternion = FusionAhrsGetQuaternion((const FusionAhrs*) ahrs);
-	
-	if (correction) {
-		quaternion = FusionQuaternionMultiply(
-				quaternion,
-				correction->inverseDrift
-		);
-	}
-	
 	device3_quat_type q;
 	q.x = quaternion.element.x;
 	q.y = quaternion.element.y;
