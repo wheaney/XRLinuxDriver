@@ -8,6 +8,7 @@ pkg_search_module(LIBUSB1 REQUIRED libusb-1.0)
 
 add_library(
 		nrealAirLibrary
+		src/crc32.c
 		src/device3.c
 		src/device4.c
 )

@@ -31,6 +31,8 @@
 #include <Fusion/Fusion.h>
 #include <libusb-1.0/libusb.h>
 
+#include "crc32.h"
+
 struct device3_calibration_t {
 	FusionMatrix gyroscopeMisalignment;
 	FusionVector gyroscopeSensitivity;
@@ -43,6 +45,73 @@ struct device3_calibration_t {
 	FusionMatrix softIronMatrix;
 	FusionVector hardIronOffset;
 };
+
+static bool send_payload(device3_type* device, uint8_t size, uint8_t* payload) {
+	if (!device->claimed) {
+		return false;
+	}
+	
+	int payload_size = size;
+	if (payload_size > device->max_packet_size_out) {
+		payload_size = device->max_packet_size_out;
+	}
+	
+	int transferred = 0;
+	int error = libusb_bulk_transfer(
+			device->handle,
+			device->endpoint_address_out,
+			payload,
+			payload_size,
+			&transferred,
+			0
+	);
+	
+	if ((0 != error) || (transferred != payload_size)) {
+		perror("ERROR\n");
+		return false;
+	}
+	
+	return (transferred == size);
+}
+
+#define DEVICE3_MSG_GET_CAL_DATA_LENGTH 0x14
+#define DEVICE3_MSG_CAL_DATA_GET_NEXT_SEGMENT 0x15
+#define DEVICE3_MSG_ALLOCATE_CAL_DATA_BUFFER 0x16
+#define DEVICE3_MSG_WRITE_CAL_DATA_SEGMENT 0x17
+#define DEVICE3_MSG_FREE_CAL_BUFFER 0x18
+#define DEVICE3_MSG_START_IMU_DATA 0x19
+#define DEVICE3_MSG_GET_STATIC_ID 0x1A
+#define DEVICE3_MSG_UNKNOWN 0x1D
+
+struct __attribute__((__packed__)) device3_payload_packet_t {
+	uint8_t head;
+	uint32_t checksum;
+	uint16_t length;
+	uint8_t msgid;
+	uint8_t data [56];
+};
+
+typedef struct device3_payload_packet_t device3_payload_packet_type;
+
+static bool send_payload_msg(device3_type* device, uint8_t msgid, uint8_t len, const uint8_t* data) {
+	device3_payload_packet_type packet;
+	
+	const uint16_t packet_len = 3 + len;
+	const uint16_t payload_len = 5 + packet_len;
+	
+	packet.head = 0xAA;
+	packet.length = packet_len;
+	packet.msgid = msgid;
+	
+	memcpy(packet.data, data, len);
+	packet.checksum = crc32_checksum((const uint8_t*) (&packet.length), packet.length);
+	
+	return send_payload(device, payload_len, (uint8_t*) (&packet));
+}
+
+static bool send_payload_msg_signal(device3_type* device, uint8_t msgid, uint8_t signal) {
+	return send_payload_msg(device, msgid, 1, &signal);
+}
 
 device3_type* device3_open(device3_event_callback callback) {
 	device3_type* device = (device3_type*) malloc(sizeof(device3_type));
@@ -140,32 +209,8 @@ device3_type* device3_open(device3_event_callback callback) {
 		device->claimed = true;
 	}
 	
-	if (device->claimed) {
-		uint8_t initial_imu_payload [9] = {
-				0xaa, 0xc5, 0xd1, 0x21,
-				0x42, 0x04, 0x00, 0x19,
-				0x01
-		};
-		
-		int size = device->max_packet_size_out;
-		if (sizeof(initial_imu_payload) < size) {
-			size = sizeof(initial_imu_payload);
-		}
-		
-		int transferred = 0;
-		int error = libusb_bulk_transfer(
-				device->handle,
-				device->endpoint_address_out,
-				initial_imu_payload,
-				size,
-				&transferred,
-				0
-		);
-		
-		if ((0 != error) || (transferred != sizeof(initial_imu_payload))) {
-			perror("ERROR\n");
-			return device;
-		}
+	if (!send_payload_msg_signal(device, DEVICE3_MSG_START_IMU_DATA, 0x1)) {
+		return device;
 	}
 	
 	const uint32_t SAMPLE_RATE = 1000;
