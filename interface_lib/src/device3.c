@@ -24,7 +24,6 @@
 
 #include "device3.h"
 
-#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,24 +43,6 @@ struct device3_calibration_t {
 	FusionMatrix softIronMatrix;
 	FusionVector hardIronOffset;
 };
-
-struct device3_correction_t {
-	FusionQuaternion inverseDrift;
-	FusionQuaternion stable;
-};
-
-static void reset_filter_v3(float* filter) {
-	for (uint8_t i = 0; i < 3; i++) {
-		const uint8_t i4 = i * 4;
-		
-		filter[i4 + 0] = -FLT_MAX;
-		filter[i4 + 1] = -FLT_MIN;
-		filter[i4 + 2] = +FLT_MAX;
-		filter[i4 + 3] = +FLT_MIN;
-	}
-}
-
-
 
 device3_type* device3_open(device3_event_callback callback) {
 	device3_type* device = (device3_type*) malloc(sizeof(device3_type));
@@ -438,23 +419,6 @@ static void apply_calibration(const device3_type* device,
 	);
 }
 
-static void update_filter_v3(float* filter, FusionVector v3) {
-	for (uint8_t i = 0; i < 3; i++) {
-		const float v = v3.array[i];
-		const uint8_t i4 = i * 4;
-		
-		if (v <= -0.0f) {
-			filter[i4 + 0] = max(v, filter[i4 + 0]);
-			filter[i4 + 1] = min(v, filter[i4 + 1]);
-		}
-		
-		if (v >= +0.0f) {
-			filter[i4 + 2] = min(v, filter[i4 + 2]);
-			filter[i4 + 3] = max(v, filter[i4 + 3]);
-		}
-	}
-}
-
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
 	if (!device) {
 		perror("No device!\n");
@@ -573,36 +537,6 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 	}
 	
 	return 0;
-}
-
-static void apply_filter_v3(const float* filter, FusionVector* v3) {
-	for (uint8_t i = 0; i < 3; i++) {
-		float v = v3->array[i];
-		const uint8_t i4 = i * 4;
-		
-		if ((v <= -0.0f) && (filter[i4 + 1] < filter[i4 + 0])) {
-			v = (v - filter[i4 + 0]) * filter[i4 + 1] / (filter[i4 + 1] - filter[i4 + 0]);
-		}
-		
-		if ((v >= +0.0f) && (filter[i4 + 3] > filter[i4 + 2])) {
-			v = (v - filter[i4 + 2]) * filter[i4 + 3] / (filter[i4 + 3] - filter[i4 + 2]);
-		}
-		
-		v3->array[i] = v;
-	}
-}
-
-static void apply_filter_drop_v3(const float* filter, FusionVector* v3) {
-	for (uint8_t i = 0; i < 3; i++) {
-		const float v = v3->array[i] * 1e-5f;
-		const uint8_t i4 = i * 4;
-		
-		if ((v >= filter[i4 + 0]) && (v <= filter[i4 + 2])) {
-			v3->array[i] = 0.0f;
-		} else {
-			v3->array[i] -= (filter[i4 + 0] + filter[i4 + 2]) * 0.5f;
-		}
-	}
 }
 
 int device3_read(device3_type* device, int timeout) {
