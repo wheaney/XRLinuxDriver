@@ -107,28 +107,6 @@ int main(int argc, const char** argv) {
 	if (pid == 0) {
 		device3_type* dev3 = device3_open(test3);
 		
-		printf("Load calibration:\n");
-		device3_load_calibration(dev3, "nreal_air_calibration.dat");
-		
-		/*
-		printf("Calibrating...\n");
-		printf("Now hold the device steady!\n");
-		sleep(1);
-		
-		device3_calibrate(dev3, 200, true, false, false);
-		
-		printf("Calibrating...\n");
-		printf("Now rotate the device around!\n");
-		sleep(3);
-		
-		device3_calibrate(dev3, 20000, false, false, true);
-		
-		printf("Calibrating finished!\n");
-		
-		printf("Save calibration:\n");
-		device3_save_calibration(dev3, "nreal_air_calibration.dat");
-		*/
-		
 		while (dev3) {
 			if (device3_read(dev3, 0) < 0) {
 				break;

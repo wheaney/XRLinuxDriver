@@ -43,6 +43,10 @@ struct device3_calibration_t {
 	FusionVector accelerometerSensitivity;
 	FusionVector accelerometerOffset;
 	
+	FusionMatrix magnetometerMisalignment;
+	FusionVector magnetometerSensitivity;
+	FusionVector magnetometerOffset;
+	
 	FusionMatrix softIronMatrix;
 	FusionVector hardIronOffset;
 	
@@ -344,13 +348,12 @@ device3_type* device3_open(device3_event_callback callback) {
 		FusionVector accel_bias = json_object_get_vector(json_object_object_get(dev1, "accel_bias"));
 		FusionQuaternion accel_q_gyro = json_object_get_quaternion(json_object_object_get(dev1, "accel_q_gyro"));
 		FusionVector gyro_bias = json_object_get_vector(json_object_object_get(dev1, "gyro_bias"));
-		FusionVector gyro_p_mag = json_object_get_vector(json_object_object_get(dev1, "gyro_p_mag"));
 		FusionQuaternion gyro_q_mag = json_object_get_quaternion(json_object_object_get(dev1, "gyro_q_mag"));
 		FusionQuaternion imu_noises = json_object_get_quaternion(json_object_object_get(dev1, "imu_noises"));
 		FusionVector mag_bias = json_object_get_vector(json_object_object_get(dev1, "mag_bias"));
 		FusionVector scale_accel = json_object_get_vector(json_object_object_get(dev1, "scale_accel"));
 		FusionVector scale_gyro = json_object_get_vector(json_object_object_get(dev1, "scale_gyro"));
-		//FusionVector scale_mag = json_object_get_vector(json_object_object_get(dev1, "scale_mag"));
+		FusionVector scale_mag = json_object_get_vector(json_object_object_get(dev1, "scale_mag"));
 		
 		FusionMatrix gyro_misalignment = FusionQuaternionToMatrix(accel_q_gyro);
 		FusionQuaternion accel_q_mag = FusionQuaternionMultiply(accel_q_gyro, gyro_q_mag);
@@ -363,10 +366,13 @@ device3_type* device3_open(device3_event_callback callback) {
 		device->calibration->accelerometerOffset = accel_bias;
 		
 		FusionMatrix mag_misalignment = FusionQuaternionToMatrix(accel_q_mag);
-		mag_bias = FusionMatrixMultiplyVector(mag_misalignment, mag_bias);
+		
+		device->calibration->magnetometerMisalignment = mag_misalignment;
+		device->calibration->magnetometerSensitivity = scale_mag;
+		device->calibration->magnetometerOffset = mag_bias;
 		
 		device->calibration->softIronMatrix = mag_misalignment;
-		device->calibration->hardIronOffset = FusionVectorAdd(gyro_p_mag, mag_bias);
+		device->calibration->hardIronOffset = mag_bias;
 		
 		device->calibration->noises = imu_noises;
 		
@@ -418,6 +424,10 @@ void device3_reset_calibration(device3_type* device) {
 	device->calibration->accelerometerOffset = FUSION_VECTOR_ZERO;
 	
 	device->calibration->accelerometerMisalignment.array[2][2] = -1.0f;
+	
+	device->calibration->magnetometerMisalignment = FUSION_IDENTITY_MATRIX;
+	device->calibration->magnetometerSensitivity = FUSION_VECTOR_ONES;
+	device->calibration->magnetometerOffset = FUSION_VECTOR_ZERO;
 	
 	device->calibration->softIronMatrix = FUSION_IDENTITY_MATRIX;
 	device->calibration->hardIronOffset = FUSION_VECTOR_ZERO;
@@ -579,6 +589,10 @@ static void apply_calibration(const device3_type* device,
 	FusionVector accelerometerSensitivity;
 	FusionVector accelerometerOffset;
 	
+	FusionMatrix magnetometerMisalignment;
+	FusionVector magnetometerSensitivity;
+	FusionVector magnetometerOffset;
+	
 	FusionMatrix softIronMatrix;
 	FusionVector hardIronOffset;
 	
@@ -590,6 +604,10 @@ static void apply_calibration(const device3_type* device,
 		accelerometerMisalignment = device->calibration->accelerometerMisalignment;
 		accelerometerSensitivity = device->calibration->accelerometerSensitivity;
 		accelerometerOffset = device->calibration->accelerometerOffset;
+		
+		magnetometerMisalignment = device->calibration->magnetometerMisalignment;
+		magnetometerSensitivity = device->calibration->magnetometerSensitivity;
+		magnetometerOffset = device->calibration->magnetometerOffset;
 		
 		softIronMatrix = device->calibration->softIronMatrix;
 		hardIronOffset = device->calibration->hardIronOffset;
@@ -603,6 +621,10 @@ static void apply_calibration(const device3_type* device,
 		accelerometerOffset = FUSION_VECTOR_ZERO;
 		
 		accelerometerMisalignment.array[2][2] = -1.0f;
+		
+		magnetometerMisalignment = FUSION_IDENTITY_MATRIX;
+		magnetometerSensitivity = FUSION_VECTOR_ONES;
+		magnetometerOffset = FUSION_VECTOR_ZERO;
 		
 		softIronMatrix = FUSION_IDENTITY_MATRIX;
 		hardIronOffset = FUSION_VECTOR_ZERO;
@@ -620,6 +642,13 @@ static void apply_calibration(const device3_type* device,
 			accelerometerMisalignment,
 			accelerometerSensitivity,
 			accelerometerOffset
+	);
+	
+	*magnetometer = FusionCalibrationInertial(
+			*magnetometer,
+			magnetometerMisalignment,
+			magnetometerSensitivity,
+			magnetometerOffset
 	);
 	
 	*magnetometer = FusionCalibrationMagnetic(
