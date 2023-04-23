@@ -18,6 +18,11 @@ A big help for implementing this piece of software was the source code and feedb
 driver for Windows [here](https://github.com/MSmithDev/AirAPI_Windows/). Without that I would have 
 needed to find out payloads my own. So big thanks to such projects being open-source!
 
+Another huge help was the reverse engineering [here](https://github.com/edwatt/real_utilities/) to 
+send different payloads to the device and even read calibration data from the local storage. Without 
+that calibrating would be quite a hassle for end-users as well as efforts from developers tweaking 
+the values manually. So big thanks as well!
+
 ## Features
 
 The driver will read, parse and interpret sensor data from two HID interfaces to feed custom event 
@@ -32,13 +37,14 @@ Pinephone or other mobile Linux devices.
 
 ## Dependencies
 
-You can build the binary using `cmake` and there are only two dependencies for now:
+You can build the binary using `cmake` and there are only three dependencies for now:
  - [libusb](https://libusb.info/)
+ - [json-c](https://github.com/json-c/json-c/)
  - [Fusion](https://github.com/xioTechnologies/Fusion)
 
 Fusion is a sensor fusion library which is integrated as git submodule. So when you checkout the 
-repository, just update the submodules to get it. The library `libusb` should be pretty common in 
-most Linux distributions repositories.
+repository, just update the submodules to get it. The libraries `libusb` and `json-c` should be 
+pretty common in most Linux distributions repositories.
 
 ## Build
 
