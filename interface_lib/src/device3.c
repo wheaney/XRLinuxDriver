@@ -818,23 +818,7 @@ int device3_read(device3_type* device, int timeout) {
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
 	
-	FusionQuaternion prev = FusionAhrsGetQuaternion((FusionAhrs*) device->ahrs);
 	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
-	
-	FusionAhrsFlags flags = FusionAhrsGetFlags((FusionAhrs*) device->ahrs);
-	
-	if ((device->calibration) &&
-		(!flags.initialising) &&
-		(!flags.accelerationRejectionTimeout) &&
-		(!flags.magneticRejectionTimeout)) {
-		const float* noises = device->calibration->noises.array;
-		
-		FusionQuaternion* q = &((FusionAhrs*) device->ahrs)->quaternion;
-		q->array[0] = noises[0] * prev.array[0] + (1.0f - noises[0]) * q->array[0];
-		q->array[1] = noises[1] * prev.array[1] + (1.0f - noises[1]) * q->array[1];
-		q->array[2] = noises[2] * prev.array[2] + (1.0f - noises[2]) * q->array[2];
-		q->array[3] = noises[3] * prev.array[3] + (1.0f - noises[3]) * q->array[3];
-	}
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;
