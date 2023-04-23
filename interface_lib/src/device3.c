@@ -30,6 +30,7 @@
 
 #include <Fusion/Fusion.h>
 #include <libusb-1.0/libusb.h>
+#include <json-c/json.h>
 
 #include "crc32.h"
 
@@ -44,6 +45,8 @@ struct device3_calibration_t {
 	
 	FusionMatrix softIronMatrix;
 	FusionVector hardIronOffset;
+	
+	FusionQuaternion noises;
 };
 
 static bool send_payload(device3_type* device, uint8_t size, uint8_t* payload) {
@@ -67,7 +70,43 @@ static bool send_payload(device3_type* device, uint8_t size, uint8_t* payload) {
 	);
 	
 	if ((0 != error) || (transferred != payload_size)) {
-		perror("ERROR\n");
+		perror("ERROR: sending payload failed\n");
+		return false;
+	}
+	
+	return (transferred == size);
+}
+
+static bool recv_payload(device3_type* device, uint8_t size, uint8_t* payload) {
+	if (!device->claimed) {
+		return false;
+	}
+	
+	int payload_size = size;
+	if (payload_size > device->max_packet_size_in) {
+		payload_size = device->max_packet_size_in;
+	}
+	
+	int transferred = 0;
+	int error = libusb_bulk_transfer(
+			device->handle,
+			device->endpoint_address_in,
+			payload,
+			device->max_packet_size_in,
+			&transferred,
+			0
+	);
+	
+	if (transferred >= payload_size) {
+		transferred = payload_size;
+	}
+	
+	if (error == LIBUSB_ERROR_TIMEOUT) {
+		return false;
+	}
+	
+	if ((0 != error) || (transferred != payload_size)) {
+		perror("ERROR: receiving payload failed\n");
 		return false;
 	}
 	
@@ -94,7 +133,7 @@ struct __attribute__((__packed__)) device3_payload_packet_t {
 typedef struct device3_payload_packet_t device3_payload_packet_type;
 
 static bool send_payload_msg(device3_type* device, uint8_t msgid, uint8_t len, const uint8_t* data) {
-	device3_payload_packet_type packet;
+	static device3_payload_packet_type packet;
 	
 	const uint16_t packet_len = 3 + len;
 	const uint16_t payload_len = 5 + packet_len;
@@ -111,6 +150,55 @@ static bool send_payload_msg(device3_type* device, uint8_t msgid, uint8_t len, c
 
 static bool send_payload_msg_signal(device3_type* device, uint8_t msgid, uint8_t signal) {
 	return send_payload_msg(device, msgid, 1, &signal);
+}
+
+static bool recv_payload_msg(device3_type* device, uint8_t msgid, uint8_t len, uint8_t* data) {
+	static device3_payload_packet_type packet;
+	
+	packet.head = 0;
+	packet.length = 0;
+	packet.msgid = 0;
+	
+	const uint16_t packet_len = 3 + len;
+	const uint16_t payload_len = 5 + packet_len;
+	
+	if (!recv_payload(device, payload_len, (uint8_t*) (&packet))) {
+		return false;
+	}
+	
+	if (packet.msgid != msgid) {
+		return false;
+	}
+	
+	memcpy(data, packet.data, len);
+	return true;
+}
+
+static FusionVector json_object_get_vector(struct json_object* obj) {
+	if ((!json_object_is_type(obj, json_type_array)) ||
+		(json_object_array_length(obj) != 3)) {
+		return FUSION_VECTOR_ZERO;
+	}
+	
+	FusionVector vector;
+	vector.axis.x = (float) json_object_get_double(json_object_array_get_idx(obj, 0));
+	vector.axis.y = (float) json_object_get_double(json_object_array_get_idx(obj, 1));
+	vector.axis.z = (float) json_object_get_double(json_object_array_get_idx(obj, 2));
+	return vector;
+}
+
+static FusionQuaternion json_object_get_quaternion(struct json_object* obj) {
+	if ((!json_object_is_type(obj, json_type_array)) ||
+		(json_object_array_length(obj) != 3)) {
+		return FUSION_IDENTITY_QUATERNION;
+	}
+	
+	FusionQuaternion quaternion;
+	quaternion.element.x = (float) json_object_get_double(json_object_array_get_idx(obj, 0));
+	quaternion.element.y = (float) json_object_get_double(json_object_array_get_idx(obj, 1));
+	quaternion.element.z = (float) json_object_get_double(json_object_array_get_idx(obj, 2));
+	quaternion.element.w = (float) json_object_get_double(json_object_array_get_idx(obj, 3));
+	return quaternion;
 }
 
 device3_type* device3_open(device3_event_callback callback) {
@@ -209,6 +297,83 @@ device3_type* device3_open(device3_event_callback callback) {
 		device->claimed = true;
 	}
 	
+	if (!send_payload_msg(device, DEVICE3_MSG_GET_STATIC_ID, 0, NULL)) {
+		return device;
+	}
+	
+	uint32_t static_id = 0;
+	if (recv_payload_msg(device, DEVICE3_MSG_GET_STATIC_ID, 4, (uint8_t*) &static_id)) {
+		device->static_id = static_id;
+	} else {
+		device->static_id = 0x20220101;
+	}
+	
+	device->calibration = malloc(sizeof(device3_calibration_type));
+	device3_reset_calibration(device);
+	
+	if (!send_payload_msg(device, DEVICE3_MSG_GET_CAL_DATA_LENGTH, 0, NULL)) {
+		return device;
+	}
+	
+	uint32_t calibration_len = 0;
+	if (recv_payload_msg(device, DEVICE3_MSG_GET_CAL_DATA_LENGTH, 4, (uint8_t*) &calibration_len)) {
+		char* calibration_data = malloc(calibration_len);
+		
+		uint32_t position = 0;
+		while (position < calibration_len) {
+			const uint32_t remaining = (calibration_len - position);
+			
+			if (!send_payload_msg(device, DEVICE3_MSG_CAL_DATA_GET_NEXT_SEGMENT, 0, NULL)) {
+				break;
+			}
+			
+			const uint8_t next = (remaining > 56? 56 : remaining);
+			
+			if (!recv_payload_msg(device, DEVICE3_MSG_CAL_DATA_GET_NEXT_SEGMENT, next, (uint8_t*) calibration_data + position)) {
+				break;
+			}
+			
+			position += next;
+		}
+		
+		struct json_tokener* tokener = json_tokener_new();
+		struct json_object* root = json_tokener_parse_ex(tokener, calibration_data, calibration_len);
+		struct json_object* imu = json_object_object_get(root, "IMU");
+		struct json_object* dev1 = json_object_object_get(imu, "device_1");
+		
+		FusionVector accel_bias = json_object_get_vector(json_object_object_get(dev1, "accel_bias"));
+		FusionQuaternion accel_q_gyro = json_object_get_quaternion(json_object_object_get(dev1, "accel_q_gyro"));
+		FusionVector gyro_bias = json_object_get_vector(json_object_object_get(dev1, "gyro_bias"));
+		FusionVector gyro_p_mag = json_object_get_vector(json_object_object_get(dev1, "gyro_p_mag"));
+		FusionQuaternion gyro_q_mag = json_object_get_quaternion(json_object_object_get(dev1, "gyro_q_mag"));
+		FusionQuaternion imu_noises = json_object_get_quaternion(json_object_object_get(dev1, "imu_noises"));
+		FusionVector mag_bias = json_object_get_vector(json_object_object_get(dev1, "mag_bias"));
+		FusionVector scale_accel = json_object_get_vector(json_object_object_get(dev1, "scale_accel"));
+		FusionVector scale_gyro = json_object_get_vector(json_object_object_get(dev1, "scale_gyro"));
+		//FusionVector scale_mag = json_object_get_vector(json_object_object_get(dev1, "scale_mag"));
+		
+		FusionMatrix gyro_misalignment = FusionQuaternionToMatrix(accel_q_gyro);
+		FusionQuaternion accel_q_mag = FusionQuaternionMultiply(accel_q_gyro, gyro_q_mag);
+		
+		device->calibration->gyroscopeMisalignment = gyro_misalignment;
+		device->calibration->gyroscopeSensitivity = scale_gyro;
+		device->calibration->gyroscopeOffset = gyro_bias;
+		
+		device->calibration->accelerometerSensitivity = scale_accel;
+		device->calibration->accelerometerOffset = accel_bias;
+		
+		FusionMatrix mag_misalignment = FusionQuaternionToMatrix(accel_q_mag);
+		mag_bias = FusionMatrixMultiplyVector(mag_misalignment, mag_bias);
+		
+		device->calibration->softIronMatrix = mag_misalignment;
+		device->calibration->hardIronOffset = FusionVectorAdd(gyro_p_mag, mag_bias);
+		
+		device->calibration->noises = imu_noises;
+		
+		json_tokener_free(tokener);
+		free(calibration_data);
+	}
+	
 	if (!send_payload_msg_signal(device, DEVICE3_MSG_START_IMU_DATA, 0x1)) {
 		return device;
 	}
@@ -220,9 +385,6 @@ device3_type* device3_open(device3_event_callback callback) {
 	
 	FusionOffsetInitialise((FusionOffset*) device->offset, SAMPLE_RATE);
 	FusionAhrsInitialise((FusionAhrs*) device->ahrs);
-	
-	device->calibration = malloc(sizeof(device3_calibration_type));
-	device3_reset_calibration(device);
 	
 	const FusionAhrsSettings settings = {
 			.convention = FusionConventionNwu,
@@ -259,6 +421,9 @@ void device3_reset_calibration(device3_type* device) {
 	
 	device->calibration->softIronMatrix = FUSION_IDENTITY_MATRIX;
 	device->calibration->hardIronOffset = FUSION_VECTOR_ZERO;
+	
+	device->calibration->noises = FUSION_IDENTITY_QUATERNION;
+	device->calibration->noises.element.w = 0.0f;
 }
 
 int device3_load_calibration(device3_type* device, const char* path) {
@@ -653,7 +818,23 @@ int device3_read(device3_type* device, int timeout) {
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
 	
+	FusionQuaternion prev = FusionAhrsGetQuaternion((FusionAhrs*) device->ahrs);
 	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+	
+	FusionAhrsFlags flags = FusionAhrsGetFlags((FusionAhrs*) device->ahrs);
+	
+	if ((device->calibration) &&
+		(!flags.initialising) &&
+		(!flags.accelerationRejectionTimeout) &&
+		(!flags.magneticRejectionTimeout)) {
+		const float* noises = device->calibration->noises.array;
+		
+		FusionQuaternion* q = &((FusionAhrs*) device->ahrs)->quaternion;
+		q->array[0] = noises[0] * prev.array[0] + (1.0f - noises[0]) * q->array[0];
+		q->array[1] = noises[1] * prev.array[1] + (1.0f - noises[1]) * q->array[1];
+		q->array[2] = noises[2] * prev.array[2] + (1.0f - noises[2]) * q->array[2];
+		q->array[3] = noises[3] * prev.array[3] + (1.0f - noises[3]) * q->array[3];
+	}
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;

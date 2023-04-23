@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD 17)
 find_package(PkgConfig REQUIRED)
 pkg_search_module(LIBUSB1 REQUIRED libusb-1.0)
 
+find_package(json-c REQUIRED)
+
 add_library(
 		nrealAirLibrary
 		src/crc32.c
@@ -22,7 +24,7 @@ target_include_directories(nrealAirLibrary
 )
 
 target_link_libraries(nrealAirLibrary
-		${LIBUSB1_LIBRARIES} ${FUSION_LIBRARY} m
+		${LIBUSB1_LIBRARIES} json-c::json-c ${FUSION_LIBRARY} m
 )
 
 set(NRA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include PARENT_SCOPE)

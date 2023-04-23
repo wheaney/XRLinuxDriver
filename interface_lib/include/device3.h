@@ -115,6 +115,8 @@ struct device3_t {
 	bool detached;
 	bool claimed;
 	
+	uint32_t static_id;
+	
 	uint64_t last_timestamp;
 	float temperature; // (in °C)
 	
