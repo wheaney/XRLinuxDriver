@@ -646,22 +646,24 @@ static void apply_calibration(const device3_type* device,
 		if (magnetometer->array[i] < min.array[i]) min.array[i] = magnetometer->array[i];
 	}
 	
-	const float mx = 2.0f / (max.axis.x - min.axis.x);
-	const float my = 2.0f / (max.axis.y - min.axis.y);
-	const float mz = 2.0f / (max.axis.z - min.axis.z);
+	const float mx = (max.axis.x - min.axis.x) / 2.0f;
+	const float my = (max.axis.y - min.axis.y) / 2.0f;
+	const float mz = (max.axis.z - min.axis.z) / 2.0f;
 	
-	if ((mx*mx > 0.0f) && (my*my > 0.0f) && (mz*mz > 0.0f)) {
-		softIronMatrix.array[0][0] = mx;
-		softIronMatrix.array[1][1] = my;
-		softIronMatrix.array[2][2] = mz;
-		
-		hardIronOffset.axis.x = (min.axis.x + max.axis.x) / (2.0f * mz);
-		hardIronOffset.axis.y = (min.axis.y + max.axis.y) / (2.0f * my);
-		hardIronOffset.axis.z = (min.axis.z + max.axis.z) / (2.0f * mz);
-		
-		device->calibration->softIronMatrix = softIronMatrix;
-		device->calibration->hardIronOffset = hardIronOffset;
-	}
+	const float cx = (min.axis.x + max.axis.x) / 2.0f;
+	const float cy = (min.axis.y + max.axis.y) / 2.0f;
+	const float cz = (min.axis.z + max.axis.z) / 2.0f;
+	
+	softIronMatrix.element.xx = 1.0f / mx;
+	softIronMatrix.element.yy = 1.0f / my;
+	softIronMatrix.element.zz = 1.0f / mz;
+	
+	hardIronOffset.axis.x = cx / mx;
+	hardIronOffset.axis.y = cy / my;
+	hardIronOffset.axis.z = cz / mz;
+	
+	device->calibration->softIronMatrix = softIronMatrix;
+	device->calibration->hardIronOffset = hardIronOffset;
 	
 	*magnetometer = FusionCalibrationMagnetic(
 			*magnetometer,
@@ -869,8 +871,12 @@ int device3_read(device3_type* device, int timeout) {
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
 	
-	//FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
-	FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
+	//printf("G: %.2f %.2f %.2f\n", gyroscope.axis.x, gyroscope.axis.y, gyroscope.axis.z);
+	//printf("A: %.2f %.2f %.2f\n", accelerometer.axis.x, accelerometer.axis.y, accelerometer.axis.z);
+	//printf("M: %.2f %.2f %.2f\n", magnetometer.axis.x, magnetometer.axis.y, magnetometer.axis.z);
+	
+	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+	//FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;
