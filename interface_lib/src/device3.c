@@ -346,33 +346,21 @@ device3_type* device3_open(device3_event_callback callback) {
 		struct json_object* dev1 = json_object_object_get(imu, "device_1");
 		
 		FusionVector accel_bias = json_object_get_vector(json_object_object_get(dev1, "accel_bias"));
-		FusionQuaternion accel_q_gyro = json_object_get_quaternion(json_object_object_get(dev1, "accel_q_gyro"));
 		FusionVector gyro_bias = json_object_get_vector(json_object_object_get(dev1, "gyro_bias"));
-		FusionQuaternion gyro_q_mag = json_object_get_quaternion(json_object_object_get(dev1, "gyro_q_mag"));
 		FusionQuaternion imu_noises = json_object_get_quaternion(json_object_object_get(dev1, "imu_noises"));
 		FusionVector mag_bias = json_object_get_vector(json_object_object_get(dev1, "mag_bias"));
 		FusionVector scale_accel = json_object_get_vector(json_object_object_get(dev1, "scale_accel"));
 		FusionVector scale_gyro = json_object_get_vector(json_object_object_get(dev1, "scale_gyro"));
 		FusionVector scale_mag = json_object_get_vector(json_object_object_get(dev1, "scale_mag"));
 		
-		FusionMatrix gyro_misalignment = FusionQuaternionToMatrix(accel_q_gyro);
-		FusionQuaternion accel_q_mag = FusionQuaternionMultiply(accel_q_gyro, gyro_q_mag);
-		
-		device->calibration->gyroscopeMisalignment = gyro_misalignment;
 		device->calibration->gyroscopeSensitivity = scale_gyro;
 		device->calibration->gyroscopeOffset = gyro_bias;
 		
 		device->calibration->accelerometerSensitivity = scale_accel;
 		device->calibration->accelerometerOffset = accel_bias;
 		
-		FusionMatrix mag_misalignment = FusionQuaternionToMatrix(accel_q_mag);
-		
-		device->calibration->magnetometerMisalignment = mag_misalignment;
 		device->calibration->magnetometerSensitivity = scale_mag;
 		device->calibration->magnetometerOffset = mag_bias;
-		
-		device->calibration->softIronMatrix = mag_misalignment;
-		device->calibration->hardIronOffset = mag_bias;
 		
 		device->calibration->noises = imu_noises;
 		
@@ -652,15 +640,40 @@ static void apply_calibration(const device3_type* device,
 			magnetometerOffset
 	);
 	
+	static FusionVector max = { -1000, -1000, -1000 }, min = { 1000, 1000, 1000 };
+	for (int i = 0; i < 3; i++) {
+		if (magnetometer->array[i] > max.array[i]) max.array[i] = magnetometer->array[i];
+		if (magnetometer->array[i] < min.array[i]) min.array[i] = magnetometer->array[i];
+	}
+	
+	const float mx = 2.0f / (max.axis.x - min.axis.x);
+	const float my = 2.0f / (max.axis.y - min.axis.y);
+	const float mz = 2.0f / (max.axis.z - min.axis.z);
+	
+	if ((mx*mx > 0.0f) && (my*my > 0.0f) && (mz*mz > 0.0f)) {
+		softIronMatrix.array[0][0] = mx;
+		softIronMatrix.array[1][1] = my;
+		softIronMatrix.array[2][2] = mz;
+		
+		hardIronOffset.axis.x = (min.axis.x + max.axis.x) / (2.0f * mz);
+		hardIronOffset.axis.y = (min.axis.y + max.axis.y) / (2.0f * my);
+		hardIronOffset.axis.z = (min.axis.z + max.axis.z) / (2.0f * mz);
+		
+		device->calibration->softIronMatrix = softIronMatrix;
+		device->calibration->hardIronOffset = hardIronOffset;
+	}
+	
 	*magnetometer = FusionCalibrationMagnetic(
 			*magnetometer,
 			softIronMatrix,
 			hardIronOffset
 	);
+
+	const FusionAxesAlignment alignment = FusionAxesAlignmentNXNYPZ;
 	
-	gyroscope->axis.z *= -1.0f;
-	accelerometer->axis.z *= -1.0f;
-	magnetometer->axis.z *= -1.0f;
+	*gyroscope = FusionAxesSwap(*gyroscope, alignment);
+	*accelerometer = FusionAxesSwap(*accelerometer, alignment);
+	*magnetometer = FusionAxesSwap(*magnetometer, alignment);
 }
 
 void device3_clear(device3_type* device) {
