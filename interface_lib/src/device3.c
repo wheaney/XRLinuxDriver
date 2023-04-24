@@ -640,7 +640,7 @@ static void apply_calibration(const device3_type* device,
 			magnetometerOffset
 	);
 	
-	static FusionVector max = { -1000, -1000, -1000 }, min = { 1000, 1000, 1000 };
+	static FusionVector max = { 0.077f, -0.129f, -0.446f }, min = { 0.603f, 0.447f, 0.085f };
 	for (int i = 0; i < 3; i++) {
 		if (magnetometer->array[i] > max.array[i]) max.array[i] = magnetometer->array[i];
 		if (magnetometer->array[i] < min.array[i]) min.array[i] = magnetometer->array[i];
@@ -869,7 +869,8 @@ int device3_read(device3_type* device, int timeout) {
 	
 	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
 	
-	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+	//FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+	FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;
