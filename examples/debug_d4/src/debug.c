@@ -55,6 +55,8 @@ int main(int argc, const char** argv) {
 		return 1;
 	}
 	
+	device4_clear(dev4);
+	
 	while (dev4) {
 		if (device4_read(dev4, 0) < 0) {
 			break;

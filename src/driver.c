@@ -106,6 +106,7 @@ int main(int argc, const char** argv) {
 	
 	if (pid == 0) {
 		device3_type* dev3 = device3_open(test3);
+		device3_clear(dev3);
 		
 		while (dev3) {
 			if (device3_read(dev3, 0) < 0) {
@@ -117,6 +118,7 @@ int main(int argc, const char** argv) {
 		return 0;
 	} else {
 		device4_type* dev4 = device4_open(test4);
+		device4_clear(dev4);
 		
 		while (dev4) {
 			if (device4_read(dev4, 0) < 0) {

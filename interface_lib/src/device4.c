@@ -170,6 +170,10 @@ static void device4_callback(device4_type* device,
 	device->callback(timestamp, event, brightness, msg);
 }
 
+void device4_clear(device4_type* device) {
+	device4_read(device, 0);
+}
+
 int device4_read(device4_type* device, int timeout) {
 	if (!device) {
 		return -1;

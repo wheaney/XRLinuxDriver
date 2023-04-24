@@ -108,6 +108,8 @@ typedef struct device4_t device4_type;
 
 device4_type* device4_open(device4_event_callback callback);
 
+void device4_clear(device4_type* device);
+
 int device4_read(device4_type* device, int timeout);
 
 void device4_close(device4_type* device);

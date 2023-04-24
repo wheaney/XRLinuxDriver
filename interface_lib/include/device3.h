@@ -137,6 +137,8 @@ int device3_load_calibration(device3_type* device, const char* path);
 
 int device3_save_calibration(device3_type* device, const char* path);
 
+void device3_clear(device3_type* device);
+
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet);
 
 int device3_read(device3_type* device, int timeout);

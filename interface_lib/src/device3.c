@@ -423,8 +423,6 @@ void device3_reset_calibration(device3_type* device) {
 	device->calibration->accelerometerSensitivity = FUSION_VECTOR_ONES;
 	device->calibration->accelerometerOffset = FUSION_VECTOR_ZERO;
 	
-	device->calibration->accelerometerMisalignment.array[2][2] = -1.0f;
-	
 	device->calibration->magnetometerMisalignment = FUSION_IDENTITY_MATRIX;
 	device->calibration->magnetometerSensitivity = FUSION_VECTOR_ONES;
 	device->calibration->magnetometerOffset = FUSION_VECTOR_ZERO;
@@ -522,7 +520,7 @@ static int32_t pack24bit_signed(const uint8_t* data) {
 }
 
 static int16_t pack16bit_signed(const uint8_t* data) {
-	uint16_t unsigned_value = (data[0]) | (data[1] << 8);
+	uint16_t unsigned_value = (data[1] << 8) | (data[0]);
 	return (int16_t) unsigned_value;
 }
 
@@ -533,6 +531,11 @@ static int32_t pack32bit_signed_swap(const uint8_t* data) {
 
 static int16_t pack16bit_signed_swap(const uint8_t* data) {
 	uint16_t unsigned_value = (data[0] << 8) | (data[1]);
+	return (int16_t) unsigned_value;
+}
+
+static int16_t pack16bit_signed_bizarre(const uint8_t* data) {
+	uint16_t unsigned_value = (data[0]) | ((data[1] ^ 0x80) << 8);
 	return (int16_t) unsigned_value;
 }
 
@@ -565,9 +568,9 @@ static void readIMU_from_packet(const device3_packet_type* packet,
 	int32_t magnet_m = pack16bit_signed_swap(packet->magnetic_multiplier);
 	int32_t magnet_d = pack32bit_signed_swap(packet->magnetic_divisor);
 	
-	int16_t magnet_x = pack16bit_signed_swap(packet->magnetic_x);
-	int16_t magnet_y = pack16bit_signed_swap(packet->magnetic_y);
-	int16_t magnet_z = pack16bit_signed_swap(packet->magnetic_z);
+	int16_t magnet_x = pack16bit_signed_bizarre(packet->magnetic_x);
+	int16_t magnet_y = pack16bit_signed_bizarre(packet->magnetic_y);
+	int16_t magnet_z = pack16bit_signed_bizarre(packet->magnetic_z);
 	
 	magnetometer->axis.x = (float) magnet_x * (float) magnet_m / (float) magnet_d;
 	magnetometer->axis.y = (float) magnet_y * (float) magnet_m / (float) magnet_d;
@@ -620,8 +623,6 @@ static void apply_calibration(const device3_type* device,
 		accelerometerSensitivity = FUSION_VECTOR_ONES;
 		accelerometerOffset = FUSION_VECTOR_ZERO;
 		
-		accelerometerMisalignment.array[2][2] = -1.0f;
-		
 		magnetometerMisalignment = FUSION_IDENTITY_MATRIX;
 		magnetometerSensitivity = FUSION_VECTOR_ONES;
 		magnetometerOffset = FUSION_VECTOR_ZERO;
@@ -656,6 +657,14 @@ static void apply_calibration(const device3_type* device,
 			softIronMatrix,
 			hardIronOffset
 	);
+	
+	gyroscope->axis.z *= -1.0f;
+	accelerometer->axis.z *= -1.0f;
+	magnetometer->axis.z *= -1.0f;
+}
+
+void device3_clear(device3_type* device) {
+	device3_read(device, 0);
 }
 
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
