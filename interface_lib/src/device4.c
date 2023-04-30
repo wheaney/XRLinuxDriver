@@ -28,7 +28,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <libusb-1.0/libusb.h>
+#include <hidapi/hidapi.h>
+
+#define MAX_PACKET_SIZE 64
 
 device4_type* device4_open(device4_event_callback callback) {
 	device4_type* device = (device4_type*) malloc(sizeof(device4_type));
@@ -42,117 +44,55 @@ device4_type* device4_open(device4_event_callback callback) {
 	device->vendor_id 	= 0x3318;
 	device->product_id 	= 0x0424;
 	device->callback 	= callback;
-	
-	if (0 != libusb_init((libusb_context**) &(device->context))) {
-		perror("No context!\n");
+
+	if (0 != hid_init()) {
+		perror("Not initialized!\n");
 		return device;
 	}
-	
-	device->handle = libusb_open_device_with_vid_pid(
-			device->context,
-			device->vendor_id,
-			device->product_id
+
+	struct hid_device_info* info = hid_enumerate(
+		device->vendor_id, 
+		device->product_id
 	);
-	
+
+	struct hid_device_info* it = info;
+	while (it) {
+		if (it->interface_number == 3) {
+			device->handle = hid_open_path(it->path);
+			break;
+		}
+
+		it = it->next;
+	}
+
+	hid_free_enumeration(info);
+
 	if (!device->handle) {
 		perror("No handle!\n");
 		return device;
 	}
 	
-	libusb_device* dev = libusb_get_device(device->handle);
-	if (!dev) {
-		perror("No dev!\n");
+	uint8_t initial_brightness_payload [16] = {
+			0xfd, 0x1e, 0xb9, 0xf0,
+			0x68, 0x11, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x03
+	};
+	
+	int size = MAX_PACKET_SIZE;
+	if (sizeof(initial_brightness_payload) < size) {
+		size = sizeof(initial_brightness_payload);
+	}
+	
+	int transferred = hid_write(
+			device->handle,
+			initial_brightness_payload,
+			size
+	);
+	
+	if (transferred != sizeof(initial_brightness_payload)) {
+		perror("ERROR\n");
 		return device;
-	}
-	
-	struct libusb_device_descriptor desc;
-	if (0 != libusb_get_device_descriptor(dev, &desc)) {
-		perror("No desc!\n");
-		return device;
-	}
-	
-	struct libusb_config_descriptor* config;
-	for (uint8_t i = 0; i < desc.bNumConfigurations; i++) {
-		if (0 != libusb_get_config_descriptor(dev, i, &config)) {
-			continue;
-		}
-		
-		const struct libusb_interface* interface;
-		for (uint8_t j = 0; j < config->bNumInterfaces; j++) {
-			interface = &(config->interface[j]);
-			
-			const struct libusb_interface_descriptor* setting;
-			for (int k = 0; k < interface->num_altsetting; k++) {
-				setting = &(interface->altsetting[k]);
-				
-				if (LIBUSB_CLASS_HID != setting->bInterfaceClass) {
-					continue;
-				}
-				
-				if (4 != setting->bInterfaceNumber) {
-					continue;
-				}
-				
-				device->interface_number = setting->bInterfaceNumber;
-				
-				if (2 != setting->bNumEndpoints) {
-					continue;
-				}
-				
-				device->endpoint_address_in = setting->endpoint[0].bEndpointAddress;
-				device->max_packet_size_in = setting->endpoint[0].wMaxPacketSize;
-				
-				device->endpoint_address_out = setting->endpoint[1].bEndpointAddress;
-				device->max_packet_size_out = setting->endpoint[1].wMaxPacketSize;
-			}
-		}
-	}
-	
-	if (4 != device->interface_number) {
-		perror("No interface!\n");
-		return device;
-	}
-	
-	if (1 == libusb_kernel_driver_active(device->handle, device->interface_number)) {
-		if (0 == libusb_detach_kernel_driver(device->handle, device->interface_number)) {
-			device->detached = true;
-		} else {
-			perror("Not detached!\n");
-			return device;
-		}
-	}
-	
-	if (0 == libusb_claim_interface(device->handle, device->interface_number)) {
-		device->claimed = true;
-	}
-	
-	if (device->claimed) {
-		uint8_t initial_brightness_payload [16] = {
-				0xfd, 0x1e, 0xb9, 0xf0,
-				0x68, 0x11, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x03
-		};
-		
-		int size = device->max_packet_size_out;
-		if (sizeof(initial_brightness_payload) < size) {
-			size = sizeof(initial_brightness_payload);
-		}
-		
-		int transferred = 0;
-		int error = libusb_bulk_transfer(
-				device->handle,
-				device->endpoint_address_out,
-				initial_brightness_payload,
-				size,
-				&transferred,
-				0
-		);
-		
-		if ((0 != error) || (transferred != sizeof(initial_brightness_payload))) {
-			perror("ERROR\n");
-			return device;
-		}
 	}
 	
 	return device;
@@ -179,36 +119,28 @@ int device4_read(device4_type* device, int timeout) {
 		return -1;
 	}
 	
-	if (!device->claimed) {
-		perror("Not claimed!\n");
-		return -2;
-	}
-	
-	if (device->max_packet_size_in != sizeof(device4_packet_type)) {
+	if (MAX_PACKET_SIZE != sizeof(device4_packet_type)) {
 		perror("Not proper size!\n");
-		return -3;
+		return -2;
 	}
 	
 	device4_packet_type packet;
 	memset(&packet, 0, sizeof(device4_packet_type));
 	
-	int transferred = 0;
-	int error = libusb_bulk_transfer(
+	int transferred = hid_read_timeout(
 			device->handle,
-			device->endpoint_address_in,
 			(uint8_t*) &packet,
-			device->max_packet_size_in,
-			&transferred,
+			MAX_PACKET_SIZE,
 			timeout
 	);
 	
-	if (error == LIBUSB_ERROR_TIMEOUT) {
+	/*if (transferred == 0) {
 		return 1;
-	}
+	}*/
 	
-	if ((0 != error) || (device->max_packet_size_in != transferred)) {
+	if (MAX_PACKET_SIZE != transferred) {
 		perror("Not expected issue!\n");
-		return -4;
+		return -3;
 	}
 	
 	const uint32_t timestamp = packet.timestamp;
@@ -328,24 +260,9 @@ void device4_close(device4_type* device) {
 		return;
 	}
 	
-	if ((device->claimed) &&
-		(0 == libusb_release_interface(device->handle, device->interface_number))) {
-		device->claimed = false;
-	}
-	
-	if ((device->detached) &&
-		(0 == libusb_attach_kernel_driver(device->handle, device->interface_number))) {
-		device->detached = false;
-	}
-	
 	if (device->handle) {
-		libusb_close(device->handle);
+		hid_close(device->handle);
 		device->handle = NULL;
-	}
-	
-	if (device->context) {
-		libusb_exit(device->context);
-		device->context = NULL;
 	}
 	
 	free(device);

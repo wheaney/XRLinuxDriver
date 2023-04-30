@@ -101,19 +101,7 @@ struct device3_t {
 	uint16_t vendor_id;
 	uint16_t product_id;
 	
-	void* context;
 	void* handle;
-	
-	uint8_t interface_number;
-	
-	uint8_t endpoint_address_in;
-	uint8_t max_packet_size_in;
-	
-	uint8_t endpoint_address_out;
-	uint8_t max_packet_size_out;
-	
-	bool detached;
-	bool claimed;
 	
 	uint32_t static_id;
 	
