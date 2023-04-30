@@ -38,12 +38,12 @@ Pinephone or other mobile Linux devices.
 ## Dependencies
 
 You can build the binary using `cmake` and there are only three dependencies for now:
- - [libusb](https://libusb.info/)
+ - [hidapi](https://github.com/libusb/hidapi)
  - [json-c](https://github.com/json-c/json-c/)
  - [Fusion](https://github.com/xioTechnologies/Fusion)
 
 Fusion is a sensor fusion library which is integrated as git submodule. So when you checkout the 
-repository, just update the submodules to get it. The libraries `libusb` and `json-c` should be 
+repository, just update the submodules to get it. The libraries `hidapi` and `json-c` should be 
 pretty common in most Linux distributions repositories.
 
 ## Build
