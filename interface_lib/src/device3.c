@@ -84,9 +84,9 @@ static bool recv_payload(device3_type* device, uint8_t size, uint8_t* payload) {
 		transferred = payload_size;
 	}
 	
-	/*if (transferred == 0) {
+	if (transferred == 0) {
 		return false;
-	}*/
+	}
 	
 	if (transferred != payload_size) {
 		perror("ERROR: receiving payload failed\n");
@@ -223,8 +223,11 @@ device3_type* device3_open(device3_event_callback callback) {
 		perror("No handle!\n");
 		return device;
 	}
+
+	device3_clear(device);
 	
 	if (!send_payload_msg(device, DEVICE3_MSG_GET_STATIC_ID, 0, NULL)) {
+		perror("Failed sending payload to get static id!\n");
 		return device;
 	}
 	
@@ -239,6 +242,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	device3_reset_calibration(device);
 	
 	if (!send_payload_msg(device, DEVICE3_MSG_GET_CAL_DATA_LENGTH, 0, NULL)) {
+		perror("Failed sending payload to get calibration data length!\n");
 		return device;
 	}
 	
@@ -292,6 +296,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	}
 	
 	if (!send_payload_msg_signal(device, DEVICE3_MSG_START_IMU_DATA, 0x1)) {
+		perror("Failed sending payload to start imu data stream!\n");
 		return device;
 	}
 	
@@ -585,8 +590,10 @@ static void apply_calibration(const device3_type* device,
 	hardIronOffset.axis.y = cy / my;
 	hardIronOffset.axis.z = cz / mz;
 	
-	device->calibration->softIronMatrix = softIronMatrix;
-	device->calibration->hardIronOffset = hardIronOffset;
+	if (device->calibration) {
+		device->calibration->softIronMatrix = softIronMatrix;
+		device->calibration->hardIronOffset = hardIronOffset;
+	}
 	
 	*magnetometer = FusionCalibrationMagnetic(
 			*magnetometer,
@@ -602,7 +609,7 @@ static void apply_calibration(const device3_type* device,
 }
 
 void device3_clear(device3_type* device) {
-	device3_read(device, 0);
+	device3_read(device, 10);
 }
 
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
@@ -636,9 +643,9 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 			MAX_PACKET_SIZE
 		);
 		
-		/*if (transferred == 0) {
+		if (transferred == 0) {
 			continue;
-		}*/
+		}
 		
 		if (MAX_PACKET_SIZE != transferred) {
 			perror("Not expected issue!\n");
@@ -730,15 +737,16 @@ int device3_read(device3_type* device, int timeout) {
 	device3_packet_type packet;
 	memset(&packet, 0, sizeof(device3_packet_type));
 	
-	int transferred = hid_read(
+	int transferred = hid_read_timeout(
 		device->handle, 
 		(uint8_t*) &packet, 
-		MAX_PACKET_SIZE
+		MAX_PACKET_SIZE,
+		timeout
 	);
 	
-	/*if (transferred == 0) {
+	if (transferred == 0) {
 		return 1;
-	}*/
+	}
 	
 	if (MAX_PACKET_SIZE != transferred) {
 		perror("Not expected issue!\n");
@@ -774,21 +782,25 @@ int device3_read(device3_type* device, int timeout) {
 	readIMU_from_packet(&packet, &gyroscope, &accelerometer, &magnetometer);
 	apply_calibration(device, &gyroscope, &accelerometer, &magnetometer);
 	
-	gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
+	if (device->offset) {
+		gyroscope = FusionOffsetUpdate((FusionOffset*) device->offset, gyroscope);
+	}
 	
 	//printf("G: %.2f %.2f %.2f\n", gyroscope.axis.x, gyroscope.axis.y, gyroscope.axis.z);
 	//printf("A: %.2f %.2f %.2f\n", accelerometer.axis.x, accelerometer.axis.y, accelerometer.axis.z);
 	//printf("M: %.2f %.2f %.2f\n", magnetometer.axis.x, magnetometer.axis.y, magnetometer.axis.z);
 	
-	FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
-	//FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
+	if (device->ahrs) {
+		FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+		//FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
+	}
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
 	return 0;
 }
 
 device3_vec3_type device3_get_earth_acceleration(const device3_ahrs_type* ahrs) {
-	FusionVector acceleration = FusionAhrsGetEarthAcceleration((const FusionAhrs*) ahrs);
+	FusionVector acceleration = ahrs? FusionAhrsGetEarthAcceleration((const FusionAhrs*) ahrs) : FUSION_VECTOR_ZERO;
 	device3_vec3_type a;
 	a.x = acceleration.axis.x;
 	a.y = acceleration.axis.y;
@@ -797,7 +809,7 @@ device3_vec3_type device3_get_earth_acceleration(const device3_ahrs_type* ahrs) 
 }
 
 device3_vec3_type device3_get_linear_acceleration(const device3_ahrs_type* ahrs) {
-	FusionVector acceleration = FusionAhrsGetLinearAcceleration((const FusionAhrs*) ahrs);
+	FusionVector acceleration = ahrs? FusionAhrsGetLinearAcceleration((const FusionAhrs*) ahrs) : FUSION_VECTOR_ZERO;
 	device3_vec3_type a;
 	a.x = acceleration.axis.x;
 	a.y = acceleration.axis.y;
@@ -806,7 +818,7 @@ device3_vec3_type device3_get_linear_acceleration(const device3_ahrs_type* ahrs)
 }
 
 device3_quat_type device3_get_orientation(const device3_ahrs_type* ahrs) {
-	FusionQuaternion quaternion = FusionAhrsGetQuaternion((const FusionAhrs*) ahrs);
+	FusionQuaternion quaternion = ahrs? FusionAhrsGetQuaternion((const FusionAhrs*) ahrs) : FUSION_IDENTITY_QUATERNION;
 	device3_quat_type q;
 	q.x = quaternion.element.x;
 	q.y = quaternion.element.y;
@@ -853,4 +865,5 @@ void device3_close(device3_type* device) {
 	}
 	
 	free(device);
+	hid_exit();
 }

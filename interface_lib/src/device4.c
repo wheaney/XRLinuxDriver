@@ -24,13 +24,52 @@
 
 #include "device4.h"
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <hidapi/hidapi.h>
 
+#include "crc32.h"
+
 #define MAX_PACKET_SIZE 64
+
+static bool send_payload(device4_type* device, uint8_t size, const uint8_t* payload) {
+	int payload_size = size;
+	if (payload_size > MAX_PACKET_SIZE) {
+		payload_size = MAX_PACKET_SIZE;
+	}
+	
+	int transferred = hid_write(device->handle, payload, payload_size);
+	
+	if (transferred != payload_size) {
+		perror("ERROR: sending payload failed\n");
+		return false;
+	}
+	
+	return (transferred == size);
+}
+
+static bool send_payload_action(device4_type* device, uint8_t action, uint8_t len, const uint8_t* data) {
+	static device4_packet_type packet;
+	
+	const uint16_t packet_len = 11 + len;
+	const uint16_t payload_len = 5 + packet_len;
+	
+	packet.signature = 0xFD;
+	packet.length = packet_len;
+	memset(packet._padding0, 0, 4);
+	packet.timestamp = 0;
+	packet.action = action;
+	memset(packet._padding1, 0, 6);
+	
+	memcpy(packet.data, data, len);
+	packet.checksum = crc32_checksum((const uint8_t*) (&packet.length), packet.length);
+	
+	return send_payload(device, payload_len, (uint8_t*) (&packet));
+}
 
 device4_type* device4_open(device4_event_callback callback) {
 	device4_type* device = (device4_type*) malloc(sizeof(device4_type));
@@ -57,7 +96,7 @@ device4_type* device4_open(device4_event_callback callback) {
 
 	struct hid_device_info* it = info;
 	while (it) {
-		if (it->interface_number == 3) {
+		if (it->interface_number == 4) {
 			device->handle = hid_open_path(it->path);
 			break;
 		}
@@ -71,30 +110,18 @@ device4_type* device4_open(device4_event_callback callback) {
 		perror("No handle!\n");
 		return device;
 	}
-	
-	uint8_t initial_brightness_payload [16] = {
-			0xfd, 0x1e, 0xb9, 0xf0,
-			0x68, 0x11, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x03
-	};
-	
-	int size = MAX_PACKET_SIZE;
-	if (sizeof(initial_brightness_payload) < size) {
-		size = sizeof(initial_brightness_payload);
-	}
-	
-	int transferred = hid_write(
-			device->handle,
-			initial_brightness_payload,
-			size
-	);
-	
-	if (transferred != sizeof(initial_brightness_payload)) {
-		perror("ERROR\n");
+
+	device4_clear(device);
+
+	/*if (!send_payload_action(device, DEVICE4_ACTION_BRIGHTNESS_COMMAND, 0, NULL)) {
+		perror("Sending brightness command action failed!\n");
 		return device;
 	}
-	
+
+	if (0 > device4_read(device, 1000)) {
+		perror("Reading error!\n");
+	}*/
+
 	return device;
 }
 
@@ -111,7 +138,7 @@ static void device4_callback(device4_type* device,
 }
 
 void device4_clear(device4_type* device) {
-	device4_read(device, 0);
+	device4_read(device, 10);
 }
 
 int device4_read(device4_type* device, int timeout) {
@@ -133,16 +160,16 @@ int device4_read(device4_type* device, int timeout) {
 			MAX_PACKET_SIZE,
 			timeout
 	);
-	
-	/*if (transferred == 0) {
+
+	if (transferred == 0) {
 		return 1;
-	}*/
+	}
 	
 	if (MAX_PACKET_SIZE != transferred) {
 		perror("Not expected issue!\n");
 		return -3;
 	}
-	
+
 	const uint32_t timestamp = packet.timestamp;
 	const size_t data_len = (size_t) &(packet.data) - (size_t) &(packet.length);
 	
@@ -266,4 +293,5 @@ void device4_close(device4_type* device) {
 	}
 	
 	free(device);
+	hid_exit();
 }
