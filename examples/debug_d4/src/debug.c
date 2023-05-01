@@ -26,16 +26,13 @@
 
 #include <stdio.h>
 
-void test4(uint32_t timestamp,
+void test4(uint64_t timestamp,
 		   device4_event_type event,
 		   uint8_t brightness,
 		   const char* msg) {
 	switch (event) {
 		case DEVICE4_EVENT_MESSAGE:
 			printf("Message: `%s`\n", msg);
-			break;
-		case DEVICE4_EVENT_BRIGHTNESS_SET:
-			printf("Set Brightness: %u\n", brightness);
 			break;
 		case DEVICE4_EVENT_BRIGHTNESS_UP:
 			printf("Increase Brightness: %u\n", brightness);

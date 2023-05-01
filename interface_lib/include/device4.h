@@ -33,7 +33,8 @@
 #include <cstdint>
 #endif
 
-#define DEVICE4_MSG_P_BRIGHTNESS 0x03
+#define DEVICE4_MSG_R_BRIGHTNESS 0x03
+
 #define DEVICE4_MSG_W_DISP_MODE 0x08
 #define DEVICE4_MSG_R_GLASSID 0x15
 #define DEVICE4_MSG_R_DP7911_FW_VERSION 0x16
@@ -95,13 +96,12 @@ extern "C" {
 #endif
 
 struct __attribute__((__packed__)) device4_packet_t {
-	uint8_t signature;
+	uint8_t head;
 	uint32_t checksum;
 	uint16_t length;
-	uint8_t _padding0 [4];
-	uint32_t timestamp;
+	uint64_t timestamp;
 	uint16_t msgid;
-	uint8_t _padding1 [5];
+	uint8_t reserved [5];
 	union {
 		char text [42];
 		uint8_t data [42];
@@ -112,16 +112,15 @@ enum device4_event_t {
 	DEVICE4_EVENT_UNKNOWN 			= 0,
 	DEVICE4_EVENT_SCREEN_ON 		= 1,
 	DEVICE4_EVENT_SCREEN_OFF 		= 2,
-	DEVICE4_EVENT_BRIGHTNESS_SET 	= 3,
-	DEVICE4_EVENT_BRIGHTNESS_UP 	= 4,
-	DEVICE4_EVENT_BRIGHTNESS_DOWN 	= 5,
-	DEVICE4_EVENT_MESSAGE 			= 6,
+	DEVICE4_EVENT_BRIGHTNESS_UP 	= 3,
+	DEVICE4_EVENT_BRIGHTNESS_DOWN 	= 4,
+	DEVICE4_EVENT_MESSAGE 			= 5,
 };
 
 typedef struct device4_packet_t device4_packet_type;
 typedef enum device4_event_t device4_event_type;
 typedef void (*device4_event_callback)(
-		uint32_t timestamp,
+		uint64_t timestamp,
 		device4_event_type event,
 		uint8_t brightness,
 		const char* msg
@@ -132,6 +131,11 @@ struct device4_t {
 	uint16_t product_id;
 	
 	void* handle;
+
+	bool activated;
+	char mcu_app_fw_version [42];
+	char dp_fw_version [42];
+	char dsp_fw_version [42];
 	
 	bool active;
 	uint8_t brightness;
@@ -146,6 +150,8 @@ device4_type* device4_open(device4_event_callback callback);
 void device4_clear(device4_type* device);
 
 int device4_read(device4_type* device, int timeout);
+
+
 
 void device4_close(device4_type* device);
 

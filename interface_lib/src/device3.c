@@ -96,15 +96,6 @@ static bool recv_payload(device3_type* device, uint8_t size, uint8_t* payload) {
 	return (transferred == size);
 }
 
-#define DEVICE3_MSG_GET_CAL_DATA_LENGTH 0x14
-#define DEVICE3_MSG_CAL_DATA_GET_NEXT_SEGMENT 0x15
-#define DEVICE3_MSG_ALLOCATE_CAL_DATA_BUFFER 0x16
-#define DEVICE3_MSG_WRITE_CAL_DATA_SEGMENT 0x17
-#define DEVICE3_MSG_FREE_CAL_BUFFER 0x18
-#define DEVICE3_MSG_START_IMU_DATA 0x19
-#define DEVICE3_MSG_GET_STATIC_ID 0x1A
-#define DEVICE3_MSG_UNKNOWN 0x1D
-
 struct __attribute__((__packed__)) device3_payload_packet_t {
 	uint8_t head;
 	uint32_t checksum;

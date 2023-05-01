@@ -29,12 +29,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <hidapi/hidapi.h>
 
 #include "crc32.h"
 
 #define MAX_PACKET_SIZE 64
+#define PACKET_HEAD 0xFD
 
 static bool send_payload(device4_type* device, uint8_t size, const uint8_t* payload) {
 	int payload_size = size;
@@ -52,23 +54,78 @@ static bool send_payload(device4_type* device, uint8_t size, const uint8_t* payl
 	return (transferred == size);
 }
 
+static bool recv_payload(device4_type* device, uint8_t size, uint8_t* payload) {
+	int payload_size = size;
+	if (payload_size > MAX_PACKET_SIZE) {
+		payload_size = MAX_PACKET_SIZE;
+	}
+	
+	int transferred = hid_read(device->handle, payload, payload_size);
+	
+	if (transferred >= payload_size) {
+		transferred = payload_size;
+	}
+	
+	if (transferred == 0) {
+		return false;
+	}
+	
+	if (transferred != payload_size) {
+		perror("ERROR: receiving payload failed\n");
+		return false;
+	}
+	
+	return (transferred == size);
+}
+
 static bool send_payload_action(device4_type* device, uint16_t msgid, uint8_t len, const uint8_t* data) {
 	static device4_packet_type packet;
 	
-	const uint16_t packet_len = 11 + len;
+	const uint16_t packet_len = 17 + len;
 	const uint16_t payload_len = 5 + packet_len;
 	
-	packet.signature = 0xFD;
+	packet.head = PACKET_HEAD;
 	packet.length = packet_len;
-	memset(packet._padding0, 0, 4);
 	packet.timestamp = 0;
 	packet.msgid = msgid;
-	memset(packet._padding1, 0, 5);
+	memset(packet.reserved, 0, 5);
 	
 	memcpy(packet.data, data, len);
 	packet.checksum = crc32_checksum((const uint8_t*) (&packet.length), packet.length);
 
 	return send_payload(device, payload_len, (uint8_t*) (&packet));
+}
+
+static bool recv_payload_msg(device4_type* device, uint8_t msgid, uint8_t len, uint8_t* data) {
+	static device4_packet_type packet;
+	
+	packet.head = 0;
+	packet.length = 0;
+	packet.msgid = 0;
+	
+	const uint16_t packet_len = 18 + len;
+	const uint16_t payload_len = 5 + packet_len;
+	
+	if (!recv_payload(device, payload_len, (uint8_t*) (&packet))) {
+		return false;
+	}
+
+	if (packet.head != PACKET_HEAD) {
+		return false;
+	}
+	
+	if (packet.msgid != msgid) {
+		return false;
+	}
+	
+	const uint8_t status = packet.data[0];
+
+	if (status != 0) {
+		return false;
+	}
+
+	memcpy(data, packet.data + 1, len);
+	return true;
 }
 
 device4_type* device4_open(device4_event_callback callback) {
@@ -113,20 +170,73 @@ device4_type* device4_open(device4_event_callback callback) {
 
 	device4_clear(device);
 
-	/*if (!send_payload_action(device, DEVICE4_MSG_P_BRIGHTNESS, 0, NULL)) {
-		perror("Sending brightness command action failed!\n");
+	if (!send_payload_action(device, DEVICE4_MSG_R_ACTIVATION_TIME, 0, NULL)) {
+		perror("Requesting activation time failed!\n");
 		return device;
 	}
 
-	if (0 > device4_read(device, 1000)) {
-		perror("Reading error!\n");
-	}*/
+	uint8_t activated;
+	if (!recv_payload_msg(device, DEVICE4_MSG_R_ACTIVATION_TIME, 1, &activated)) {
+		perror("Receiving activation time failed!\n");
+		return device;
+	}
+
+	device->activated = (activated != 0);
+
+	if (!device->activated) {
+		perror("Device is not activated!\n");
+		return device;
+	}
+
+	if (!send_payload_action(device, DEVICE4_MSG_R_MCU_APP_FW_VERSION, 0, NULL)) {
+		perror("Requesting current MCU app firmware version!\n");
+		return device;
+	}
+
+	if (!recv_payload_msg(device, DEVICE4_MSG_R_MCU_APP_FW_VERSION, 41, (uint8_t*) device->mcu_app_fw_version)) {
+		perror("Receiving current MCU app firmware version failed!\n");
+		return device;
+	}
+
+	if (!send_payload_action(device, DEVICE4_MSG_R_DP7911_FW_VERSION, 0, NULL)) {
+		perror("Requesting current DP firmware version!\n");
+		return device;
+	}
+
+	if (!recv_payload_msg(device, DEVICE4_MSG_R_DP7911_FW_VERSION, 41, (uint8_t*) device->dp_fw_version)) {
+		perror("Receiving current DP firmware version failed!\n");
+		return device;
+	}
+
+	if (!send_payload_action(device, DEVICE4_MSG_R_DSP_APP_FW_VERSION, 0, NULL)) {
+		perror("Requesting current DSP app firmware version!\n");
+		return device;
+	}
+
+	if (!recv_payload_msg(device, DEVICE4_MSG_R_DSP_APP_FW_VERSION, 41, (uint8_t*) device->dsp_fw_version)) {
+		perror("Receiving current DSP app firmware version failed!\n");
+		return device;
+	}
+
+	printf("MCU: %s\n", device->mcu_app_fw_version);
+	printf("DP: %s\n", device->dp_fw_version);
+	printf("DSP: %s\n", device->dsp_fw_version);
+
+	if (!send_payload_action(device, DEVICE4_MSG_R_BRIGHTNESS, 0, NULL)) {
+		perror("Requesting initial brightness failed!\n");
+		return device;
+	}
+
+	if (!recv_payload_msg(device, DEVICE4_MSG_R_BRIGHTNESS, 1, &device->brightness)) {
+		perror("Receiving initial brightness failed!\n");
+		return device;
+	}
 
 	return device;
 }
 
 static void device4_callback(device4_type* device,
-							 uint32_t timestamp,
+							 uint64_t timestamp,
 							 device4_event_type event,
 							 uint8_t brightness,
 							 const char* msg) {
@@ -166,8 +276,13 @@ int device4_read(device4_type* device, int timeout) {
 	}
 	
 	if (MAX_PACKET_SIZE != transferred) {
-		perror("Not expected issue!\n");
+		perror("Reading failed!\n");
 		return -3;
+	}
+
+	if (packet.head != PACKET_HEAD) {
+		perror("Wrong packet!\n");
+		return -4;
 	}
 
 	const uint32_t timestamp = packet.timestamp;
@@ -187,20 +302,6 @@ int device4_read(device4_type* device, int timeout) {
 	
 	switch (packet.msgid) {
 		case DEVICE4_MSG_P_START_HEARTBEAT: {
-			break;
-		}
-		case DEVICE4_MSG_P_BRIGHTNESS: {
-			const uint8_t brightness = packet.data[1];
-			
-			device->brightness = brightness;
-			
-			device4_callback(
-					device,
-					timestamp,
-					DEVICE4_EVENT_BRIGHTNESS_SET,
-					device->brightness,
-					NULL
-			);
 			break;
 		}
 		case DEVICE4_MSG_P_BUTTON_PRESSED: {
