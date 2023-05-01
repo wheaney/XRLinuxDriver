@@ -52,7 +52,7 @@ static bool send_payload(device4_type* device, uint8_t size, const uint8_t* payl
 	return (transferred == size);
 }
 
-static bool send_payload_action(device4_type* device, uint8_t action, uint8_t len, const uint8_t* data) {
+static bool send_payload_action(device4_type* device, uint16_t msgid, uint8_t len, const uint8_t* data) {
 	static device4_packet_type packet;
 	
 	const uint16_t packet_len = 11 + len;
@@ -62,12 +62,12 @@ static bool send_payload_action(device4_type* device, uint8_t action, uint8_t le
 	packet.length = packet_len;
 	memset(packet._padding0, 0, 4);
 	packet.timestamp = 0;
-	packet.action = action;
-	memset(packet._padding1, 0, 6);
+	packet.msgid = msgid;
+	memset(packet._padding1, 0, 5);
 	
 	memcpy(packet.data, data, len);
 	packet.checksum = crc32_checksum((const uint8_t*) (&packet.length), packet.length);
-	
+
 	return send_payload(device, payload_len, (uint8_t*) (&packet));
 }
 
@@ -113,7 +113,7 @@ device4_type* device4_open(device4_event_callback callback) {
 
 	device4_clear(device);
 
-	/*if (!send_payload_action(device, DEVICE4_ACTION_BRIGHTNESS_COMMAND, 0, NULL)) {
+	/*if (!send_payload_action(device, DEVICE4_MSG_P_BRIGHTNESS, 0, NULL)) {
 		perror("Sending brightness command action failed!\n");
 		return device;
 	}
@@ -142,7 +142,7 @@ void device4_clear(device4_type* device) {
 }
 
 int device4_read(device4_type* device, int timeout) {
-	if (!device) {
+	if ((!device) || (!device->handle)) {
 		return -1;
 	}
 	
@@ -172,12 +172,24 @@ int device4_read(device4_type* device, int timeout) {
 
 	const uint32_t timestamp = packet.timestamp;
 	const size_t data_len = (size_t) &(packet.data) - (size_t) &(packet.length);
+
+#ifndef NDEBUG
+	printf("MSG: %d = %04x (%d)\n", packet.msgid, packet.msgid, packet.length);
+
+	if (packet.length > 11) {
+		for (int i = 0; i < packet.length - 11; i++) {
+			printf("%02x ", packet.data[i]);
+		}
+
+		printf("\n");
+	}
+#endif
 	
-	switch (packet.action) {
-		case DEVICE4_ACTION_PASSIVE_POLL_START: {
+	switch (packet.msgid) {
+		case DEVICE4_MSG_P_START_HEARTBEAT: {
 			break;
 		}
-		case DEVICE4_ACTION_BRIGHTNESS_COMMAND: {
+		case DEVICE4_MSG_P_BRIGHTNESS: {
 			const uint8_t brightness = packet.data[1];
 			
 			device->brightness = brightness;
@@ -191,13 +203,14 @@ int device4_read(device4_type* device, int timeout) {
 			);
 			break;
 		}
-		case DEVICE4_ACTION_MANUAL_POLL_CLICK: {
-			const uint8_t button = packet.data[0];
-			const uint8_t brightness = packet.data[8];
+		case DEVICE4_MSG_P_BUTTON_PRESSED: {
+			const uint8_t phys_button = packet.data[0];
+			const uint8_t virt_button = packet.data[4];
+			const uint8_t value = packet.data[8];
 			
-			switch (button) {
-				case DEVICE4_BUTTON_DISPLAY_TOGGLE:
-					device->active = !device->active;
+			switch (virt_button) {
+				case DEVICE4_BUTTON_VIRT_DISPLAY_TOGGLE:
+					device->active = value;
 					
 					if (device->active) {
 						device4_callback(
@@ -217,8 +230,8 @@ int device4_read(device4_type* device, int timeout) {
 						);
 					}
 					break;
-				case DEVICE4_BUTTON_BRIGHTNESS_UP:
-					device->brightness = brightness;
+				case DEVICE4_BUTTON_VIRT_BRIGHTNESS_UP:
+					device->brightness = value;
 					
 					device4_callback(
 							device,
@@ -228,8 +241,8 @@ int device4_read(device4_type* device, int timeout) {
 							NULL
 					);
 					break;
-				case DEVICE4_BUTTON_BRIGHTNESS_DOWN:
-					device->brightness = brightness;
+				case DEVICE4_BUTTON_VIRT_BRIGHTNESS_DOWN:
+					device->brightness = value;
 					
 					device4_callback(
 							device,
@@ -245,7 +258,7 @@ int device4_read(device4_type* device, int timeout) {
 			
 			break;
 		}
-		case DEVICE4_ACTION_ACTIVE_POLL: {
+		case DEVICE4_MSG_P_ASYNC_TEXT_LOG: {
 			const char* text = packet.text;
 			const size_t text_len = strlen(text);
 			
@@ -265,7 +278,7 @@ int device4_read(device4_type* device, int timeout) {
 			);
 			break;
 		}
-		case DEVICE4_ACTION_PASSIVE_POLL_END: {
+		case DEVICE4_MSG_P_END_HEARTBEAT: {
 			break;
 		}
 		default:
