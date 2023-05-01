@@ -218,9 +218,11 @@ device4_type* device4_open(device4_event_callback callback) {
 		return device;
 	}
 
+#ifndef NDEBUG
 	printf("MCU: %s\n", device->mcu_app_fw_version);
 	printf("DP: %s\n", device->dp_fw_version);
 	printf("DSP: %s\n", device->dsp_fw_version);
+#endif
 
 	if (!send_payload_action(device, DEVICE4_MSG_R_BRIGHTNESS, 0, NULL)) {
 		perror("Requesting initial brightness failed!\n");
