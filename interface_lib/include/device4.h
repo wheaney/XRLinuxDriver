@@ -154,7 +154,7 @@ void device4_clear(device4_type* device);
 
 int device4_read(device4_type* device, int timeout);
 
-
+bool device4_update_mcu_firmware(device4_type* device, const char* path);
 
 void device4_close(device4_type* device);
 

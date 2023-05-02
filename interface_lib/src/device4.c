@@ -96,7 +96,7 @@ static bool send_payload_action(device4_type* device, uint16_t msgid, uint8_t le
 	return send_payload(device, payload_len, (uint8_t*) (&packet));
 }
 
-static bool recv_payload_msg(device4_type* device, uint8_t msgid, uint8_t len, uint8_t* data) {
+static bool recv_payload_msg(device4_type* device, uint16_t msgid, uint8_t len, uint8_t* data) {
 	static device4_packet_type packet;
 	
 	packet.head = 0;
@@ -134,6 +134,26 @@ static bool recv_payload_msg(device4_type* device, uint8_t msgid, uint8_t len, u
 	}
 
 	return true;
+}
+
+static bool do_payload_action(device4_type* device, uint16_t msgid, uint8_t len, const uint8_t* data) {
+	if (!send_payload_action(device, msgid, len, data)) {
+		return false;
+	}
+
+	const uint16_t attempts_per_second = (device->active? 60 : 1);
+	
+	uint16_t attempts = attempts_per_second * 5;
+
+	while (attempts > 0) {
+		if (recv_payload_msg(device, msgid, 0, NULL)) {
+			return true;
+		}
+
+		attempts--;
+	}
+
+	return false;
 }
 
 device4_type* device4_open(device4_event_callback callback) {
@@ -419,6 +439,94 @@ int device4_read(device4_type* device, int timeout) {
 	}
 	
 	return 0;
+}
+
+bool device4_update_mcu_firmware(device4_type* device, const char* path) {
+	if (!device) {
+		return false;
+	}
+
+	if (!device->activated) {
+		perror("Device is not activated!\n");
+		return false;
+	}
+
+	size_t firmware_len = 0;
+	uint8_t* firmware = NULL;
+
+	FILE* file = fopen(path, "rb");
+	bool result = false;
+
+	if (file) {
+		fseek(file, 0, SEEK_END);
+		firmware_len = ftell(file);
+
+		if (firmware_len > 0) {
+			firmware = (uint8_t*) malloc(firmware_len);
+			fread(firmware, sizeof(uint8_t), firmware_len, file);
+		}
+
+		fclose(file);
+	}
+
+	device4_clear(device);
+
+	printf("Prepare upload: %lu\n", firmware_len);
+
+	if (!do_payload_action(device, DEVICE4_MSG_W_UPDATE_MCU_APP_FW_PREPARE, 0, NULL)) {
+		perror("Failed preparing the device for MCU firmware update!\n");
+		goto cleanup;
+	}
+
+	if (!do_payload_action(device, DEVICE4_MSG_W_MCU_APP_JUMP_TO_BOOT, 0, NULL)) {
+		perror("Failed mcu app jumping to boot!\n");
+		goto cleanup;
+	}
+
+	size_t offset = 0;
+
+	while (offset < firmware_len) {
+		const size_t remaining = firmware_len - offset;
+
+		printf("Upload: %lu / %lu\n", offset, firmware_len);
+
+		uint8_t len;
+		uint16_t msgid;
+		if (offset == 0) {
+			len = remaining > 24? 24 : remaining;
+			msgid = DEVICE4_MSG_W_UPDATE_MCU_APP_FW_START;
+		} else {
+			len = remaining > 42? 42 : remaining;
+			msgid = DEVICE4_MSG_W_UPDATE_MCU_APP_FW_TRANSMIT;
+		}
+
+		if (!do_payload_action(device, msgid, len, firmware)) {
+			perror("Failed sending firmware upload!\n");
+			goto jump_to_app;
+		}
+	}
+
+	printf("Finish upload!\n");
+
+	if (!do_payload_action(device, DEVICE4_MSG_W_UPDATE_MCU_APP_FW_FINISH, 0, NULL)) {
+		perror("Failed finishing firmware upload!\n");
+		goto jump_to_app;
+	}
+
+	result = true;
+
+jump_to_app:
+	if (!do_payload_action(device, DEVICE4_MSG_W_BOOT_JUMP_TO_APP, 0, NULL)) {
+		perror("Failed boot jumping back to app!\n");
+		goto cleanup;
+	}
+
+cleanup:
+	if (firmware) {
+		free(firmware);
+	}
+
+	return result;
 }
 
 void device4_close(device4_type* device) {
