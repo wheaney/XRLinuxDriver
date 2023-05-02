@@ -124,7 +124,15 @@ static bool recv_payload_msg(device4_type* device, uint8_t msgid, uint8_t len, u
 		return false;
 	}
 
-	memcpy(data, packet.data + 1, len);
+	const uint16_t data_len = packet.length - 18;
+
+	if (len <= data_len) {
+		memcpy(data, packet.data + 1, len);
+	} else {
+		memcpy(data, packet.data + 1, data_len);
+		memset(data + data_len, 0, len - data_len);
+	}
+
 	return true;
 }
 
@@ -233,6 +241,21 @@ device4_type* device4_open(device4_event_callback callback) {
 		perror("Receiving initial brightness failed!\n");
 		return device;
 	}
+
+	if (!send_payload_action(device, DEVICE4_MSG_R_DISP_MODE, 0, NULL)) {
+		perror("Requesting display mode failed!\n");
+		return device;
+	}
+
+	if (!recv_payload_msg(device, DEVICE4_MSG_R_DISP_MODE, 1, &device->disp_mode)) {
+		perror("Receiving display mode failed!\n");
+		return device;
+	}
+
+#ifndef NDEBUG
+	printf("Brightness: %d\n", device->brightness);
+	printf("Disp-Mode: %d\n", device->disp_mode);
+#endif
 
 	return device;
 }

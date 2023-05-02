@@ -34,8 +34,10 @@
 #endif
 
 #define DEVICE4_MSG_R_BRIGHTNESS 0x03
-
+#define DEVICE4_MSG_W_BRIGHTNESS 0x04
+#define DEVICE4_MSG_R_DISP_MODE 0x07
 #define DEVICE4_MSG_W_DISP_MODE 0x08
+
 #define DEVICE4_MSG_R_GLASSID 0x15
 #define DEVICE4_MSG_R_DP7911_FW_VERSION 0x16
 #define DEVICE4_MSG_R_DSP_VERSION 0x18
@@ -139,6 +141,7 @@ struct device4_t {
 	
 	bool active;
 	uint8_t brightness;
+	uint8_t disp_mode;
 	
 	device4_event_callback callback;
 };
