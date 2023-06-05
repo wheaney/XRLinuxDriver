@@ -31,7 +31,7 @@
 #include <string.h>
 #include <time.h>
 
-#include <hidapi/hidapi.h>
+#include <../hidapi/hidapi/hidapi.h>
 
 #include "crc32.h"
 

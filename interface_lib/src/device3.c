@@ -31,7 +31,7 @@
 #include <Fusion/Fusion.h>
 #include <json-c/json.h>
 
-#include <hidapi/hidapi.h>
+#include <../hidapi/hidapi/hidapi.h>
 
 #include "crc32.h"
 

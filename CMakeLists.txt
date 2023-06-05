@@ -3,10 +3,6 @@ project(nrealAirLinuxDriver C)
 
 set(CMAKE_C_STANDARD 17)
 
-add_subdirectory(modules/Fusion/Fusion)
-set(FUSION_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/modules/Fusion)
-set(FUSION_LIBRARY Fusion)
-
 add_subdirectory(interface_lib)
 add_subdirectory(examples)
 
