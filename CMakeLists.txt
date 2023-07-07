@@ -3,6 +3,9 @@ project(nrealAirLinuxDriver C)
 
 set(CMAKE_C_STANDARD 17)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+find_package(LIBEVDEV REQUIRED)
+
 add_subdirectory(interface_lib)
 add_subdirectory(examples)
 
@@ -11,7 +14,7 @@ add_executable(nrealAirLinuxDriver
 )
 
 target_include_directories(nrealAirLinuxDriver
-		SYSTEM BEFORE PRIVATE ${FUSION_INCLUDE_DIR}
+		SYSTEM BEFORE PRIVATE ${FUSION_INCLUDE_DIR} ${LIBEVDEV_INCLUDE_DIRS}
 )
 
 target_include_directories(nrealAirLinuxDriver
@@ -19,5 +22,5 @@ target_include_directories(nrealAirLinuxDriver
 )
 
 target_link_libraries(nrealAirLinuxDriver
-		${NRA_LIBRARY} ${FUSION_LIBRARY}
+		PRIVATE ${NRA_LIBRARY} ${FUSION_LIBRARY} ${LIBEVDEV_LIBRARIES}
 )

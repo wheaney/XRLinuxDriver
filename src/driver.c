@@ -25,56 +25,117 @@
 #include "device3.h"
 #include "device4.h"
 
+#include <libevdev/libevdev.h>
+#include <libevdev/libevdev-uinput.h>
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
+#include <string.h>
+#include <dirent.h>
+#include <fcntl.h>
 
 #include <math.h>
 
-void test3(uint64_t timestamp,
-		   device3_event_type event,
-		   const device3_ahrs_type* ahrs) {
-	static device3_quat_type old;
-	static float dmax = -1.0f;
-	
-	if (event != DEVICE3_EVENT_UPDATE) {
-		return;
-	}
-	
-	device3_quat_type q = device3_get_orientation(ahrs);
-	
-	const float dx = (old.x - q.x) * (old.x - q.x);
-	const float dy = (old.y - q.y) * (old.y - q.y);
-	const float dz = (old.z - q.z) * (old.z - q.z);
-	const float dw = (old.w - q.w) * (old.w - q.w);
-	
-	const float d = sqrtf(dx*dx + dy*dy + dz*dz + dw*dw);
-	
-	if (dmax < 0.0f) {
-		dmax = 0.0f;
-	} else {
-		dmax = (d > dmax? d : dmax);
-	}
-	
-	device3_vec3_type e = device3_get_euler(q);
-	
-	if (d >= 0.00005f) {
-		device3_vec3_type e0 = device3_get_euler(old);
-		
-		printf("Pitch: %f; Roll: %f; Yaw: %f\n", e0.x, e0.y, e0.z);
-		printf("Pitch: %f; Roll: %f; Yaw: %f\n", e.x, e.y, e.z);
-		printf("D = %f; ( %f )\n", d, dmax);
-		
-		printf("X: %f; Y: %f; Z: %f; W: %f;\n", old.x, old.y, old.z, old.w);
-		printf("X: %f; Y: %f; Z: %f; W: %f;\n", q.x, q.y, q.z, q.w);
-	} else {
-		printf("Pitch: %.2f; Roll: %.2f; Yaw: %.2f\n", e.x, e.y, e.z);
-	}
-	
-	old = q;
+const int max_input = 1 << 16;
+const int mid_input = 0;
+const int min_input = -max_input;
+
+const int cycles_per_second = 1000;
+
+// anyone rotating their head more than 360 degrees per second is probably dead
+const float max_head_movement_per_cycle = 360.0 / cycles_per_second;
+
+const float joystick_sensitivity = max_head_movement_per_cycle / 4;
+const float joystick_sensitivity_radians = joystick_sensitivity * M_PI / 180.0;
+const int joystick_resolution = max_input / joystick_sensitivity_radians;
+
+static int check(int i) {
+    if (i < 0) {
+        printf("%s\n", strerror(-i));
+        exit(1);
+    }
+
+    return i;
 }
 
-void test4(uint64_t timestamp,
+// Joystick ranges from 0 to 2^16 (~65k), where zero-tilt (degree_diff == 0) is halfway between. Negative degree_diff
+// should result in a value somewhere between 0 and middle, while a positive degree_diff should result in a value
+// between mid and 2^16. max_value determines degree_diff should cap out at (-max_value will result in a joystick value
+// of 0, +max_value will result in a joystick value of 2^16).
+int joystick_value(float degree_diff, float max_value) {
+  int value = round(degree_diff * max_input / max_value + mid_input);
+  if (value < min_input) {
+    return min_input;
+  } else if (value > max_input) {
+    return max_input;
+  }
+
+  return value;
+}
+
+// Starting from degree 0, 180 and -180 are the same. If the previous value was 179 and the new value is -179,
+// the diff is 2 (-179 is equivalent to 181). This function takes the diff and then adjusts it if it detects
+// that we've crossed the +/-180 threshold.
+float degree_delta(float prev, float next) {
+    float delta = fmod(prev - next, 360);
+    if (isnan(delta)) {
+        printf("nan value");
+        exit(1);
+    }
+
+    if (delta > 180) {
+        return delta - 360;
+    } else if (delta < -180) {
+        return delta + 360;
+    }
+
+    return delta;
+}
+
+struct libevdev_uinput* uinput;
+void handleDevice3(uint64_t timestamp,
+		   device3_event_type event,
+		   const device3_ahrs_type* ahrs) {
+	static device3_vec3_type prev_tracked;
+	static device3_vec3_type prev;
+
+	device3_quat_type q = device3_get_orientation(ahrs);
+	device3_vec3_type e = device3_get_euler(q);
+
+    float this_delta_x = prev.z - e.z;
+    float this_delta_y = prev.y - e.y;
+    prev = e;
+
+    // Ignore anomalous data from the glasses.
+    bool valid_movement = fabs(this_delta_x) < max_head_movement_per_cycle &&
+                          fabs(this_delta_y) < max_head_movement_per_cycle;
+    if (valid_movement) {
+        float delta_x = degree_delta(prev_tracked.z, e.z);
+        float delta_y = degree_delta(prev_tracked.y, e.y);
+        float delta_z = degree_delta(prev_tracked.x, e.x);
+
+        printf("%d\t%d\t%d\n",
+            joystick_value(delta_x, joystick_sensitivity),
+            joystick_value(delta_y, joystick_sensitivity),
+            joystick_value(delta_z, joystick_sensitivity)
+        );
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_sensitivity));
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_sensitivity));
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_sensitivity));
+        libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
+
+        prev_tracked = e;
+	} else {
+	    // adjust our tracked values by the delta of the anomaly so we can pick right back up on the next cycle
+	    prev_tracked.z -= this_delta_x;
+	    prev_tracked.y -= this_delta_y;
+	}
+}
+
+void handleDevice4(uint64_t timestamp,
 		   device4_event_type event,
 		   uint8_t brightness,
 		   const char* msg) {
@@ -84,6 +145,8 @@ void test4(uint64_t timestamp,
 			break;
 		case DEVICE4_EVENT_BRIGHTNESS_UP:
 			printf("Increase Brightness: %u\n", brightness);
+            libevdev_uinput_write_event(uinput, EV_KEY, BTN_A, 1);
+            libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 			break;
 		case DEVICE4_EVENT_BRIGHTNESS_DOWN:
 			printf("Decrease Brightness: %u\n", brightness);
@@ -94,42 +157,46 @@ void test4(uint64_t timestamp,
 }
 
 int main(int argc, const char** argv) {
-	pid_t pid = fork();
-	
-	if (pid == -1) {
-		perror("Could not fork!\n");
-		return 1;
-	}
-	
-	if (pid == 0) {
-		device3_type* dev3 = device3_open(test3);
-		device3_clear(dev3);
-		
-		while (dev3) {
-			if (device3_read(dev3, 0) < 0) {
-				break;
-			}
-		}
-		
-		device3_close(dev3);
-		return 0;
-	} else {
-		device4_type* dev4 = device4_open(test4);
-		device4_clear(dev4);
-		
-		while (dev4) {
-			if (device4_read(dev4, 0) < 0) {
-				break;
-			}
-		}
-		
-		device4_close(dev4);
-		
-		int status = 0;
-		if (pid != waitpid(pid, &status, 0)) {
-			return 1;
-		}
-		
-		return status;
-	}
+    struct input_absinfo absinfo;
+
+    absinfo.minimum = min_input;
+    absinfo.maximum = max_input;
+    absinfo.resolution = joystick_resolution;
+    absinfo.value = mid_input;
+    absinfo.flat = 2;
+    absinfo.fuzz = 0;
+
+    struct libevdev* evdev = libevdev_new();
+    check(libevdev_enable_property(evdev, INPUT_PROP_BUTTONPAD));
+//    check(libevdev_enable_property(evdev, INPUT_PROP_ACCELEROMETER));
+    libevdev_set_name(evdev, "xReal Air virtual joystick");
+    check(libevdev_enable_event_type(evdev, EV_ABS));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_X, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Y, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Z, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RX, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RY, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RZ, &absinfo));
+
+    /* do not remove next 3 lines or udev scripts won't assign 0664 permissions -sh */
+    check(libevdev_enable_event_type(evdev, EV_KEY));
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_JOYSTICK, NULL));
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
+
+    check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
+
+    device3_type* dev3 = device3_open(handleDevice3);
+    device3_clear(dev3);
+
+    while (dev3) {
+        if (device3_read(dev3, 0) < 0) {
+            break;
+        }
+    }
+
+    device3_close(dev3);
+    libevdev_uinput_destroy(uinput);
+    libevdev_free(evdev);
+    return 0;
 }
