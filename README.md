@@ -37,14 +37,13 @@ Pinephone or other mobile Linux devices.
 
 ## Dependencies
 
-You can build the binary using `cmake` and there are only three dependencies for now:
+You can build the binary using `cmake` and there are a few dependencies for now:
  - [hidapi](https://github.com/libusb/hidapi)
  - [json-c](https://github.com/json-c/json-c/)
  - [Fusion](https://github.com/xioTechnologies/Fusion)
+ - [libevdev](https://gitlab.freedesktop.org/libevdev/libevdev)
 
-Fusion is a sensor fusion library which is integrated as git submodule. So when you checkout the 
-repository, just update the submodules to get it. The libraries `hidapi` and `json-c` should be 
-pretty common in most Linux distributions repositories.
+Fusion and hidapi source are included as Git submodules that you'll need to check out using the `git submodules` command. json-c may already be installed with your distro, and you'll want to install libevdev (e.g. 'sudo apt install libevdev-dev`)
 
 ## Build
 
@@ -57,12 +56,17 @@ cmake ..
 make
 ```
 
-## Run
+## Usage
 
-It's easiest to run the software with root privileges. But theoretically it should be possible to 
-adjust rules of your device to not need them for read/write access vis USB. It's definitely not 
-planned to require that in the future (but for now):
-
-```
-sudo nrealAirLinuxDriver
-```
+To use this driver:
+1. If on Steam Deck, switch to Desktop Mode
+2. Download the latest driver from the releases page
+3. From a terminal, check if you have the `uinput` module already installed `lsmod | grep uinput`; if not, install it
+4. Add the following rule to a udev rules file: `SUBSYSTEMS=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424", TAG+="uaccess"`
+   * Modify or create a new file in `/etc/udev/rules.d/`
+   * Reload the udev rules using something like `sudo udevadm control --reload` and `sudo udevadm trigger`
+5. Plug in your glasses, wait a few seconds
+6. Run the driver from a terminal like `/path/to/nrealAirLinuxDriver` (e.g. `~/Downloads/nrealAirLinuxDriver`)
+   * If you don't see a constant stream of numbers, try again until you do
+  
+Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curive to linear and reduce the dead zone (the input has very little wobble to it, so doing this will allow for smaller/fine-grained movement).
