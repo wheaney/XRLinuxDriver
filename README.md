@@ -31,7 +31,7 @@ You can build the binary using `cmake` and there are a few dependencies for now:
  - [Fusion](https://github.com/xioTechnologies/Fusion)
  - [libevdev](https://gitlab.freedesktop.org/libevdev/libevdev)
 
-Fusion and hidapi source are included as Git submodules that you'll need to check out using the `git submodules` command. json-c may already be installed with your distro, and you'll want to install libevdev (e.g. 'sudo apt install libevdev-dev`)
+Fusion and hidapi source are included as Git submodules that you'll need to check out using the `git submodules` command. json-c may already be installed with your distro, and you'll want to install libevdev (e.g. `sudo apt install libevdev-dev`)
 
 ## Build
 
@@ -57,4 +57,8 @@ To use this driver:
 6. Run the driver from a terminal like `/path/to/nrealAirLinuxDriver` (e.g. `~/Downloads/nrealAirLinuxDriver`)
    * If you don't see a constant stream of numbers, try again until you do
   
-Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curive to linear and reduce the dead zone (the input has very little wobble to it, so doing this will allow for smaller/fine-grained movement).
+Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curive to linear. Lastly, you'll want to reduce the dead zone (the input has very little wobble to it, so doing this will allow for smaller/fine-grained movement), but this should be done from the general controller settings and not just in a game-specific controller layout; I've found that setting the dead zone somewhere between 2000 and 3000 is best.
+
+### Steam Deck Game Mode
+
+On Steam Deck, once you have the driver working from Desktop mode, you can get it working in Game Mode as well by (from Desktop mode) clicking the `Add a Game` button in Steam, then `Add a Non-Steam Game`, then `Browse...`, navigate to the `nrealAirLinuxDriver` that you downloaded, click `Select`, make sure its checkbox is checked in the `Add Non-Steam Game` dialog, then finally click the `Add Selected Program` button. Now you should be able to find `nrealAirLinuxDriver` from the games sidebar. You'll probably want to flag it as a Favorite so it's easy to locate. From Game Mode, you'll want to find the driver in your favorites, use `Play` to get it running, then hit the `Steam` button, return to your Home or Library and choose the game you want to play. Keep in mind that, for the moment, the driver doesn't always work on the first try, so if you're not getting mouse movement from the glasses while in-game, then double-check you've set up the right xReal joystick using `Joystick as Mouse` in the controller settings for that game, and otherwise, exit and restart the driver program.
