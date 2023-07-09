@@ -122,6 +122,8 @@ struct device3_t {
 	
 	device3_event_callback callback;
 	device3_calibration_type* calibration;
+
+	bool ready;
 };
 
 typedef struct device3_t device3_type;
@@ -138,7 +140,7 @@ void device3_clear(device3_type* device);
 
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet);
 
-int device3_read(device3_type* device, int timeout);
+int device3_read(device3_type* device, int timeout, bool silent);
 
 device3_vec3_type device3_get_earth_acceleration(const device3_ahrs_type* ahrs);
 

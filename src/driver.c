@@ -99,39 +99,34 @@ struct libevdev_uinput* uinput;
 void handleDevice3(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
-	static device3_vec3_type prev_tracked;
-	static device3_vec3_type prev;
+    if (event == DEVICE3_EVENT_UPDATE) {
+        static device3_vec3_type prev_tracked;
+        static device3_vec3_type prev;
+        device3_quat_type q = device3_get_orientation(ahrs);
+        device3_vec3_type e = device3_get_euler(q);
 
-	device3_quat_type q = device3_get_orientation(ahrs);
-	device3_vec3_type e = device3_get_euler(q);
+        float this_delta_x = prev.z - e.z;
+        float this_delta_y = prev.y - e.y;
+        prev = e;
 
-    float this_delta_x = prev.z - e.z;
-    float this_delta_y = prev.y - e.y;
-    prev = e;
+        // Ignore anomalous data from the glasses.
+        bool valid_movement = fabs(this_delta_x) < max_head_movement_per_cycle &&
+                              fabs(this_delta_y) < max_head_movement_per_cycle;
+        if (valid_movement) {
+            float delta_x = degree_delta(prev_tracked.z, e.z);
+            float delta_y = degree_delta(prev_tracked.y, e.y);
+            float delta_z = degree_delta(prev_tracked.x, e.x);
+            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_sensitivity));
+            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_sensitivity));
+            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_sensitivity));
+            libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 
-    // Ignore anomalous data from the glasses.
-    bool valid_movement = fabs(this_delta_x) < max_head_movement_per_cycle &&
-                          fabs(this_delta_y) < max_head_movement_per_cycle;
-    if (valid_movement) {
-        float delta_x = degree_delta(prev_tracked.z, e.z);
-        float delta_y = degree_delta(prev_tracked.y, e.y);
-        float delta_z = degree_delta(prev_tracked.x, e.x);
-
-        printf("%d\t%d\t%d\n",
-            joystick_value(delta_x, joystick_sensitivity),
-            joystick_value(delta_y, joystick_sensitivity),
-            joystick_value(delta_z, joystick_sensitivity)
-        );
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_sensitivity));
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_sensitivity));
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_sensitivity));
-        libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
-
-        prev_tracked = e;
-	} else {
-	    // adjust our tracked values by the delta of the anomaly so we can pick right back up on the next cycle
-	    prev_tracked.z -= this_delta_x;
-	    prev_tracked.y -= this_delta_y;
+            prev_tracked = e;
+        } else {
+            // adjust our tracked values by the delta of the anomaly so we can pick right back up on the next cycle
+            prev_tracked.z -= this_delta_x;
+            prev_tracked.y -= this_delta_y;
+        }
 	}
 }
 
@@ -187,11 +182,13 @@ int main(int argc, const char** argv) {
     check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 
     device3_type* dev3 = device3_open(handleDevice3);
-    device3_clear(dev3);
+    if (dev3 && dev3->ready) {
+        device3_clear(dev3);
 
-    while (dev3) {
-        if (device3_read(dev3, 0) < 0) {
-            break;
+        while (dev3) {
+            if (device3_read(dev3, 0, false) < 0) {
+                break;
+            }
         }
     }
 

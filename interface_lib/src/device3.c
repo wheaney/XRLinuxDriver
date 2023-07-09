@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include <Fusion/Fusion.h>
@@ -308,6 +309,9 @@ device3_type* device3_open(device3_event_callback callback) {
 	};
 	
 	FusionAhrsSetSettings((FusionAhrs*) device->ahrs, &settings);
+
+	device->ready = true;
+
 	return device;
 }
 
@@ -600,7 +604,7 @@ static void apply_calibration(const device3_type* device,
 }
 
 void device3_clear(device3_type* device) {
-	device3_read(device, 10);
+	device3_read(device, 10, true);
 }
 
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
@@ -714,14 +718,18 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 	return 0;
 }
 
-int device3_read(device3_type* device, int timeout) {
-	if (!device) {
-		perror("No device!\n");
+int device3_read(device3_type* device, int timeout, bool silent) {
+	if (!device || !device->ready) {
+		if (!silent) {
+			perror("No device!\n");
+		}
 		return -1;
 	}
 	
 	if (MAX_PACKET_SIZE != sizeof(device3_packet_type)) {
-		perror("Not proper size!\n");
+		if (!silent) {
+			perror("Not proper size!\n");
+		}
 		return -2;
 	}
 	
@@ -740,7 +748,9 @@ int device3_read(device3_type* device, int timeout) {
 	}
 	
 	if (MAX_PACKET_SIZE != transferred) {
-		perror("Not expected issue!\n");
+		if (!silent) {
+			perror("Not expected issue!\n");
+		}
 		return -3;
 	}
 	
@@ -752,7 +762,9 @@ int device3_read(device3_type* device, int timeout) {
 	}
 	
 	if ((packet.signature[0] != 0x01) || (packet.signature[1] != 0x02)) {
-		perror("Not matching signature!\n");
+		if (!silent) {
+			perror("Not matching signature! Try unplugging then replugging your device.\n");
+		}
 		return -4;
 	}
 	
@@ -783,7 +795,12 @@ int device3_read(device3_type* device, int timeout) {
 	
 	if (device->ahrs) {
 		FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
-		//FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
+		if (isnan(device3_get_orientation(device->ahrs).x)) {
+			if (!silent) {
+				perror("Invalid device reading\n");
+			}
+			return -5;
+		}
 	}
 	
 	device3_callback(device, timestamp, DEVICE3_EVENT_UPDATE);
