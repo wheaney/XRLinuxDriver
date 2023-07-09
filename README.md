@@ -48,7 +48,7 @@ make
 
 To use this driver:
 1. If on Steam Deck, switch to Desktop Mode
-2. Download the latest driver from the releases page
+2. Download the latest driver from the releases page and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/nrealAirLinuxDriver`)
 3. From a terminal, check if you have the `uinput` module already installed `lsmod | grep uinput`; if not, install it
 4. Add the following rule to a udev rules file: `SUBSYSTEMS=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424", TAG+="uaccess"`
    * Modify or create a new file in `/etc/udev/rules.d/`
