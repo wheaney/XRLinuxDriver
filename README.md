@@ -48,11 +48,11 @@ make
 
 To use this driver:
 1. If on Steam Deck, switch to Desktop Mode
-2. Download the latest driver from the releases page and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/nrealAirLinuxDriver`)
-3. From a terminal, check if you have the `uinput` module already installed `lsmod | grep uinput`; if not, install it
-4. Add the following rule to a udev rules file: `SUBSYSTEMS=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424", TAG+="uaccess"`
-   * Modify or create a new file in `/etc/udev/rules.d/`
-   * Reload the udev rules using something like `sudo udevadm control --reload` and `sudo udevadm trigger`
+2. [Download the driver](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/nrealAirLinuxDriver) and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/nrealAirLinuxDriver`)
+3. From a terminal, check if you have the `uinput` module already installed `lsmod | grep uinput`; if not, install it using `sudo modprobe uinput`
+4. [Download the `nreal_air.rules` file](https://github.com/wheaney/xrealAirLinuxDriver/blob/main/udev/nreal_air.rules) to `/etc/udev/rules.d/`
+   * For Steam Deck, you may need to disable the readonly file system: `sudo steamos-readonly disable`
+   * Reload the udev rules using something like `udevadm control --reload`
 5. Plug in your glasses, wait a few seconds
 6. Run the driver from a terminal like `/path/to/nrealAirLinuxDriver` (e.g. `~/Downloads/nrealAirLinuxDriver`)
    * The program will exit with an error message if there are any issues, otherwise it will run without output until the device is unplugged or some other exit condition is hit
@@ -61,4 +61,6 @@ Steam should now register your glasses as a new controller named `xReal Air virt
 
 ### Steam Deck Game Mode
 
-On Steam Deck, once you have the driver working from Desktop mode, you can get it working in Game Mode as well by (from Desktop mode) clicking the `Add a Game` button in Steam, then `Add a Non-Steam Game`, then `Browse...`, navigate to the `nrealAirLinuxDriver` that you downloaded, click `Select`, make sure its checkbox is checked in the `Add Non-Steam Game` dialog, then finally click the `Add Selected Program` button. Now you should be able to find `nrealAirLinuxDriver` from the games sidebar. You'll probably want to flag it as a Favorite so it's easy to locate. From Game Mode, you'll want to find the driver in your favorites, use `Play` to get it running, then hit the `Steam` button, return to your Home or Library and choose the game you want to play. Keep in mind that, for the moment, the driver doesn't always work on the first try, so if you're not getting mouse movement from the glasses while in-game, then double-check you've set up the right xReal joystick using `Joystick as Mouse` in the controller settings for that game, and otherwise, exit and restart the driver program.
+On Steam Deck, once you have the driver working from Desktop mode, you can get it working in Game Mode as well by (from Desktop mode) clicking the `Add a Game` button in Steam, then `Add a Non-Steam Game`, then `Browse...`, navigate to the `nrealAirLinuxDriver` that you downloaded, click `Select`, make sure its checkbox is checked in the `Add Non-Steam Game` dialog, then finally click the `Add Selected Program` button. Now you should be able to find `nrealAirLinuxDriver` from the games sidebar. You'll probably want to flag it as a Favorite so it's easy to locate. 
+
+From Game Mode, you'll want to find the driver in your favorites, use `Play` to get it running and you'll see the steam game loading icon. If there's a problem it will just close and the "Play" button will be visible and green again. If it's running successfully, the loading symbol will just spin indefinitely as the driver doesn't have anything visual to display while running. You'll need to leave it running by hitting the `Steam` button, return to your Home or Library and choose the game you want to play. If you're not getting mouse movement from the glasses while in-game, then double-check you've set up the right xReal joystick using `Joystick as Mouse` in the controller settings for that game, and otherwise verify that the driver is still running (you'll see it running above "Home" in the sidebar when you hit the Steam button).
