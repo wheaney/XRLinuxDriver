@@ -48,9 +48,9 @@ make
 
 To use this driver:
 1. If on Steam Deck, switch to Desktop Mode
-2. [Download the driver](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/nrealAirLinuxDriver) and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/nrealAirLinuxDriver`)
+2. [Download the driver](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xrealAirLinuxDriver) and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/xrealAirLinuxDriver`)
 3. From a terminal, check if you have the `uinput` module already installed `lsmod | grep uinput`; if not, install it using `sudo modprobe uinput`
-4. [Download the `nreal_air.rules` file](https://github.com/wheaney/xrealAirLinuxDriver/blob/main/udev/nreal_air.rules) to `/etc/udev/rules.d/`
+4. [Download the `xreal_air.rules` file](https://github.com/wheaney/xrealAirLinuxDriver/blob/main/udev/xreal_air.rules) to `/etc/udev/rules.d/`
    * For Steam Deck, you may need to disable the readonly file system: `sudo steamos-readonly disable`
    * Reload the udev rules using something like `udevadm control --reload`
 5. Plug in your glasses, wait a few seconds
