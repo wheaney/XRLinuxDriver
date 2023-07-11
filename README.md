@@ -48,19 +48,16 @@ make
 
 To use this driver:
 1. If on Steam Deck, switch to Desktop Mode
-2. [Download the driver](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xrealAirLinuxDriver) and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/xrealAirLinuxDriver`)
-3. From a terminal, check if you have the `uinput` module already installed `lsmod | grep uinput`; if not, install it using `sudo modprobe uinput`
-4. [Download the `xreal_air.rules` file](https://github.com/wheaney/xrealAirLinuxDriver/blob/main/udev/xreal_air.rules) to `/etc/udev/rules.d/`
-   * For Steam Deck, you may need to disable the readonly file system: `sudo steamos-readonly disable`
-   * Reload the udev rules using something like `udevadm control --reload`
-5. Plug in your glasses, wait a few seconds
-6. Run the driver from a terminal like `/path/to/xrealAirLinuxDriver` (e.g. `~/Downloads/xrealAirLinuxDriver`)
+2. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/setup.sh) and set the execute flag (e.g. from the terminal: `sudo chmod +x ~/Downloads/setup.sh`)
+3. Run the setup script as root (e.g. `sudo ~/Downloads/setup.sh`)
+4. Plug in your glasses, wait a few seconds
+5. Run the driver from a terminal with `~/bin/xrealAirLinuxDriver`
    * The program will exit with an error message if there are any issues, otherwise it will run without output until the device is unplugged or some other exit condition is hit
   
 Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curive to linear. Lastly, you'll want to reduce the dead zone (the input has very little wobble to it, so doing this will allow for smaller/fine-grained movement), but this should be done from the general controller settings and not just in a game-specific controller layout; I've found that setting the dead zone somewhere between 2000 and 3000 is best.
 
 ### Steam Deck Game Mode
 
-On Steam Deck, once you have the driver working from Desktop mode, you can get it working in Game Mode as well by (from Desktop mode) clicking the `Add a Game` button in Steam, then `Add a Non-Steam Game`, then `Browse...`, navigate to the `xrealAirLinuxDriver` that you downloaded, click `Select`, make sure its checkbox is checked in the `Add Non-Steam Game` dialog, then finally click the `Add Selected Program` button. Now you should be able to find `xrealAirLinuxDriver` from the games sidebar. You'll probably want to flag it as a Favorite so it's easy to locate. 
+On Steam Deck, once you have the driver working from Desktop mode, you can get it working in Game Mode as well by (from Desktop mode) clicking the `Add a Game` button in Steam, then `Add a Non-Steam Game`, then `Browse...`, navigate to `~/bin/xrealAirLinuxDriver`, click `Select`, make sure its checkbox is checked in the `Add Non-Steam Game` dialog, then finally click the `Add Selected Program` button. Now you should be able to find `xrealAirLinuxDriver` from the games sidebar. You'll probably want to flag it as a Favorite so it's easy to locate. 
 
 From Game Mode, you'll want to find the driver in your favorites, use `Play` to get it running and you'll see the steam game loading icon. If there's a problem it will just close and the "Play" button will be visible and green again. If it's running successfully, the loading symbol will just spin indefinitely as the driver doesn't have anything visual to display while running. You'll need to leave it running by hitting the `Steam` button, return to your Home or Library and choose the game you want to play. If you're not getting mouse movement from the glasses while in-game, then double-check you've set up the right xReal joystick using `Joystick as Mouse` in the controller settings for that game, and otherwise verify that the driver is still running (you'll see it running above "Home" in the sidebar when you hit the Steam button).
