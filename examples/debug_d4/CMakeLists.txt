@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
-project(nrealAirDebugD4 C)
+project(xrealAirDebugD4 C)
 
 set(CMAKE_C_STANDARD 17)
 
 add_executable(
-		nrealAirDebugD4
+		xrealAirDebugD4
 		src/debug.c
 )
 
-target_include_directories(nrealAirDebugD4
-		BEFORE PUBLIC ${NRA_INCLUDE_DIR}
+target_include_directories(xrealAirDebugD4
+		BEFORE PUBLIC ${XREAL_AIR_INCLUDE_DIR}
 )
 
-target_link_libraries(nrealAirDebugD4
-		${NRA_LIBRARY}
+target_link_libraries(xrealAirDebugD4
+		${XREAL_AIR_LIBRARY}
 )

@@ -46,11 +46,11 @@ const int min_input = -max_input;
 const int cycles_per_second = 1000;
 
 // anyone rotating their head more than 360 degrees per second is probably dead
-const float max_head_movement_per_cycle = 360.0 / cycles_per_second;
+const float max_head_movement_degrees_per_cycle = 360.0 / cycles_per_second;
 
-const float joystick_sensitivity = max_head_movement_per_cycle / 4;
-const float joystick_sensitivity_radians = joystick_sensitivity * M_PI / 180.0;
-const int joystick_resolution = max_input / joystick_sensitivity_radians;
+const float joystick_max_degrees = max_head_movement_degrees_per_cycle / 4;
+const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
+const int joystick_resolution = max_input / joystick_max_radians;
 
 static int check(int i) {
     if (i < 0) {
@@ -61,12 +61,10 @@ static int check(int i) {
     return i;
 }
 
-// Joystick ranges from 0 to 2^16 (~65k), where zero-tilt (degree_diff == 0) is halfway between. Negative degree_diff
-// should result in a value somewhere between 0 and middle, while a positive degree_diff should result in a value
-// between mid and 2^16. max_value determines degree_diff should cap out at (-max_value will result in a joystick value
-// of 0, +max_value will result in a joystick value of 2^16).
-int joystick_value(float degree_diff, float max_value) {
-  int value = round(degree_diff * max_input / max_value + mid_input);
+// returns an integer between -max_input and max_input, the magnitude of which is just the ratio of
+// input_deg to max_input_deg
+int joystick_value(float input_degrees, float max_input_degrees) {
+  int value = round(input_degrees * max_input / max_input_degrees);
   if (value < min_input) {
     return min_input;
   } else if (value > max_input) {
@@ -96,7 +94,7 @@ float degree_delta(float prev, float next) {
 }
 
 struct libevdev_uinput* uinput;
-void handleDevice3(uint64_t timestamp,
+void handle_device_3(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
     if (event == DEVICE3_EVENT_UPDATE) {
@@ -110,15 +108,15 @@ void handleDevice3(uint64_t timestamp,
         prev = e;
 
         // Ignore anomalous data from the glasses.
-        bool valid_movement = fabs(this_delta_x) < max_head_movement_per_cycle &&
-                              fabs(this_delta_y) < max_head_movement_per_cycle;
+        bool valid_movement = fabs(this_delta_x) < max_head_movement_degrees_per_cycle &&
+                              fabs(this_delta_y) < max_head_movement_degrees_per_cycle;
         if (valid_movement) {
             float delta_x = degree_delta(prev_tracked.z, e.z);
             float delta_y = degree_delta(prev_tracked.y, e.y);
             float delta_z = degree_delta(prev_tracked.x, e.x);
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_sensitivity));
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_sensitivity));
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_sensitivity));
+            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_max_degrees));
+            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_max_degrees));
+            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
             libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 
             prev_tracked = e;
@@ -127,28 +125,28 @@ void handleDevice3(uint64_t timestamp,
             prev_tracked.z -= this_delta_x;
             prev_tracked.y -= this_delta_y;
         }
-	}
+    }
 }
 
-void handleDevice4(uint64_t timestamp,
+void handle_device_4(uint64_t timestamp,
 		   device4_event_type event,
 		   uint8_t brightness,
 		   const char* msg) {
-	switch (event) {
-		case DEVICE4_EVENT_MESSAGE:
-			printf("Message: `%s`\n", msg);
-			break;
-		case DEVICE4_EVENT_BRIGHTNESS_UP:
-			printf("Increase Brightness: %u\n", brightness);
+    switch (event) {
+        case DEVICE4_EVENT_MESSAGE:
+            printf("Message: `%s`\n", msg);
+            break;
+        case DEVICE4_EVENT_BRIGHTNESS_UP:
+            printf("Increase Brightness: %u\n", brightness);
             libevdev_uinput_write_event(uinput, EV_KEY, BTN_A, 1);
             libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
-			break;
-		case DEVICE4_EVENT_BRIGHTNESS_DOWN:
-			printf("Decrease Brightness: %u\n", brightness);
-			break;
-		default:
-			break;
-	}
+            break;
+        case DEVICE4_EVENT_BRIGHTNESS_DOWN:
+            printf("Decrease Brightness: %u\n", brightness);
+            break;
+        default:
+            break;
+    }
 }
 
 int main(int argc, const char** argv) {
@@ -163,7 +161,6 @@ int main(int argc, const char** argv) {
 
     struct libevdev* evdev = libevdev_new();
     check(libevdev_enable_property(evdev, INPUT_PROP_BUTTONPAD));
-//    check(libevdev_enable_property(evdev, INPUT_PROP_ACCELEROMETER));
     libevdev_set_name(evdev, "xReal Air virtual joystick");
     check(libevdev_enable_event_type(evdev, EV_ABS));
     check(libevdev_enable_event_code(evdev, EV_ABS, ABS_X, &absinfo));
@@ -175,13 +172,14 @@ int main(int argc, const char** argv) {
 
     /* do not remove next 3 lines or udev scripts won't assign 0664 permissions -sh */
     check(libevdev_enable_event_type(evdev, EV_KEY));
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
     check(libevdev_enable_event_code(evdev, EV_KEY, BTN_JOYSTICK, NULL));
     check(libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
 
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
+
     check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 
-    device3_type* dev3 = device3_open(handleDevice3);
+    device3_type* dev3 = device3_open(handle_device_3);
     if (dev3 && dev3->ready) {
         device3_clear(dev3);
 

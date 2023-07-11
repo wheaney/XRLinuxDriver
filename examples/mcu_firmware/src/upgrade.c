@@ -29,7 +29,7 @@
 
 int main(int argc, const char** argv) {
     if (argc <= 1) {
-        printf("HOW TO USE IT:\n$ nrealAirUpgradeMCU <PATH>\n");
+        printf("HOW TO USE IT:\n$ xrealAirUpgradeMCU <PATH>\n");
         return 0;
     }
 

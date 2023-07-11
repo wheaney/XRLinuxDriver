@@ -795,6 +795,9 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 	
 	if (device->ahrs) {
 		FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+
+		// TODO: fix detection of this case; quat.x as a nan value is only a side-effect of some issue with ahrs or
+		//       the gyro/accel/magnet readings
 		if (isnan(device3_get_orientation(device->ahrs).x)) {
 			if (!silent) {
 				perror("Invalid device reading\n");
