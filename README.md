@@ -52,6 +52,7 @@ To use this driver:
 3. Run the setup script as root (e.g. `sudo ~/Downloads/setup.sh`)
 4. Plug in your glasses, wait a few seconds
 5. Run the driver from a terminal with `~/bin/xrealAirLinuxDriver`
+   * You may need to run this with `sudo`, if you get "Permission Denied"
    * The program will exit with an error message if there are any issues, otherwise it will run without output until the device is unplugged or some other exit condition is hit
   
 Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curive to linear. Lastly, you'll want to reduce the dead zone (the input has very little wobble to it, so doing this will allow for smaller/fine-grained movement), but this should be done from the general controller settings and not just in a game-specific controller layout; I've found that setting the dead zone somewhere between 2000 and 3000 is best.
