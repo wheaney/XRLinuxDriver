@@ -66,7 +66,7 @@ static bool send_payload(device3_type* device, uint8_t size, const uint8_t* payl
 	int transferred = hid_write(device->handle, payload, payload_size);
 	
 	if (transferred != payload_size) {
-		perror("ERROR: sending payload failed\n");
+		fprintf(stderr, "ERROR: sending payload failed\n");
 		return false;
 	}
 	
@@ -90,7 +90,7 @@ static bool recv_payload(device3_type* device, uint8_t size, uint8_t* payload) {
 	}
 	
 	if (transferred != payload_size) {
-		perror("ERROR: receiving payload failed\n");
+		fprintf(stderr, "ERROR: receiving payload failed\n");
 		return false;
 	}
 	
@@ -180,7 +180,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	device3_type* device = (device3_type*) malloc(sizeof(device3_type));
 	
 	if (!device) {
-		perror("Not allocated!\n");
+		fprintf(stderr, "Not allocated!\n");
 		return NULL;
 	}
 	
@@ -190,7 +190,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	device->callback 	= callback;
 	
 	if (0 != hid_init()) {
-		perror("Not initialized!\n");
+		fprintf(stderr, "Not initialized!\n");
 		return device;
 	}
 
@@ -212,14 +212,14 @@ device3_type* device3_open(device3_event_callback callback) {
 	hid_free_enumeration(info);
 	
 	if (!device->handle) {
-		perror("No handle!\n");
+		fprintf(stderr, "No handle!\n");
 		return device;
 	}
 
 	device3_clear(device);
 	
 	if (!send_payload_msg(device, DEVICE3_MSG_GET_STATIC_ID, 0, NULL)) {
-		perror("Failed sending payload to get static id!\n");
+		fprintf(stderr, "Failed sending payload to get static id!\n");
 		return device;
 	}
 	
@@ -234,7 +234,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	device3_reset_calibration(device);
 	
 	if (!send_payload_msg(device, DEVICE3_MSG_GET_CAL_DATA_LENGTH, 0, NULL)) {
-		perror("Failed sending payload to get calibration data length!\n");
+		fprintf(stderr, "Failed sending payload to get calibration data length!\n");
 		return device;
 	}
 	
@@ -288,7 +288,7 @@ device3_type* device3_open(device3_event_callback callback) {
 	}
 	
 	if (!send_payload_msg_signal(device, DEVICE3_MSG_START_IMU_DATA, 0x1)) {
-		perror("Failed sending payload to start imu data stream!\n");
+		fprintf(stderr, "Failed sending payload to start imu data stream!\n");
 		return device;
 	}
 	
@@ -317,12 +317,12 @@ device3_type* device3_open(device3_event_callback callback) {
 
 void device3_reset_calibration(device3_type* device) {
 	if (!device) {
-		perror("No device!\n");
+		fprintf(stderr, "No device!\n");
 		return;
 	}
 	
 	if (!device->calibration) {
-		perror("Not allocated!\n");
+		fprintf(stderr, "Not allocated!\n");
 		return;
 	}
 	
@@ -347,18 +347,18 @@ void device3_reset_calibration(device3_type* device) {
 
 int device3_load_calibration(device3_type* device, const char* path) {
 	if (!device) {
-		perror("No device!\n");
+		fprintf(stderr, "No device!\n");
 		return -1;
 	}
 	
 	if (!device->calibration) {
-		perror("Not allocated!\n");
+		fprintf(stderr, "Not allocated!\n");
 		return -2;
 	}
 	
 	FILE* file = fopen(path, "rb");
 	if (!file) {
-		perror("No file opened!\n");
+		fprintf(stderr, "No file opened!\n");
 		return -3;
 	}
 	
@@ -366,11 +366,11 @@ int device3_load_calibration(device3_type* device, const char* path) {
 	count = fread(device->calibration, 1, sizeof(device3_calibration_type), file);
 	
 	if (sizeof(device3_calibration_type) != count) {
-		perror("Not fully loaded!\n");
+		fprintf(stderr, "Not fully loaded!\n");
 	}
 	
 	if (0 != fclose(file)) {
-		perror("No file closed!\n");
+		fprintf(stderr, "No file closed!\n");
 		return -4;
 	}
 	
@@ -379,18 +379,18 @@ int device3_load_calibration(device3_type* device, const char* path) {
 
 int device3_save_calibration(device3_type* device, const char* path) {
 	if (!device) {
-		perror("No device!\n");
+		fprintf(stderr, "No device!\n");
 		return -1;
 	}
 	
 	if (!device->calibration) {
-		perror("Not allocated!\n");
+		fprintf(stderr, "Not allocated!\n");
 		return -2;
 	}
 	
 	FILE* file = fopen(path, "wb");
 	if (!file) {
-		perror("No file opened!\n");
+		fprintf(stderr, "No file opened!\n");
 		return -3;
 	}
 	
@@ -398,11 +398,11 @@ int device3_save_calibration(device3_type* device, const char* path) {
 	count = fwrite(device->calibration, 1, sizeof(device3_calibration_type), file);
 	
 	if (sizeof(device3_calibration_type) != count) {
-		perror("Not fully saved!\n");
+		fprintf(stderr, "Not fully saved!\n");
 	}
 	
 	if (0 != fclose(file)) {
-		perror("No file closed!\n");
+		fprintf(stderr, "No file closed!\n");
 		return -4;
 	}
 	
@@ -609,12 +609,12 @@ void device3_clear(device3_type* device) {
 
 int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool accel, bool magnet) {
 	if (!device) {
-		perror("No device!\n");
+		fprintf(stderr, "No device!\n");
 		return -1;
 	}
 	
 	if (MAX_PACKET_SIZE != sizeof(device3_packet_type)) {
-		perror("Not proper size!\n");
+		fprintf(stderr, "Not proper size!\n");
 		return -2;
 	}
 	
@@ -643,7 +643,7 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 		}
 		
 		if (MAX_PACKET_SIZE != transferred) {
-			perror("Not expected issue!\n");
+			fprintf(stderr, "Not expected issue!\n");
 			return -3;
 		}
 		
@@ -721,14 +721,14 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 int device3_read(device3_type* device, int timeout, bool silent) {
 	if (!device || !device->ready) {
 		if (!silent) {
-			perror("No device!\n");
+			fprintf(stderr, "No device!\n");
 		}
 		return -1;
 	}
 	
 	if (MAX_PACKET_SIZE != sizeof(device3_packet_type)) {
 		if (!silent) {
-			perror("Not proper size!\n");
+			fprintf(stderr, "Not proper size!\n");
 		}
 		return -2;
 	}
@@ -749,7 +749,7 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 	
 	if (MAX_PACKET_SIZE != transferred) {
 		if (!silent) {
-			perror("Not expected issue!\n");
+			fprintf(stderr, "Not expected issue!\n");
 		}
 		return -3;
 	}
@@ -763,7 +763,7 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 	
 	if ((packet.signature[0] != 0x01) || (packet.signature[1] != 0x02)) {
 		if (!silent) {
-			perror("Not matching signature! Try unplugging then replugging your device.\n");
+			fprintf(stderr, "Mismatched signature! Try unplugging then replugging your device.\n");
 		}
 		return -4;
 	}
@@ -800,7 +800,7 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 		//       the gyro/accel/magnet readings
 		if (isnan(device3_get_orientation(device->ahrs).x)) {
 			if (!silent) {
-				perror("Invalid device reading\n");
+				fprintf(stderr, "Invalid device reading\n");
 			}
 			return -5;
 		}
@@ -854,7 +854,7 @@ device3_vec3_type device3_get_euler(device3_quat_type quat) {
 
 void device3_close(device3_type* device) {
 	if (!device) {
-		perror("No device!\n");
+		fprintf(stderr, "No device!\n");
 		return;
 	}
 	

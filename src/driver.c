@@ -180,13 +180,24 @@ int main(int argc, const char** argv) {
     check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 
     device3_type* dev3 = device3_open(handle_device_3);
-    if (dev3 && dev3->ready) {
-        device3_clear(dev3);
+    int connection_attempts = 0;
+    while (!dev3 || !dev3->ready) {
+        if (++connection_attempts > 5) {
+            fprintf(stderr, "Device not found, exiting...\n");
+            exit(1);
+        }
 
-        while (dev3) {
-            if (device3_read(dev3, 0, false) < 0) {
-                break;
-            }
+        fprintf(stderr, "Device not found, sleeping...\n");
+        sleep(5);
+        dev3 = device3_open(handle_device_3);
+    }
+    fprintf(stdout, "Device connected, redirecting input to virtual joystick...\n");
+
+    device3_clear(dev3);
+
+    while (dev3) {
+        if (device3_read(dev3, 0, false) < 0) {
+            break;
         }
     }
 
