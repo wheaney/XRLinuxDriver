@@ -1,0 +1,4 @@
+# copied from Valve: https://github.com/ValveSoftware/steam-devices/blob/13443480a64fe8f10676606bd57da6de89f8ccb1/60-steam-input.rules#L5
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"
+
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424", MODE="0660", TAG+="uaccess"

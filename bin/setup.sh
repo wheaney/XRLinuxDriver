@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# exit when any command fails
+set -e
+
 # Make sure only root can run our script
 if [ "$(id -u)" != "0" ]; then
    echo "This script must be run as root" 1>&2
@@ -24,13 +27,13 @@ echo "Extracting to: ${tmp_dir}/driver_air_glasses"
 tar -xf xrealAirLinuxDriver.tar.gz
 
 pushd driver_air_glasses > /dev/null
-UDEV_FILE=/etc/udev/rules.d/xreal_air.rules
+UDEV_FILE=/etc/udev/rules.d/60-xreal-air.rules
 if test -f "$UDEV_FILE"; then
   rm $UDEV_FILE
 fi
 
 echo "Copying udev file to ${UDEV_FILE}"
-cp udev/xreal_air.rules $UDEV_FILE
+cp udev/60-xreal-air.rules $UDEV_FILE
 udevadm control --reload
 udevadm trigger
 
