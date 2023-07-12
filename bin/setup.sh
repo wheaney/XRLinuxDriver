@@ -19,9 +19,14 @@ tmp_dir=$(mktemp -d -t xreal-air-XXXXXXXXXX)
 pushd $tmp_dir > /dev/null
 echo "Created temp directory: ${tmp_dir}"
 
-# download and unzip the latest driver
-echo "Downloading latest release to: ${tmp_dir}/xrealAirLinuxDriver.tar.gz"
-wget -q https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xrealAirLinuxDriver.tar.gz
+if [ -z "$1" ]
+then
+  # download and unzip the latest driver
+  echo "Downloading latest release to: ${tmp_dir}/xrealAirLinuxDriver.tar.gz"
+  wget -q https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xrealAirLinuxDriver.tar.gz
+else
+  cp $1 $tmp_dir
+fi
 
 echo "Extracting to: ${tmp_dir}/driver_air_glasses"
 tar -xf xrealAirLinuxDriver.tar.gz
@@ -33,11 +38,16 @@ if test -f "$UDEV_FILE"; then
 fi
 
 echo "Copying udev file to ${UDEV_FILE}"
+USER_HOME=$(getent passwd ${SUDO_USER:-$USER} | cut -d: -f6)
+
+# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
+ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
+sed -i "s/{user_home}/$ESCAPED_USER_HOME/g" udev/60-xreal-air.rules
+
 cp udev/60-xreal-air.rules $UDEV_FILE
 udevadm control --reload
 udevadm trigger
 
-USER_HOME=$(getent passwd ${SUDO_USER:-$USER} | cut -d: -f6)
 echo "Copying driver to ${USER_HOME}/bin"
 if test ! -d "$USER_HOME/bin"; then
   mkdir $USER_HOME/bin
