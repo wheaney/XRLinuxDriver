@@ -7,43 +7,6 @@ it will work or that it won't damage your device since all of it is based on rev
 instead of public documentation. The contributors are not responsible for proper or even official 
 support. So use it at your own risk!
 
-## Inspiration and motivation
-
-This is a forked package. See [the original](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver) for details. 
-
-## Features
-
-The driver will read, parse and interpret sensor data from two HID interfaces to feed custom event 
-callbacks with data which can be used in user-space applications (for example whether buttons have 
-been pressed, the current brightness level and the orientation quaternion/matrix/euler angles).
-
-It's still a work-in-progress project since the goal would be to wire such events up into a 
-compositor to render whole screens virtually depending on your 6-DoF orientation (without position).
-
-Also keep in mind that this software will only run on Linux including devices like the Steam Deck, 
-Pinephone or other mobile Linux devices.
-
-## Dependencies
-
-You can build the binary using `cmake` and there are a few dependencies for now:
- - [hidapi](https://github.com/libusb/hidapi)
- - [json-c](https://github.com/json-c/json-c/)
- - [Fusion](https://github.com/xioTechnologies/Fusion)
- - [libevdev](https://gitlab.freedesktop.org/libevdev/libevdev)
-
-Fusion and hidapi source are included as Git submodules that you'll need to check out using the `git submodules` command. json-c may already be installed with your distro, and you'll want to install libevdev (e.g. `sudo apt install libevdev-dev`)
-
-## Build
-
-The build process should be straight forward:
-
-```
-mkdir build
-cd build
-cmake ..
-make
-```
-
 ## Usage
 
 To use this driver:
@@ -59,3 +22,30 @@ From my testing so far I've found that games don't really like to have two contr
 ### Steam Deck Game Mode
 
 On Steam Deck, once you have the driver working from Desktop mode, it should also work automatically from Game Mode.
+
+## Development
+
+### Dependencies
+
+You can build the binary using `cmake` and there are a few dependencies for now:
+ - [hidapi](https://github.com/libusb/hidapi)
+ - [json-c](https://github.com/json-c/json-c/)
+ - [Fusion](https://github.com/xioTechnologies/Fusion)
+ - [libevdev](https://gitlab.freedesktop.org/libevdev/libevdev)
+
+Fusion and hidapi source are included as Git submodules that you'll need to check out using the `git submodules` command. json-c may already be installed with your distro, and you'll want to install libevdev (e.g. `sudo apt install libevdev-dev`).
+
+### Build
+
+The build process should be straight forward:
+
+```
+mkdir build
+cd build
+cmake ..
+make
+```
+
+### Deployment
+
+To create the deployment gzip file, run `bin/package.sh`. Upload the resulting gzip file and the `bin/setup.sh` file to a new Release.
