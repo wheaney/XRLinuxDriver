@@ -9,7 +9,7 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
-if lsmod | grep -q uinput; then
+if ! lsmod | grep -q uinput; then
   echo "Setting up uinput kernel module"
   modprobe uinput
 fi
