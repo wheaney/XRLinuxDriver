@@ -184,20 +184,22 @@ int main(int argc, const char** argv) {
     while (!dev3 || !dev3->ready) {
         if (++connection_attempts > 5) {
             fprintf(stderr, "Device not found, exiting...\n");
-            exit(1);
+            break;
         }
 
         fprintf(stderr, "Device not found, sleeping...\n");
         sleep(5);
         dev3 = device3_open(handle_device_3);
     }
-    fprintf(stdout, "Device connected, redirecting input to virtual joystick...\n");
 
-    device3_clear(dev3);
+    if (dev3 && dev3->ready) {
+        fprintf(stdout, "Device connected, redirecting input to virtual joystick...\n");
 
-    while (dev3) {
-        if (device3_read(dev3, 0, false) < 0) {
-            break;
+        device3_clear(dev3);
+        while (dev3) {
+            if (device3_read(dev3, 1, false) < 0) {
+                break;
+            }
         }
     }
 
