@@ -10,10 +10,11 @@ support. So use it at your own risk!
 ## Usage
 
 To use this driver:
-1. If on Steam Deck, switch to Desktop Mode
-2. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
-3. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
-4. Plug in your glasses, wait a few seconds
+1. If your glasses are already plugged in, unplug them
+2. If on Steam Deck, switch to Desktop Mode
+3. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
+4. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
+5. Plug in your glasses, wait a few seconds
   
 Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. If you're not seeing this, check the log at `~/.xreal_udev_log` and report an Issue here with its contents.
 
