@@ -23,7 +23,7 @@ if [ -z "$1" ]
 then
   # download and unzip the latest driver
   echo "Downloading latest release to: ${tmp_dir}/xrealAirLinuxDriver.tar.gz"
-  wget -q https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xrealAirLinuxDriver.tar.gz
+  curl https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xrealAirLinuxDriver.tar.gz -o xrealAirLinuxDriver.tar.gz
 else
   cp $1 $tmp_dir
 fi
