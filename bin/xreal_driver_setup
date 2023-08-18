@@ -9,6 +9,17 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
+# If we're on Steam Deck, check if the file system is readonly, if so, disable readonly and store the state to re-enable later
+steam_deck_readonly_fs=false
+if command -v steamos-readonly &> /dev/null; then
+  if steamos-readonly status | grep -q "enabled"; then
+    steam_deck_readonly_fs=true
+    echo "Disabling readonly SteamOS partition"
+    steamos-readonly disable
+  fi
+fi
+
+
 if ! lsmod | grep -q uinput; then
   echo "Setting up uinput kernel module"
   modprobe uinput
@@ -57,3 +68,11 @@ cp xrealAirLinuxDriver $USER_HOME/bin
 
 echo "Deleting temp directory: ${tmp_dir}"
 rm -rf $tmp_dir
+cd "$(dirs -l -0)" && dirs -c
+
+# If we disabled the Steam Deck readonly file system, re-enable it
+if $steam_deck_readonly_fs; then
+  echo "Re-enabling readonly SteamOS partition"
+  steamos-readonly enable
+fi
+
