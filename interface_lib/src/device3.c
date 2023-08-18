@@ -305,7 +305,7 @@ device3_type* device3_open(device3_event_callback callback) {
 			.gain = 0.5f,
 			.accelerationRejection = 10.0f,
 			.magneticRejection = 20.0f,
-			.rejectionTimeout = 5 * SAMPLE_RATE, /* 5 seconds */
+			.recoveryTriggerPeriod = 5 * SAMPLE_RATE, /* 5 seconds */
 	};
 	
 	FusionAhrsSetSettings((FusionAhrs*) device->ahrs, &settings);
@@ -794,7 +794,7 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 	//printf("M: %.2f %.2f %.2f\n", magnetometer.axis.x, magnetometer.axis.y, magnetometer.axis.z);
 	
 	if (device->ahrs) {
-		FusionAhrsUpdate((FusionAhrs*) device->ahrs, gyroscope, accelerometer, magnetometer, deltaTime);
+		FusionAhrsUpdateNoMagnetometer((FusionAhrs*) device->ahrs, gyroscope, accelerometer, deltaTime);
 
 		// TODO: fix detection of this case; quat.x as a nan value is only a side-effect of some issue with ahrs or
 		//       the gyro/accel/magnet readings

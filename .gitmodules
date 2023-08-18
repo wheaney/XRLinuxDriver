@@ -1,6 +1,6 @@
 [submodule "interface_lib/Fusion"]
 	path = interface_lib/Fusion
-	url = https://github.com/TheJackiMonster/Fusion.git
+	url = https://github.com/xioTechnologies/Fusion.git
 [submodule "interface_lib/hidapi"]
 	path = interface_lib/hidapi
 	url = https://github.com/libusb/hidapi.git

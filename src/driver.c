@@ -45,10 +45,7 @@ const int min_input = -max_input;
 
 const int cycles_per_second = 1000;
 
-// anyone rotating their head more than 360 degrees per second is probably dead
-const float max_head_movement_degrees_per_cycle = 360.0 / cycles_per_second;
-
-const float joystick_max_degrees = max_head_movement_degrees_per_cycle / 4;
+const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 
@@ -99,32 +96,18 @@ void handle_device_3(uint64_t timestamp,
 		   const device3_ahrs_type* ahrs) {
     if (event == DEVICE3_EVENT_UPDATE) {
         static device3_vec3_type prev_tracked;
-        static device3_vec3_type prev;
         device3_quat_type q = device3_get_orientation(ahrs);
         device3_vec3_type e = device3_get_euler(q);
 
-        float this_delta_x = prev.z - e.z;
-        float this_delta_y = prev.y - e.y;
-        prev = e;
+        float delta_x = degree_delta(prev_tracked.z, e.z);
+        float delta_y = degree_delta(prev_tracked.y, e.y);
+        float delta_z = degree_delta(prev_tracked.x, e.x);
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_max_degrees));
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_max_degrees));
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
+        libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 
-        // Ignore anomalous data from the glasses.
-        bool valid_movement = fabs(this_delta_x) < max_head_movement_degrees_per_cycle &&
-                              fabs(this_delta_y) < max_head_movement_degrees_per_cycle;
-        if (valid_movement) {
-            float delta_x = degree_delta(prev_tracked.z, e.z);
-            float delta_y = degree_delta(prev_tracked.y, e.y);
-            float delta_z = degree_delta(prev_tracked.x, e.x);
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_max_degrees));
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_max_degrees));
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
-            libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
-
-            prev_tracked = e;
-        } else {
-            // adjust our tracked values by the delta of the anomaly so we can pick right back up on the next cycle
-            prev_tracked.z -= this_delta_x;
-            prev_tracked.y -= this_delta_y;
-        }
+        prev_tracked = e;
     }
 }
 

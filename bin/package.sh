@@ -3,7 +3,7 @@
 # exit when any command fails
 set -e
 
-# check out submodules, recusively for nested ones
+# check out submodules, recursively for nested ones
 git submodule update --init --recursive
 
 # build the driver
