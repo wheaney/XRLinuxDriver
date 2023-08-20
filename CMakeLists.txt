@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 project(xrealAirLinuxDriver C)
 
 set(CMAKE_C_STANDARD 17)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 find_package(LIBEVDEV REQUIRED)
@@ -24,3 +26,5 @@ target_include_directories(xrealAirLinuxDriver
 target_link_libraries(xrealAirLinuxDriver
 		PRIVATE ${XREAL_AIR_LIBRARY} ${FUSION_LIBRARY} ${LIBEVDEV_LIBRARIES}
 )
+
+target_link_libraries(xrealAirLinuxDriver PRIVATE Threads::Threads)

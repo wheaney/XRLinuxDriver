@@ -38,6 +38,7 @@
 #include <fcntl.h>
 
 #include <math.h>
+#include <pthread.h>
 
 const int max_input = 1 << 16;
 const int mid_input = 0;
@@ -132,6 +133,22 @@ void handle_device_4(uint64_t timestamp,
     }
 }
 
+device3_type* glasses_imu;
+
+// pthread function to poll the glasses and translate to our virtual controller's joystick input
+void *poll_glasses_imu(void *arg) {
+    fprintf(stdout, "Device connected, redirecting input to virtual controller...\n");
+    fflush(NULL);
+
+    device3_clear(glasses_imu);
+    while (glasses_imu) {
+        if (device3_read(glasses_imu, 1, false) < 0) {
+            break;
+        }
+        fflush(NULL);
+    }
+}
+
 int main(int argc, const char** argv) {
     struct input_absinfo absinfo;
 
@@ -162,31 +179,28 @@ int main(int argc, const char** argv) {
 
     check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 
-    device3_type* dev3 = device3_open(handle_device_3);
+    glasses_imu = device3_open(handle_device_3);
     int connection_attempts = 0;
-    while (!dev3 || !dev3->ready) {
+    while (!glasses_imu || !glasses_imu->ready) {
         if (++connection_attempts > 5) {
             fprintf(stderr, "Device not found, exiting...\n");
             break;
         }
 
+        device3_close(glasses_imu);
         fprintf(stderr, "Device not found, sleeping...\n");
         sleep(5);
-        dev3 = device3_open(handle_device_3);
+        glasses_imu = device3_open(handle_device_3);
     }
 
-    if (dev3 && dev3->ready) {
-        fprintf(stdout, "Device connected, redirecting input to virtual joystick...\n");
+    if (glasses_imu && glasses_imu->ready) {
+        pthread_t glasses_imu_thread;
+        pthread_create(&glasses_imu_thread, NULL, poll_glasses_imu, NULL);
 
-        device3_clear(dev3);
-        while (dev3) {
-            if (device3_read(dev3, 1, false) < 0) {
-                break;
-            }
-        }
+        pthread_join(glasses_imu_thread, NULL);
     }
 
-    device3_close(dev3);
+    device3_close(glasses_imu);
     libevdev_uinput_destroy(uinput);
     libevdev_free(evdev);
     return 0;
