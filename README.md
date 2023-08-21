@@ -24,6 +24,10 @@ To use this driver:
   
 Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. If you're not seeing this, check the log at `~/.xreal_udev_log` and report an Issue here with its contents.
 
+### Turning automatic driver usage on or off
+
+After initial installation, the driver will automatically run whenever the glasses are plugged in. To disable the driver without completely removing it, you can use the script installed at `~/bin/xreal_driver_config`. From this script, you can enable the driver, disable it, or report its status. Run this file without arguments to see its usage. Configs are stored in the file `~/.xreal_driver_config`.
+
 ### Practical Usage
 
 From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curve to Linear. Lastly, you'll want to reduce the dead zone or simply disable the dead zone if you find that doesn't result in drift, but this should be done from the general controller settings and not just in a game-specific controller layout.
