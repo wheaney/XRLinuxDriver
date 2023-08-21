@@ -30,8 +30,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <sys/wait.h>
 #include <sys/ioctl.h>
+#include <limits.h>
+#include <sys/inotify.h>
+#include <libgen.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
@@ -39,6 +44,8 @@
 
 #include <math.h>
 #include <pthread.h>
+
+#define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 
 const int max_input = 1 << 16;
 const int mid_input = 0;
@@ -134,6 +141,7 @@ void handle_device_4(uint64_t timestamp,
 }
 
 device3_type* glasses_imu;
+bool driver_disabled=false;
 
 // pthread function to poll the glasses and translate to our virtual controller's joystick input
 void *poll_glasses_imu(void *arg) {
@@ -141,12 +149,107 @@ void *poll_glasses_imu(void *arg) {
     fflush(NULL);
 
     device3_clear(glasses_imu);
-    while (glasses_imu) {
+    while (!driver_disabled && glasses_imu) {
         if (device3_read(glasses_imu, 1, false) < 0) {
             break;
         }
         fflush(NULL);
     }
+}
+
+void parse_config_file(FILE *fp) {
+    char line[1024];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        char *key = strtok(line, "=");
+        char *value = strtok(NULL, "\n");
+        if (strcmp(key, "disabled") == 0) {
+            driver_disabled = strcmp(value, "true") == 0;
+            if (driver_disabled)
+                fprintf(stdout, "Driver is disabled!\n");
+        }
+    }
+}
+
+// pthread function to monitor the config file for changes
+void *monitor_config_file(void *arg) {
+    char filename[1024];
+    char *home = getenv("HOME");
+    snprintf(filename, sizeof(filename), "%s/.xreal_driver_config", home);
+    fprintf(stdout, "config file path: %s\n", filename);
+
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL) {
+        // Parse the parent path from the file path
+        char *parent_path = strdup(filename);
+        parent_path = dirname(parent_path);
+
+        // Retrieve the permissions of the parent directory
+        struct stat st;
+        if (stat(parent_path, &st) == -1) {
+            perror("stat");
+            exit(1);
+        }
+
+        fp = fopen(filename, "w");
+        if (fp == NULL) {
+            perror("Error creating config file");
+            exit(1);
+        }
+
+        // Set the permissions and ownership of the new file to be the same as the parent directory
+        if (chmod(filename, st.st_mode & 0777) == -1) {
+            perror("Error setting config file permissions");
+            exit(1);
+        }
+        if (chown(filename, st.st_uid, st.st_gid) == -1) {
+            perror("Error setting config file ownership");
+            exit(1);
+        }
+    } else {
+        parse_config_file(fp);
+    }
+
+    int fd = inotify_init();
+    if (fd < 0) {
+        perror("Error initializing inotify");
+        exit(1);
+    }
+
+    int wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+    if (wd < 0) {
+        perror("Error adding watch");
+        exit(1);
+    }
+
+    char buffer[EVENT_SIZE];
+    while (!driver_disabled) {
+        int length = read(fd, buffer, EVENT_SIZE);
+        if (length < 0) {
+            perror("Error reading events");
+            exit(1);
+        }
+
+        int i = 0;
+        while (i < length) {
+            struct inotify_event *event = (struct inotify_event *) &buffer[i];
+            if (event->mask & IN_DELETE_SELF) {
+                // The file has been deleted, so we need to re-add the watch
+                wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+                if (wd < 0) {
+                    perror("Error re-adding watch");
+                    exit(1);
+                }
+            } else {
+                fp = freopen(filename, "r", fp);
+                parse_config_file(fp);
+            }
+            i += EVENT_SIZE + event->len;
+        }
+    }
+
+    fclose(fp);
+    inotify_rm_watch(fd, wd);
+    close(fd);
 }
 
 int main(int argc, const char** argv) {
@@ -195,7 +298,9 @@ int main(int argc, const char** argv) {
 
     if (glasses_imu && glasses_imu->ready) {
         pthread_t glasses_imu_thread;
+        pthread_t monitor_config_file_thread;
         pthread_create(&glasses_imu_thread, NULL, poll_glasses_imu, NULL);
+        pthread_create(&monitor_config_file_thread, NULL, monitor_config_file, NULL);
 
         pthread_join(glasses_imu_thread, NULL);
     }

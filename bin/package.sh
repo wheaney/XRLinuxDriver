@@ -25,6 +25,9 @@ fi
 # move and rename the compiled driver to the driver directory
 mv xrealAirLinuxDriver $PACKAGE_DIR
 
+# copy user-relevant scripts
+cp ../bin/xreal_driver_config $PACKAGE_DIR
+
 # copy the udev rule that's needed for the USB integration
 cp -r ../udev $PACKAGE_DIR
 

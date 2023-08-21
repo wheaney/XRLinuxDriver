@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+if [ -z "$1" ]
+then
+    echo "Usage: xreal_driver_config [--disable|--enable|--status]"
+else
+    config_file=~/.xreal_driver_config
+    touch "$config_file"
+
+    config_value=""
+    if [ "$1" == "--disable" ]; then
+        config_value="true"
+    elif [ "$1" == "--enable" ]; then
+        config_value="false"
+    elif [ "$1" == "--status" ]; then
+        status="enabled"
+        while read -r line; do
+            if [[ $line == "disabled="* ]]; then
+                config_value=${line#*=}
+                # Check if the value is "true"
+                if [ "$config_value" == "true" ]; then
+                    status="disabled"
+                fi
+
+                break
+            fi
+        done < "$config_file"
+
+        echo $status
+        exit 0
+    fi
+
+    if [[ -n $config_value ]]; then
+        config_key="disabled"
+
+        # Check if the key already exists in the config file
+        if grep -q "^$config_key=" "$config_file"; then
+            # Replace the existing key/value pair
+            sed -i "s/^$config_key=.*/$config_key=$config_value/" "$config_file"
+        else
+            # Add the new key/value pair to the end of the file
+            echo "$config_key=$config_value" >> "$config_file"
+        fi
+
+        if [ "$config_key" == "disabled" ] && [ "$config_value" == "false" ]; then
+            ((echo $(date -u); ~/bin/xrealAirLinuxDriver) >> ~/.xreal_udev_log 2>&1) &
+        fi
+    fi
+fi

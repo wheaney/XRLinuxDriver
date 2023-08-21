@@ -49,22 +49,24 @@ if test -f "$UDEV_FILE"; then
 fi
 
 echo "Copying udev file to ${UDEV_FILE}"
-USER_HOME=$(getent passwd ${SUDO_USER:-$USER} | cut -d: -f6)
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
 
 # escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
 ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
-sed -i "s/{user_home}/$ESCAPED_USER_HOME/g" udev/60-xreal-air.rules
+sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" udev/60-xreal-air.rules
 
 cp udev/60-xreal-air.rules $UDEV_FILE
 udevadm control --reload
 udevadm trigger
 
-echo "Copying driver to ${USER_HOME}/bin"
+echo "Copying driver and scripts to ${USER_HOME}/bin"
 if test ! -d "$USER_HOME/bin"; then
   mkdir $USER_HOME/bin
 fi
 
 cp xrealAirLinuxDriver $USER_HOME/bin
+cp xreal_driver_config $USER_HOME/bin
 
 echo "Deleting temp directory: ${tmp_dir}"
 rm -rf $tmp_dir
