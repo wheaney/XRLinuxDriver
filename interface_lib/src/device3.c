@@ -180,7 +180,6 @@ device3_type* device3_open(device3_event_callback callback) {
 	device3_type* device = (device3_type*) malloc(sizeof(device3_type));
 	
 	if (!device) {
-		fprintf(stderr, "Not allocated!\n");
 		return NULL;
 	}
 	
@@ -190,7 +189,6 @@ device3_type* device3_open(device3_event_callback callback) {
 	device->callback 	= callback;
 	
 	if (0 != hid_init()) {
-		fprintf(stderr, "Not initialized!\n");
 		return device;
 	}
 
@@ -212,14 +210,12 @@ device3_type* device3_open(device3_event_callback callback) {
 	hid_free_enumeration(info);
 	
 	if (!device->handle) {
-		fprintf(stderr, "No handle!\n");
 		return device;
 	}
 
 	device3_clear(device);
 	
 	if (!send_payload_msg(device, DEVICE3_MSG_GET_STATIC_ID, 0, NULL)) {
-		fprintf(stderr, "Failed sending payload to get static id!\n");
 		return device;
 	}
 	
@@ -234,7 +230,6 @@ device3_type* device3_open(device3_event_callback callback) {
 	device3_reset_calibration(device);
 	
 	if (!send_payload_msg(device, DEVICE3_MSG_GET_CAL_DATA_LENGTH, 0, NULL)) {
-		fprintf(stderr, "Failed sending payload to get calibration data length!\n");
 		return device;
 	}
 	
@@ -288,7 +283,6 @@ device3_type* device3_open(device3_event_callback callback) {
 	}
 	
 	if (!send_payload_msg_signal(device, DEVICE3_MSG_START_IMU_DATA, 0x1)) {
-		fprintf(stderr, "Failed sending payload to start imu data stream!\n");
 		return device;
 	}
 	

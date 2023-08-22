@@ -60,13 +60,35 @@ cp udev/60-xreal-air.rules $UDEV_FILE
 udevadm control --reload
 udevadm trigger
 
-echo "Copying driver and scripts to ${USER_HOME}/bin"
+echo "Copying scripts to ${USER_HOME}/bin"
 if test ! -d "$USER_HOME/bin"; then
   mkdir $USER_HOME/bin
 fi
-
-cp xrealAirLinuxDriver $USER_HOME/bin
 cp xreal_driver_config $USER_HOME/bin
+
+echo "Setting up the systemd service"
+# check if the systemd service is already running from a previous install
+if systemctl is-active --quiet xreal-air-driver; then
+  systemctl stop xreal-air-driver
+fi
+
+cp xrealAirLinuxDriver /usr/bin
+chmod 755 /usr/bin/xrealAirLinuxDriver
+
+sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" systemd/xreal-air-driver.service
+cp systemd/xreal-air-driver.service /etc/systemd/system
+chmod 644 /etc/systemd/system/xreal-air-driver.service
+systemctl daemon-reload
+systemctl start xreal-air-driver
+
+# check if systemd startup was successful
+if ! systemctl is-active --quiet xreal-air-driver; then
+  echo "systemd startup failed"
+  exit 1
+fi
+
+# set it to run on startup
+systemctl enable xreal-air-driver
 
 echo "Deleting temp directory: ${tmp_dir}"
 rm -rf $tmp_dir

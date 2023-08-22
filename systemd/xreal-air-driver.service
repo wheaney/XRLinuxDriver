@@ -1,0 +1,11 @@
+[Unit]
+Description=XREAL Air user-space driver
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'HOME={user_home} /usr/bin/xrealAirLinuxDriver'
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
