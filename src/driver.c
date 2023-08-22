@@ -104,7 +104,7 @@ struct libevdev_uinput* uinput;
 void handle_device_3(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
-    if (event == DEVICE3_EVENT_UPDATE) {
+    if (uinput && event == DEVICE3_EVENT_UPDATE) {
         static device3_vec3_type prev_tracked;
         device3_quat_type q = device3_get_orientation(ahrs);
         device3_vec3_type e = device3_get_euler(q);
@@ -145,17 +145,49 @@ void handle_device_4(uint64_t timestamp,
 device3_type* glasses_imu;
 bool driver_disabled=false;
 
-// pthread function to poll the glasses and translate to our virtual controller's joystick input
+// pthread function to create the virtual controller and poll the glasses
 void *poll_glasses_imu(void *arg) {
     printf("Device connected, redirecting input to virtual controller...\n");
+
+    // create our virtual device
+    struct input_absinfo absinfo;
+    absinfo.minimum = min_input;
+    absinfo.maximum = max_input;
+    absinfo.resolution = joystick_resolution;
+    absinfo.value = mid_input;
+    absinfo.flat = 2;
+    absinfo.fuzz = 0;
+
+    struct libevdev* evdev = libevdev_new();
+    check(libevdev_enable_property(evdev, INPUT_PROP_BUTTONPAD));
+    libevdev_set_name(evdev, "xReal Air virtual joystick");
+    check(libevdev_enable_event_type(evdev, EV_ABS));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_X, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Y, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Z, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RX, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RY, &absinfo));
+    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RZ, &absinfo));
+
+    /* do not remove next 3 lines or udev scripts won't assign 0664 permissions -sh */
+    check(libevdev_enable_event_type(evdev, EV_KEY));
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_JOYSTICK, NULL));
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
+
+    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
+
+    check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 
     device3_clear(glasses_imu);
     while (!driver_disabled) {
         if (device3_read(glasses_imu, 1, false) < 0) {
-            glasses_imu = NULL;
             break;
         }
     }
+
+    glasses_imu = NULL;
+    libevdev_uinput_destroy(uinput);
+    libevdev_free(evdev);
 }
 
 void parse_config_file(FILE *fp) {
@@ -164,9 +196,12 @@ void parse_config_file(FILE *fp) {
         char *key = strtok(line, "=");
         char *value = strtok(NULL, "\n");
         if (strcmp(key, "disabled") == 0) {
+            bool was_disabled = driver_disabled;
             driver_disabled = strcmp(value, "true") == 0;
-            if (driver_disabled)
-                printf("Driver is disabled!\n");
+            if (!was_disabled && driver_disabled)
+                printf("Driver has been disabled, see ~/bin/xreal_driver_config\n");
+            if (was_disabled && !driver_disabled)
+                printf("Driver has been re-enabled, see ~/bin/xreal_driver_config\n");
         }
     }
 }
@@ -227,7 +262,11 @@ void *monitor_config_file(void *arg) {
     }
 
     char buffer[EVENT_SIZE];
-    while (!driver_disabled && glasses_imu) {
+
+    // hold this pthread open while the glasses are plugged in, but if they become unplugged:
+    // 1. hold this thread open as long as driver is disabled, this will block from re-initializing the glasses-polling thread until the driver becomes re-enabled
+    // 2. exit this thread if the driver is enabled, then we'll wait for the glasses to get plugged back in to re-initialize these threads
+    while (glasses_imu || driver_disabled) {
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(fd, &readfds);
@@ -296,60 +335,26 @@ int main(int argc, const char** argv) {
         exit(1);
     }
 
-    struct input_absinfo absinfo;
-
-    absinfo.minimum = min_input;
-    absinfo.maximum = max_input;
-    absinfo.resolution = joystick_resolution;
-    absinfo.value = mid_input;
-    absinfo.flat = 2;
-    absinfo.fuzz = 0;
-
-    struct libevdev* evdev = libevdev_new();
-    check(libevdev_enable_property(evdev, INPUT_PROP_BUTTONPAD));
-    libevdev_set_name(evdev, "xReal Air virtual joystick");
-    check(libevdev_enable_event_type(evdev, EV_ABS));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_X, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Y, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Z, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RX, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RY, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RZ, &absinfo));
-
-    /* do not remove next 3 lines or udev scripts won't assign 0664 permissions -sh */
-    check(libevdev_enable_event_type(evdev, EV_KEY));
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_JOYSTICK, NULL));
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
-
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
-
-    check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
-
-    glasses_imu = device3_open(handle_device_3);
-    int connection_attempts = 0;
-    while (!glasses_imu || !glasses_imu->ready) {
-        if (++connection_attempts > 5) {
-            fprintf(stderr, "Device not found, exiting...\n");
-            break;
+    while (1) {
+        glasses_imu = device3_open(handle_device_3);
+        while (!glasses_imu || !glasses_imu->ready) {
+            // TODO - move to a blocking check, rather than polling for device availability
+            // retry every 5 seconds until the device becomes available
+            device3_close(glasses_imu);
+            sleep(5);
+            glasses_imu = device3_open(handle_device_3);
         }
 
-        device3_close(glasses_imu);
-        fprintf(stderr, "Device not found, sleeping...\n");
-        sleep(5);
-        glasses_imu = device3_open(handle_device_3);
-    }
-
-    if (glasses_imu && glasses_imu->ready) {
+        // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
         pthread_t glasses_imu_thread;
         pthread_t monitor_config_file_thread;
         pthread_create(&glasses_imu_thread, NULL, poll_glasses_imu, NULL);
         pthread_create(&monitor_config_file_thread, NULL, monitor_config_file, NULL);
-
         pthread_join(glasses_imu_thread, NULL);
+        pthread_join(monitor_config_file_thread, NULL);
+
+        device3_close(glasses_imu);
     }
 
-    device3_close(glasses_imu);
-    libevdev_uinput_destroy(uinput);
-    libevdev_free(evdev);
     return 0;
 }

@@ -41,9 +41,5 @@ else
             # Add the new key/value pair to the end of the file
             echo "$config_key=$config_value" >> "$config_file"
         fi
-
-        if [ "$config_key" == "disabled" ] && [ "$config_value" == "false" ]; then
-            ~/bin/xrealAirLinuxDriver &
-        fi
     fi
 fi
