@@ -37,10 +37,12 @@
 #include <sys/inotify.h>
 #include <libgen.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include <math.h>
 #include <pthread.h>
@@ -145,15 +147,14 @@ bool driver_disabled=false;
 
 // pthread function to poll the glasses and translate to our virtual controller's joystick input
 void *poll_glasses_imu(void *arg) {
-    fprintf(stdout, "Device connected, redirecting input to virtual controller...\n");
-    fflush(NULL);
+    printf("Device connected, redirecting input to virtual controller...\n");
 
     device3_clear(glasses_imu);
-    while (!driver_disabled && glasses_imu) {
+    while (!driver_disabled) {
         if (device3_read(glasses_imu, 1, false) < 0) {
+            glasses_imu = NULL;
             break;
         }
-        fflush(NULL);
     }
 }
 
@@ -165,85 +166,105 @@ void parse_config_file(FILE *fp) {
         if (strcmp(key, "disabled") == 0) {
             driver_disabled = strcmp(value, "true") == 0;
             if (driver_disabled)
-                fprintf(stdout, "Driver is disabled!\n");
+                printf("Driver is disabled!\n");
         }
     }
+}
+
+// creates a file, if it doesn't already exist, in the user home directory with home directory permissions and ownership.
+// this is helpful since the driver may be run with sudo, so we don't create files owned by root:root
+static FILE* get_or_create_home_file(char *filename, char *mode, char *full_path) {
+    char *home_directory = getenv("HOME");
+    snprintf(full_path, 1024, "%s/%s", home_directory, filename);
+    FILE *fp = fopen(full_path, "r");
+    if (fp == NULL) {
+        // Retrieve the permissions of the parent directory
+        struct stat st;
+        if (stat(home_directory, &st) == -1) {
+            perror("stat");
+            return NULL;
+        }
+
+        fp = fopen(full_path, "w");
+        if (fp == NULL) {
+            perror("Error creating config file");
+            return NULL;
+        }
+
+        // Set the permissions and ownership of the new file to be the same as the parent directory
+        if (chmod(full_path, st.st_mode & 0777) == -1) {
+            perror("Error setting file permissions");
+            return NULL;
+        }
+        if (chown(full_path, st.st_uid, st.st_gid) == -1) {
+            perror("Error setting file ownership");
+            return NULL;
+        }
+    }
+
+    return fp;
 }
 
 // pthread function to monitor the config file for changes
 void *monitor_config_file(void *arg) {
     char filename[1024];
-    char *home = getenv("HOME");
-    snprintf(filename, sizeof(filename), "%s/.xreal_driver_config", home);
-    fprintf(stdout, "config file path: %s\n", filename);
+    FILE *fp = get_or_create_home_file(".xreal_driver_config", "r", &filename[0]);
+    if (!fp)
+        return NULL;
 
-    FILE *fp = fopen(filename, "r");
-    if (fp == NULL) {
-        // Parse the parent path from the file path
-        char *parent_path = strdup(filename);
-        parent_path = dirname(parent_path);
-
-        // Retrieve the permissions of the parent directory
-        struct stat st;
-        if (stat(parent_path, &st) == -1) {
-            perror("stat");
-            exit(1);
-        }
-
-        fp = fopen(filename, "w");
-        if (fp == NULL) {
-            perror("Error creating config file");
-            exit(1);
-        }
-
-        // Set the permissions and ownership of the new file to be the same as the parent directory
-        if (chmod(filename, st.st_mode & 0777) == -1) {
-            perror("Error setting config file permissions");
-            exit(1);
-        }
-        if (chown(filename, st.st_uid, st.st_gid) == -1) {
-            perror("Error setting config file ownership");
-            exit(1);
-        }
-    } else {
-        parse_config_file(fp);
-    }
+    parse_config_file(fp);
 
     int fd = inotify_init();
     if (fd < 0) {
         perror("Error initializing inotify");
-        exit(1);
+        return NULL;
     }
 
     int wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
     if (wd < 0) {
         perror("Error adding watch");
-        exit(1);
+        return NULL;
     }
 
     char buffer[EVENT_SIZE];
-    while (!driver_disabled) {
-        int length = read(fd, buffer, EVENT_SIZE);
-        if (length < 0) {
-            perror("Error reading events");
-            exit(1);
-        }
+    while (!driver_disabled && glasses_imu) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
 
-        int i = 0;
-        while (i < length) {
-            struct inotify_event *event = (struct inotify_event *) &buffer[i];
-            if (event->mask & IN_DELETE_SELF) {
-                // The file has been deleted, so we need to re-add the watch
-                wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
-                if (wd < 0) {
-                    perror("Error re-adding watch");
-                    exit(1);
-                }
-            } else {
-                fp = freopen(filename, "r", fp);
-                parse_config_file(fp);
+        struct timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+
+        // wait for data to be available for reading, do this with select() so we can specify a timeout and make
+        // sure we shouldn't exit due to driver_disabled
+        int retval = select(fd + 1, &readfds, NULL, NULL, &tv);
+        if (retval == -1) {
+            perror("select()");
+            return NULL;
+        } else if (retval) {
+            int length = read(fd, buffer, EVENT_SIZE);
+            if (length < 0) {
+                    perror("Error reading inotify events");
+                    return NULL;
             }
-            i += EVENT_SIZE + event->len;
+
+            int i = 0;
+            while (i < length) {
+                struct inotify_event *event = (struct inotify_event *) &buffer[i];
+                if (event->mask & IN_DELETE_SELF) {
+                    // The file has been deleted, so we need to re-add the watch
+                    wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+                    if (wd < 0) {
+                        perror("Error re-adding watch");
+                        return NULL;
+                    }
+                } else {
+                    fp = freopen(filename, "r", fp);
+                    parse_config_file(fp);
+                }
+                i += EVENT_SIZE + event->len;
+            }
         }
     }
 
@@ -253,6 +274,28 @@ void *monitor_config_file(void *arg) {
 }
 
 int main(int argc, const char** argv) {
+    // ensure the log file exists, reroute stdout and stderr there
+    char log_file_path[1024];
+    FILE *log_file = get_or_create_home_file(".xreal_driver_log", NULL, &log_file_path[0]);
+    fclose(log_file);
+    freopen(log_file_path, "a", stdout);
+    freopen(log_file_path, "a", stderr);
+
+    // when redirecting stdout/stderr to a file, it becomes fully buffered, requiring lots of manual flushing of the
+    // stream, this makes them unbuffered, which is fine since we log so little
+    setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
+
+    // set a lock so only one instance of the driver can be running at a time
+    char lock_file_path[1024];
+    FILE *lock_file = get_or_create_home_file(".xreal_driver_lock", "r", &lock_file_path[0]);
+    int rc = flock(fileno(lock_file), LOCK_EX | LOCK_NB);
+    if(rc) {
+        if(EWOULDBLOCK == errno)
+            printf("Another instance of this program is already running.\n");
+        exit(1);
+    }
+
     struct input_absinfo absinfo;
 
     absinfo.minimum = min_input;

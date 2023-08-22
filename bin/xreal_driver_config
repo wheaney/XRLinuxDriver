@@ -43,7 +43,7 @@ else
         fi
 
         if [ "$config_key" == "disabled" ] && [ "$config_value" == "false" ]; then
-            ((echo $(date -u); ~/bin/xrealAirLinuxDriver) >> ~/.xreal_udev_log 2>&1) &
+            ~/bin/xrealAirLinuxDriver &
         fi
     fi
 fi
