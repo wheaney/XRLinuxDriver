@@ -38,12 +38,6 @@ then
                 # Add the new key/value pair to the end of the file
                 echo "$config_key=$config_value" >> "$config_file"
             fi
-
-            if [ "$config_key" == "disabled" ] && [ "$config_value" == "false" ]; then
-                # driver exits when it's disabled (it doesn't support blocking on this config yet), so it requires a
-                # manual start in the case where it becomes enabled but the glasses are already plugged in
-                ((echo $(date -u); ~/bin/xrealAirLinuxDriver) >> ~/.xreal_udev_log 2>&1) &
-            fi
         else
             status="enabled"
             while read -r line; do
