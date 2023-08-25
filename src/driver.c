@@ -59,6 +59,11 @@ const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 
+device3_type* glasses_imu;
+bool driver_disabled=false;
+bool debug_threads=false;
+bool debug_joystick=false;
+
 static int check(int i) {
     if (i < 0) {
         printf("%s\n", strerror(-i));
@@ -100,6 +105,126 @@ float degree_delta(float prev, float next) {
     return delta;
 }
 
+// creates a file, if it doesn't already exist, in the user home directory with home directory permissions and ownership.
+// this is helpful since the driver may be run with sudo, so we don't create files owned by root:root
+static FILE* get_or_create_home_file(char *filename, char *mode, char *full_path, bool *created) {
+    char *home_directory = getenv("HOME");
+    snprintf(full_path, 1024, "%s/%s", home_directory, filename);
+    FILE *fp = fopen(full_path, mode ? mode : "r");
+    if (fp == NULL) {
+        // Retrieve the permissions of the parent directory
+        struct stat st;
+        if (stat(home_directory, &st) == -1) {
+            perror("stat");
+            return NULL;
+        }
+
+        fp = fopen(full_path, "w");
+        if (fp == NULL) {
+            perror("Error creating config file");
+            return NULL;
+        }
+        if (created != NULL)
+            *created = true;
+
+        // Set the permissions and ownership of the new file to be the same as the parent directory
+        if (chmod(full_path, st.st_mode & 0777) == -1) {
+            perror("Error setting file permissions");
+            return NULL;
+        }
+        if (chown(full_path, st.st_uid, st.st_gid) == -1) {
+            perror("Error setting file ownership");
+            return NULL;
+        }
+    } else if (created != NULL) {
+        *created = false;
+    }
+
+    return fp;
+}
+
+#define JOYSTICK_DEBUG_LINES 17
+#define JOYSTICK_DEBUG_LINES_MIDDLE 8 // zero-indexed from 17 total lines
+
+// converts a value in the joystick min/max range to a value in the file row/col range
+int joystick_debug_val_to_line(int value) {
+    int joystick_middle = (max_input + min_input) / 2;
+    int value_from_middle = value - joystick_middle;
+    float value_percent_of_total = (float)value_from_middle / (max_input - min_input);
+    int line_value_from_middle = value_percent_of_total < 0 ? ceil(value_percent_of_total * JOYSTICK_DEBUG_LINES) : floor(value_percent_of_total * JOYSTICK_DEBUG_LINES);
+
+    return JOYSTICK_DEBUG_LINES_MIDDLE + line_value_from_middle;
+}
+
+// write a character to a coordinate -- as a grid of characters -- in a file
+void write_character_to_joystick_debug_file(FILE *fp, int col, int row, char new_char) {
+    if (row < 0 || row >= JOYSTICK_DEBUG_LINES || col < 0 || col >= JOYSTICK_DEBUG_LINES) {
+        fprintf(stderr, "joystick_debug: invalid row or column index: %d %d\n", row, col);
+    } else {
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < JOYSTICK_DEBUG_LINES; j++) {
+                fgetc(fp);
+            }
+            char c = fgetc(fp);
+            if (c != '\n') {
+                return;
+            }
+        }
+
+        for (int j = 0; j <= col; j++) {
+            fgetc(fp);
+        }
+
+        fseek(fp, -1, SEEK_CUR);
+        fputc(new_char, fp);
+    }
+}
+
+// debug visual joystick from bash: watch -n 0.1 cat ~/.xreal_joystick_debug
+void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, int new_joystick_y) {
+    int old_x = joystick_debug_val_to_line(old_joystick_x);
+    int old_y = joystick_debug_val_to_line(old_joystick_y);
+    int new_x = joystick_debug_val_to_line(new_joystick_x);
+    int new_y = joystick_debug_val_to_line(new_joystick_y);
+
+    if (old_x != new_x || old_y != new_y) {
+        char full_path[1024];
+        bool file_created = false;
+        FILE *fp = get_or_create_home_file(".xreal_joystick_debug", "r+", &full_path[0], &file_created);
+        if (file_created) {
+            for (int i = 0; i < JOYSTICK_DEBUG_LINES; i++) {
+                for (int j = 0; j < JOYSTICK_DEBUG_LINES; j++) {
+                    char grid_char = ' ';
+                    if (i == JOYSTICK_DEBUG_LINES_MIDDLE && j == JOYSTICK_DEBUG_LINES_MIDDLE)
+                        grid_char = 'X';
+                    fputc(grid_char, fp);
+                }
+                fputc('\n', fp);
+            }
+            fclose(fp);
+
+            fp = fopen(full_path, "r+");
+            if (fp == NULL) {
+                return;
+            }
+        }
+
+        if (fp != NULL) {
+            char reset_char = ' ';
+            if (old_x == JOYSTICK_DEBUG_LINES_MIDDLE && old_y == JOYSTICK_DEBUG_LINES_MIDDLE)
+                reset_char = 'X';
+
+            write_character_to_joystick_debug_file(fp, old_x, old_y, reset_char);
+            rewind(fp);
+            write_character_to_joystick_debug_file(fp, new_x, new_y, 'O');
+            fclose(fp);
+        }
+    }
+}
+
+int joystick_debug_count = 0;
+int prev_joystick_x = 0;
+int prev_joystick_y = 0;
 struct libevdev_uinput* uinput;
 void handle_device_3(uint64_t timestamp,
 		   device3_event_type event,
@@ -112,10 +237,20 @@ void handle_device_3(uint64_t timestamp,
         float delta_x = degree_delta(prev_tracked.z, e.z);
         float delta_y = degree_delta(prev_tracked.y, e.y);
         float delta_z = degree_delta(prev_tracked.x, e.x);
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, joystick_value(delta_x, joystick_max_degrees));
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, joystick_value(delta_y, joystick_max_degrees));
+
+        int next_joystick_x = joystick_value(delta_x, joystick_max_degrees);
+        int next_joystick_y = joystick_value(delta_y, joystick_max_degrees);
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
+        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
         libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
         libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
+
+        if (debug_joystick && (joystick_debug_count++ % 100) == 0) {
+            joystick_debug_count = 0;
+            joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
+        }
+        prev_joystick_x = next_joystick_x;
+        prev_joystick_y = next_joystick_y;
 
         prev_tracked = e;
     }
@@ -141,9 +276,6 @@ void handle_device_4(uint64_t timestamp,
             break;
     }
 }
-
-device3_type* glasses_imu;
-bool driver_disabled=false;
 
 // pthread function to create the virtual controller and poll the glasses
 void *poll_glasses_imu(void *arg) {
@@ -185,65 +317,66 @@ void *poll_glasses_imu(void *arg) {
         }
     }
 
+    if (debug_threads)
+        printf("Exiting glasses_imu thread\n");
+
     glasses_imu = NULL;
     libevdev_uinput_destroy(uinput);
     libevdev_free(evdev);
 }
 
 void parse_config_file(FILE *fp) {
+    bool was_disabled = driver_disabled;
+    bool new_driver_disabled = false;
+    bool was_debugging_joystick = debug_joystick;
+    bool new_debug_joystick = false;
+    bool was_debugging_threads = debug_threads;
+    bool new_debug_threads = false;
+
     char line[1024];
     while (fgets(line, sizeof(line), fp) != NULL) {
         char *key = strtok(line, "=");
         char *value = strtok(NULL, "\n");
         if (strcmp(key, "disabled") == 0) {
-            bool was_disabled = driver_disabled;
-            driver_disabled = strcmp(value, "true") == 0;
-            if (!was_disabled && driver_disabled)
-                printf("Driver has been disabled, see ~/bin/xreal_driver_config\n");
-            if (was_disabled && !driver_disabled)
-                printf("Driver has been re-enabled, see ~/bin/xreal_driver_config\n");
-        }
-    }
-}
-
-// creates a file, if it doesn't already exist, in the user home directory with home directory permissions and ownership.
-// this is helpful since the driver may be run with sudo, so we don't create files owned by root:root
-static FILE* get_or_create_home_file(char *filename, char *mode, char *full_path) {
-    char *home_directory = getenv("HOME");
-    snprintf(full_path, 1024, "%s/%s", home_directory, filename);
-    FILE *fp = fopen(full_path, "r");
-    if (fp == NULL) {
-        // Retrieve the permissions of the parent directory
-        struct stat st;
-        if (stat(home_directory, &st) == -1) {
-            perror("stat");
-            return NULL;
-        }
-
-        fp = fopen(full_path, "w");
-        if (fp == NULL) {
-            perror("Error creating config file");
-            return NULL;
-        }
-
-        // Set the permissions and ownership of the new file to be the same as the parent directory
-        if (chmod(full_path, st.st_mode & 0777) == -1) {
-            perror("Error setting file permissions");
-            return NULL;
-        }
-        if (chown(full_path, st.st_uid, st.st_gid) == -1) {
-            perror("Error setting file ownership");
-            return NULL;
+            new_driver_disabled = strcmp(value, "true") == 0;
+        } else if (strcmp(key, "debug") == 0) {
+            char *token = strtok(value, ",");
+            while (token != NULL) {
+                if (strcmp(token, "joystick") == 0) {
+                    new_debug_joystick = true;
+                }
+                if (strcmp(token, "threads") == 0) {
+                    new_debug_threads = true;
+                }
+                token = strtok(NULL, ",");
+            }
         }
     }
 
-    return fp;
+    if (!was_disabled && new_driver_disabled)
+        printf("Driver has been disabled, see ~/bin/xreal_driver_config\n");
+    if (was_disabled && !new_driver_disabled)
+        printf("Driver has been re-enabled, see ~/bin/xreal_driver_config\n");
+
+    if (!was_debugging_joystick && new_debug_joystick)
+        printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat ~/.xreal_joystick_debug' in bash\n");
+    if (was_debugging_joystick && !new_debug_joystick)
+        printf("Joystick debugging has been disabled\n");
+
+    if (!was_debugging_threads && new_debug_threads)
+        printf("Threads debugging has been enabled\n");
+    if (was_debugging_threads && !new_debug_threads)
+        printf("Threads debugging has been disabled\n");
+
+    driver_disabled = new_driver_disabled;
+    debug_joystick = new_debug_joystick;
+    debug_threads = new_debug_threads;
 }
 
 // pthread function to monitor the config file for changes
 void *monitor_config_file(void *arg) {
     char filename[1024];
-    FILE *fp = get_or_create_home_file(".xreal_driver_config", "r", &filename[0]);
+    FILE *fp = get_or_create_home_file(".xreal_driver_config", "r", &filename[0], NULL);
     if (!fp)
         return NULL;
 
@@ -284,8 +417,8 @@ void *monitor_config_file(void *arg) {
         } else if (retval) {
             int length = read(fd, buffer, EVENT_SIZE);
             if (length < 0) {
-                    perror("Error reading inotify events");
-                    return NULL;
+                perror("Error reading inotify events");
+                return NULL;
             }
 
             int i = 0;
@@ -307,6 +440,9 @@ void *monitor_config_file(void *arg) {
         }
     }
 
+    if (debug_threads)
+        printf("Exiting monitor_config_file thread\n");
+
     fclose(fp);
     inotify_rm_watch(fd, wd);
     close(fd);
@@ -315,7 +451,7 @@ void *monitor_config_file(void *arg) {
 int main(int argc, const char** argv) {
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];
-    FILE *log_file = get_or_create_home_file(".xreal_driver_log", NULL, &log_file_path[0]);
+    FILE *log_file = get_or_create_home_file(".xreal_driver_log", NULL, &log_file_path[0], NULL);
     fclose(log_file);
     freopen(log_file_path, "a", stdout);
     freopen(log_file_path, "a", stderr);
@@ -327,7 +463,7 @@ int main(int argc, const char** argv) {
 
     // set a lock so only one instance of the driver can be running at a time
     char lock_file_path[1024];
-    FILE *lock_file = get_or_create_home_file(".xreal_driver_lock", "r", &lock_file_path[0]);
+    FILE *lock_file = get_or_create_home_file(".xreal_driver_lock", "r", &lock_file_path[0], NULL);
     int rc = flock(fileno(lock_file), LOCK_EX | LOCK_NB);
     if(rc) {
         if(EWOULDBLOCK == errno)
@@ -337,6 +473,9 @@ int main(int argc, const char** argv) {
 
     while (1) {
         glasses_imu = device3_open(handle_device_3);
+        if (!glasses_imu || !glasses_imu->ready)
+            printf("Waiting for glasses\n");
+
         while (!glasses_imu || !glasses_imu->ready) {
             // TODO - move to a blocking check, rather than polling for device availability
             // retry every 5 seconds until the device becomes available
@@ -352,6 +491,9 @@ int main(int argc, const char** argv) {
         pthread_create(&monitor_config_file_thread, NULL, monitor_config_file, NULL);
         pthread_join(glasses_imu_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
+
+        if (debug_threads)
+            printf("All threads have exited, starting over\n");
 
         device3_close(glasses_imu);
     }
