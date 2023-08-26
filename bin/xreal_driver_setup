@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# This setup script should do the minimum work required to download the release package, unzip it, and kick off the
+# setup script contained within.
+
 # exit when any command fails
 set -e
 
@@ -17,20 +20,6 @@ if [ $(command -v steamos-readonly) ]; then
     echo "Disabling readonly SteamOS partition"
     steamos-readonly disable
   fi
-fi
-
-USER=${SUDO_USER:-$USER}
-USER_HOME=$(getent passwd $USER | cut -d: -f6)
-if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
-  echo "Cleaning up the previous installation"
-
-  # ` || true` will ensure that this can't cause a failure, even with `set -e`
-  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
-fi
-
-if ! lsmod | grep -q uinput; then
-  echo "Setting up uinput kernel module"
-  modprobe uinput
 fi
 
 # create temp directory
@@ -51,50 +40,9 @@ echo "Extracting to: ${tmp_dir}/driver_air_glasses"
 tar -xf xrealAirLinuxDriver.tar.gz
 
 pushd driver_air_glasses > /dev/null
-UDEV_FILE=/etc/udev/rules.d/60-xreal-air.rules
-if test -f "$UDEV_FILE"; then
-  rm $UDEV_FILE
-fi
 
-echo "Copying udev file to ${UDEV_FILE}"
-# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
-ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
-sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" udev/60-xreal-air.rules
-
-cp udev/60-xreal-air.rules $UDEV_FILE
-udevadm control --reload
-udevadm trigger
-
-echo "Copying scripts to ${USER_HOME}/bin"
-if [ ! -d "$USER_HOME/bin" ]; then
-  mkdir $USER_HOME/bin
-fi
-cp xreal_driver_config $USER_HOME/bin
-cp xreal_driver_uninstall $USER_HOME/bin
-
-echo "Setting up the systemd service"
-# check if the systemd service is already running from a previous install
-if systemctl is-active --quiet xreal-air-driver; then
-  systemctl stop xreal-air-driver
-fi
-
-cp xrealAirLinuxDriver /usr/bin
-chmod 755 /usr/bin/xrealAirLinuxDriver
-
-sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" systemd/xreal-air-driver.service
-cp systemd/xreal-air-driver.service /etc/systemd/system
-chmod 644 /etc/systemd/system/xreal-air-driver.service
-systemctl daemon-reload
-systemctl start xreal-air-driver
-
-# check if systemd startup was successful
-if ! systemctl is-active --quiet xreal-air-driver; then
-  echo "systemd startup failed"
-  exit 1
-fi
-
-# set it to run on startup
-systemctl enable xreal-air-driver
+# run the setup script that comes with this release
+./setup
 
 echo "Deleting temp directory: ${tmp_dir}"
 rm -rf $tmp_dir

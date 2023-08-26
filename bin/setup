@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+# This script gets packaged with the release and should do the bulk of the setup work. This allows this setup to be tied
+# to a specific release of the code, and guarantees it will never run along-side newer or older binaries.
+
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
+  echo "Cleaning up the previous installation"
+
+  # ` || true` will ensure that this can't cause a failure, even with `set -e`
+  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
+fi
+
+if ! lsmod | grep -q uinput; then
+  echo "Setting up uinput kernel module"
+  modprobe uinput
+fi
+
+UDEV_FILE=/etc/udev/rules.d/60-xreal-air.rules
+echo "Copying udev file to ${UDEV_FILE}"
+# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
+ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
+sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" udev/60-xreal-air.rules
+
+cp udev/60-xreal-air.rules $UDEV_FILE
+udevadm control --reload
+udevadm trigger
+
+echo "Copying scripts to ${USER_HOME}/bin"
+if [ ! -d "$USER_HOME/bin" ]; then
+  mkdir $USER_HOME/bin
+fi
+cp xreal_driver_config $USER_HOME/bin
+cp xreal_driver_uninstall $USER_HOME/bin
+
+echo "Setting up the systemd service"
+# check if the systemd service is already running from a previous install
+if systemctl is-active --quiet xreal-air-driver; then
+  systemctl stop xreal-air-driver
+fi
+
+cp xrealAirLinuxDriver /usr/bin
+chmod 755 /usr/bin/xrealAirLinuxDriver
+
+sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" systemd/xreal-air-driver.service
+cp systemd/xreal-air-driver.service /etc/systemd/system
+chmod 644 /etc/systemd/system/xreal-air-driver.service
+systemctl daemon-reload
+systemctl start xreal-air-driver
+
+# check if systemd startup was successful
+if ! systemctl is-active --quiet xreal-air-driver; then
+  echo "systemd startup failed"
+  exit 1
+fi
+
+# set it to run on startup
+systemctl enable xreal-air-driver
