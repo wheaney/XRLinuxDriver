@@ -36,6 +36,10 @@ From my testing so far I've found that games don't really like to have two contr
 
 On Steam Deck, once you have the driver working from Desktop mode, it should also work automatically from Game Mode.
 
+### Uninstalling
+
+If you wish to completely remove the installation, run the following script as root: `~/bin/xreal_driver_uninstall`
+
 ## Development
 
 ### Dependencies
@@ -61,4 +65,4 @@ make
 
 ### Deployment
 
-To create the deployment gzip file, run `bin/package.sh`. Upload the resulting gzip file and the `bin/xreal_driver_setup` file to a new Release.
+To create the deployment gzip file, run `bin/package`. Upload the resulting gzip file and the `bin/xreal_driver_setup` file to a new Release.
