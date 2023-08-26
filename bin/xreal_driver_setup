@@ -10,15 +10,23 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 # If we're on Steam Deck, check if the file system is readonly, if so, disable readonly and store the state to re-enable later
-steam_deck_readonly_fs=false
-if command -v steamos-readonly &> /dev/null; then
+steam_deck_readonly_fs=0
+if [ $(command -v steamos-readonly) ]; then
   if steamos-readonly status | grep -q "enabled"; then
-    steam_deck_readonly_fs=true
+    steam_deck_readonly_fs=1
     echo "Disabling readonly SteamOS partition"
     steamos-readonly disable
   fi
 fi
 
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
+  echo "Cleaning up the previous installation"
+
+  # ` || true` will ensure that this can't cause a failure, even with `set -e`
+  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
+fi
 
 if ! lsmod | grep -q uinput; then
   echo "Setting up uinput kernel module"
@@ -49,9 +57,6 @@ if test -f "$UDEV_FILE"; then
 fi
 
 echo "Copying udev file to ${UDEV_FILE}"
-USER=${SUDO_USER:-$USER}
-USER_HOME=$(getent passwd $USER | cut -d: -f6)
-
 # escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
 ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" udev/60-xreal-air.rules
@@ -61,10 +66,11 @@ udevadm control --reload
 udevadm trigger
 
 echo "Copying scripts to ${USER_HOME}/bin"
-if test ! -d "$USER_HOME/bin"; then
+if [ ! -d "$USER_HOME/bin" ]; then
   mkdir $USER_HOME/bin
 fi
 cp xreal_driver_config $USER_HOME/bin
+cp xreal_driver_uninstall $USER_HOME/bin
 
 echo "Setting up the systemd service"
 # check if the systemd service is already running from a previous install
@@ -95,7 +101,7 @@ rm -rf $tmp_dir
 cd "$(dirs -l -0)" && dirs -c
 
 # If we disabled the Steam Deck readonly file system, re-enable it
-if $steam_deck_readonly_fs; then
+if [ "$steam_deck_readonly_fs" -eq 1 ]; then
   echo "Re-enabling readonly SteamOS partition"
   steamos-readonly enable
 fi
