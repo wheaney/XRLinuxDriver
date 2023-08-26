@@ -36,6 +36,12 @@ From my testing so far I've found that games don't really like to have two contr
 
 On Steam Deck, once you have the driver working from Desktop mode, it should also work automatically from Game Mode.
 
+### Updating
+
+If you already installed **release 0.2.2 and later**: to update to the latest version of the driver, just rerun the `xreal_driver_setup` file (no need to re-download the setup script).
+
+**Prior to release 0.2.2**: remove any old versions of `xreal_driver_setup` from your browser's downloads directory, then repeat the [Installation steps](#installation). After this, you can always re-use the same setup script to update.
+
 ### Uninstalling
 
 If you wish to completely remove the installation, run the following script as root: `~/bin/xreal_driver_uninstall`
