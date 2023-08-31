@@ -58,15 +58,18 @@ const int cycles_per_second = 1000;
 const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
+const int default_mouse_sensitivity = 20;
 
 device3_type* glasses_imu;
 bool driver_disabled=false;
+bool use_roll_axis=false;
+int mouse_sensitivity=default_mouse_sensitivity;
 bool debug_threads=false;
 bool debug_joystick=false;
 
-static int check(int i) {
+static int check(char * function, int i) {
     if (i < 0) {
-        printf("%s\n", strerror(-i));
+        printf("libevdev.%s: %s\n", function, strerror(-i));
         exit(1);
     }
 
@@ -225,6 +228,12 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
 int joystick_debug_count = 0;
 int prev_joystick_x = 0;
 int prev_joystick_y = 0;
+
+// keep track of the remainder (the amount that was lost with round()) for smoothing out mouse movements
+float mouse_x_remainder = 0.0;
+float mouse_y_remainder = 0.0;
+float mouse_z_remainder = 0.0;
+
 struct libevdev_uinput* uinput;
 void handle_device_3(uint64_t timestamp,
 		   device3_event_type event,
@@ -238,13 +247,28 @@ void handle_device_3(uint64_t timestamp,
         float delta_y = degree_delta(prev_tracked.y, e.y);
         float delta_z = degree_delta(prev_tracked.x, e.x);
 
-        int next_joystick_x = joystick_value(delta_x, joystick_max_degrees);
-        int next_joystick_y = joystick_value(delta_y, joystick_max_degrees);
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
-        libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
+        // smooth out the mouse values using the remainders left over from previous writes
+        float next_x = delta_x * mouse_sensitivity + mouse_x_remainder;
+        int next_x_int = round(next_x);
+        mouse_x_remainder = next_x - next_x_int;
+
+        float next_y = delta_y * mouse_sensitivity + mouse_y_remainder;
+        int next_y_int = round(next_y);
+        mouse_y_remainder = next_y - next_y_int;
+
+        float next_z = delta_z * mouse_sensitivity + mouse_z_remainder;
+        int next_z_int = round(next_z);
+        mouse_z_remainder = next_z - next_z_int;
+
+        libevdev_uinput_write_event(uinput, EV_REL, REL_X, next_x_int);
+        libevdev_uinput_write_event(uinput, EV_REL, REL_Y, next_y_int);
+        if (use_roll_axis)
+            libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
         libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 
+        // keep joystick debugging as it adds a helpful visual
+        int next_joystick_x = joystick_value(delta_x, joystick_max_degrees);
+        int next_joystick_y = joystick_value(delta_y, joystick_max_degrees);
         if (debug_joystick && (joystick_debug_count++ % 100) == 0) {
             joystick_debug_count = 0;
             joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
@@ -253,27 +277,6 @@ void handle_device_3(uint64_t timestamp,
         prev_joystick_y = next_joystick_y;
 
         prev_tracked = e;
-    }
-}
-
-void handle_device_4(uint64_t timestamp,
-		   device4_event_type event,
-		   uint8_t brightness,
-		   const char* msg) {
-    switch (event) {
-        case DEVICE4_EVENT_MESSAGE:
-            printf("Message: `%s`\n", msg);
-            break;
-        case DEVICE4_EVENT_BRIGHTNESS_UP:
-            printf("Increase Brightness: %u\n", brightness);
-            libevdev_uinput_write_event(uinput, EV_KEY, BTN_A, 1);
-            libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
-            break;
-        case DEVICE4_EVENT_BRIGHTNESS_DOWN:
-            printf("Decrease Brightness: %u\n", brightness);
-            break;
-        default:
-            break;
     }
 }
 
@@ -291,24 +294,19 @@ void *poll_glasses_imu(void *arg) {
     absinfo.fuzz = 0;
 
     struct libevdev* evdev = libevdev_new();
-    check(libevdev_enable_property(evdev, INPUT_PROP_BUTTONPAD));
-    libevdev_set_name(evdev, "xReal Air virtual joystick");
-    check(libevdev_enable_event_type(evdev, EV_ABS));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_X, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Y, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_Z, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RX, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RY, &absinfo));
-    check(libevdev_enable_event_code(evdev, EV_ABS, ABS_RZ, &absinfo));
+    libevdev_set_name(evdev, "XREAL Air virtual mouse");
 
-    /* do not remove next 3 lines or udev scripts won't assign 0664 permissions -sh */
-    check(libevdev_enable_event_type(evdev, EV_KEY));
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_JOYSTICK, NULL));
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
+    check("libevdev_enable_event_type", libevdev_enable_event_type(evdev, EV_REL));
+    check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_REL, REL_X, NULL));
+    check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_REL, REL_Y, NULL));
+    check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_REL, REL_WHEEL, NULL));
 
-    check(libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
+    check("libevdev_enable_event_type", libevdev_enable_event_type(evdev, EV_KEY));
+    check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_LEFT, NULL));
+    check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_MIDDLE, NULL));
+    check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_RIGHT, NULL));
 
-    check(libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
+    check("libevdev_uinput_create_from_device", libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 
     device3_clear(glasses_imu);
     while (!driver_disabled) {
@@ -328,6 +326,10 @@ void *poll_glasses_imu(void *arg) {
 void parse_config_file(FILE *fp) {
     bool was_disabled = driver_disabled;
     bool new_driver_disabled = false;
+    bool was_use_roll_axis = use_roll_axis;
+    bool new_use_roll_axis = false;
+    int was_mouse_sensitivity = mouse_sensitivity;
+    int new_mouse_sensitivity = default_mouse_sensitivity;
     bool was_debugging_joystick = debug_joystick;
     bool new_debug_joystick = false;
     bool was_debugging_threads = debug_threads;
@@ -350,6 +352,17 @@ void parse_config_file(FILE *fp) {
                 }
                 token = strtok(NULL, ",");
             }
+        } else if (strcmp(key, "use_roll_axis") == 0) {
+            new_use_roll_axis = true;
+        } else if (strcmp(key, "mouse_sensitivity") == 0) {
+            char *endptr;
+            errno = 0;
+            long num = strtol(value, &endptr, 10);
+            if (errno != ERANGE && endptr != value) {
+                new_mouse_sensitivity = (int) num;
+            } else {
+                fprintf(stderr, "Error parsing mouse_sensitivity value: %s\n", value);
+            }
         }
     }
 
@@ -357,6 +370,14 @@ void parse_config_file(FILE *fp) {
         printf("Driver has been disabled, see ~/bin/xreal_driver_config\n");
     if (was_disabled && !new_driver_disabled)
         printf("Driver has been re-enabled, see ~/bin/xreal_driver_config\n");
+
+    if (!was_use_roll_axis && new_use_roll_axis)
+        printf("Roll axis has been enabled, see ~/bin/xreal_driver_config\n");
+    if (was_use_roll_axis && !new_use_roll_axis)
+        printf("Roll axis has been disabled, see ~/bin/xreal_driver_config\n");
+
+    if (was_mouse_sensitivity != new_mouse_sensitivity)
+        fprintf(stdout, "Mouse sensitivity has changed to %d, see ~/bin/xreal_driver_config\n", new_mouse_sensitivity);
 
     if (!was_debugging_joystick && new_debug_joystick)
         printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat ~/.xreal_joystick_debug' in bash\n");
@@ -369,6 +390,8 @@ void parse_config_file(FILE *fp) {
         printf("Threads debugging has been disabled\n");
 
     driver_disabled = new_driver_disabled;
+    use_roll_axis = new_use_roll_axis;
+    mouse_sensitivity = new_mouse_sensitivity;
     debug_joystick = new_debug_joystick;
     debug_threads = new_debug_threads;
 }
