@@ -20,11 +20,11 @@ To use this driver:
 2. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
 3. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
   
-Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. If you're not seeing this, check the log at `~/.xreal_driver_log` and report an Issue here with its contents.
+Your PC should now automatically recognize when your glasses are plugged in and translate their movements to mouse movements. If you're not seeing this, check the log at `~/.xreal_driver_log` and report an Issue here with its contents.
 
 ### Turning automatic driver usage on or off
 
-After initial installation, the driver will automatically run whenever the glasses are plugged in. To disable the driver without completely removing it, you can use the script installed at `~/bin/xreal_driver_config`. From this script, you can enable the driver, disable it, or report its status. Run this file without arguments to see its usage. Configs are stored in the file `~/.xreal_driver_config`.
+To disable the driver and turn off mouse movements without completely removing it, you can use the config script (e.g. `~/bin/xreal_driver_config -d` to disable, and `-e` to re-enable). Run this script without arguments to see its usage. Configs are stored in the file `~/.xreal_driver_config`.
 
 ### Practical Usage
 
@@ -41,7 +41,7 @@ If your game doesn't support blending mouse and controller movement well, the be
 #### Steam
 
 1. Open your game's controller configuration in Steam
-2. Open the layouts view
+2. Open the Layouts view
 3. Choose a keyboard/mouse template (e.g. "Keyboard (WASD) and Mouse"). Be sure to edit the configuration and set "Gyro Behavior" to "As Mouse" for any games where you want to use gyro.
 
 #### Non-Steam
