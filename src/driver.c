@@ -58,7 +58,7 @@ const int cycles_per_second = 1000;
 const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
-const default_mouse_sensitivity = 20;
+const int default_mouse_sensitivity = 20;
 
 device3_type* glasses_imu;
 bool driver_disabled=false;
