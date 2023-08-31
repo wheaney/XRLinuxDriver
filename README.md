@@ -2,7 +2,7 @@
 
 ## What is this?
 
-This driver allows your Linux device (including Steam Deck) to automatically recognize XREAL Air glasses when they're plugged in, and convert the accelerometer movements of the glasses into controller joystick movements that Steam (and probably non-Steam platforms) can recognize.
+This driver allows your Linux device (including Steam Deck) to automatically recognize XREAL Air glasses when they're plugged in, and convert the accelerometer movements of the glasses into mouse movements that PC games can use.
 
 ## Before use
 
@@ -16,11 +16,9 @@ support. So use it at your own risk!
 ### Installation
 
 To use this driver:
-1. If your glasses are already plugged in, unplug them
-2. If on Steam Deck, switch to Desktop Mode
-3. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
-4. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
-5. Plug in your glasses, wait a few seconds
+1. If on Steam Deck, switch to Desktop Mode
+2. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
+3. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
   
 Steam should now register your glasses as a new controller named `xReal Air virtual joystick`. If you're not seeing this, check the log at `~/.xreal_driver_log` and report an Issue here with its contents.
 
@@ -30,7 +28,25 @@ After initial installation, the driver will automatically run whenever the glass
 
 ### Practical Usage
 
-From my testing so far I've found that games don't really like to have two controllers both providing joystick input, so they'll only use controller #1. So for now I've only gotten this to work by modifying the controller settings for a game and choosing "right joystick" option "joystick as mouse". Clicking the gear icon next to this will allow you to change the sensitivity, I've found it helps to increase the sensitivity a little bit, and you'll also want to change the response curve to Linear. Lastly, you'll want to reduce the dead zone or simply disable the dead zone if you find that doesn't result in drift, but this should be done from the general controller settings and not just in a game-specific controller layout.
+Since the device movements are converted to mouse movements, they should be recognized by any PC game that supports keyboard/mouse input. This will work most naturally for games where mouse movements is used to control "look"/camera movements. For point-and-click style games, you may want to disable the driver so your glasses act as just a simple display.
+
+To adjust the sensitivity of mapping head movements to mouse movements, use the config script: `~/bin/xreal_driver_config --mouse-sensitivity 20` 
+
+If you're using keyboard and mouse to control your games, then the mouse movements from this driver will simply add to your own mouse movements and they should work naturally together.
+
+If you're using a game controller, Valve pushes pretty heavily for PC games support mouse input *in addition to* controller input, so you should find that most modern games will just work with this driver straight out of the box.
+
+If your game doesn't support blending mouse and controller movement well, the best option may be to convert your controller's input to keyboard and mouse. Read on for how to do this for Steam and non-Steam games.
+
+#### Steam
+
+1. Open your game's controller configuration in Steam
+2. Open the layouts view
+3. Choose a keyboard/mouse template (e.g. "Keyboard (WASD) and Mouse"). Be sure to edit the configuration and set "Gyro Behavior" to "As Mouse" for any games where you want to use gyro.
+
+#### Non-Steam
+
+You'll probably want to use a utility that does what Steam's controller layouts are doing behind the scenes: mapping controller buttons, joystick, and gyro inputs to keyboard/mouse inputs. One popular tool is [JoyShockMapper](https://github.com/Electronicks/JoyShockMapper).
 
 ### Steam Deck Game Mode
 
