@@ -23,6 +23,12 @@ then
         if [ -n "$2" ]; then
             config_value="$2"
         fi
+    elif [ "$1" == "--use-joystick" ] || [ "$1" == "-j" ]; then
+        config_key="use_joystick"
+        config_value="true"
+    elif [ "$1" == "--use-mouse" ] || [ "$1" == "-m" ]; then
+        config_key="use_joystick"
+        config_value="false"
     fi
 
     if [[ -n $config_key ]]; then
@@ -69,4 +75,11 @@ then
     fi
 fi
 
-echo "Usage: xreal_driver_config [-d|--disable] | [-e|--enable] | [-s|--status] | [-ms|--mouse-sensitivity [sensitivity_value]]"
+echo "Usage: xreal_driver_config [options]
+Options:
+  -d, --disable
+  -e, --enable
+  -s, --status
+  -ms, --mouse-sensitivity [sensitivity_value]
+  -j, --use-joystick
+  -m, --use-mouse"

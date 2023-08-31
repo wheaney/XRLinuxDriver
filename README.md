@@ -48,6 +48,10 @@ If your game doesn't support blending mouse and controller movement well, the be
 
 You'll probably want to use a utility that does what Steam's controller layouts are doing behind the scenes: mapping controller buttons, joystick, and gyro inputs to keyboard/mouse inputs. One popular tool is [JoyShockMapper](https://github.com/Electronicks/JoyShockMapper).
 
+#### Enable joystick mode
+
+One last alternative if mouse input just won't work is to enable the driver's joystick mode, using `~/bin/xreal_driver_config --use-joystick` (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
+
 ### Steam Deck Game Mode
 
 On Steam Deck, once you have the driver working from Desktop mode, it should also work automatically from Game Mode.
