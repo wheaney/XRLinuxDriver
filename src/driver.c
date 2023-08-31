@@ -318,7 +318,7 @@ void *poll_glasses_imu(void *arg) {
     }
 
     if (debug_threads)
-        printf("Exiting glasses_imu thread\n");
+        printf("\tdebug: Exiting glasses_imu thread\n");
 
     glasses_imu = NULL;
     libevdev_uinput_destroy(uinput);
@@ -441,7 +441,7 @@ void *monitor_config_file(void *arg) {
     }
 
     if (debug_threads)
-        printf("Exiting monitor_config_file thread\n");
+        printf("\tdebug: Exiting monitor_config_file thread\n");
 
     fclose(fp);
     inotify_rm_watch(fd, wd);
@@ -493,7 +493,7 @@ int main(int argc, const char** argv) {
         pthread_join(monitor_config_file_thread, NULL);
 
         if (debug_threads)
-            printf("All threads have exited, starting over\n");
+            printf("\tdebug: All threads have exited, starting over\n");
 
         device3_close(glasses_imu);
     }

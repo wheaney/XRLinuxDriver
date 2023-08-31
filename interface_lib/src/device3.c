@@ -631,13 +631,18 @@ int device3_calibrate(device3_type* device, uint32_t iterations, bool gyro, bool
 			(uint8_t*) &packet, 
 			MAX_PACKET_SIZE
 		);
-		
+
+		if (transferred == -1) {
+			fprintf(stderr, "HID read error: device may be unplugged\n");
+			return -5;
+		}
+
 		if (transferred == 0) {
 			continue;
 		}
-		
+
 		if (MAX_PACKET_SIZE != transferred) {
-			fprintf(stderr, "Not expected issue!\n");
+			fprintf(stderr, "HID read error: unexpected packet size\n");
 			return -3;
 		}
 		
@@ -736,6 +741,13 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 		MAX_PACKET_SIZE,
 		timeout
 	);
+
+	if (transferred == -1) {
+		if (!silent) {
+			fprintf(stderr, "HID read error: device may be unplugged\n");
+		}
+		return -5;
+	}
 	
 	if (transferred == 0) {
 		return 1;
@@ -743,7 +755,7 @@ int device3_read(device3_type* device, int timeout, bool silent) {
 	
 	if (MAX_PACKET_SIZE != transferred) {
 		if (!silent) {
-			fprintf(stderr, "Not expected issue!\n");
+			fprintf(stderr, "HID read error: unexpected packet size\n");
 		}
 		return -3;
 	}
@@ -848,7 +860,6 @@ device3_vec3_type device3_get_euler(device3_quat_type quat) {
 
 void device3_close(device3_type* device) {
 	if (!device) {
-		fprintf(stderr, "No device!\n");
 		return;
 	}
 	
