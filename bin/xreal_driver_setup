@@ -12,16 +12,6 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
-# If we're on Steam Deck, check if the file system is readonly, if so, disable readonly and store the state to re-enable later
-steam_deck_readonly_fs=0
-if [ $(command -v steamos-readonly) ]; then
-  if steamos-readonly status | grep -q "enabled"; then
-    steam_deck_readonly_fs=1
-    echo "Disabling readonly SteamOS partition"
-    steamos-readonly disable
-  fi
-fi
-
 # create temp directory
 tmp_dir=$(mktemp -d -t xreal-air-XXXXXXXXXX)
 pushd $tmp_dir > /dev/null
@@ -47,10 +37,3 @@ pushd driver_air_glasses > /dev/null
 echo "Deleting temp directory: ${tmp_dir}"
 rm -rf $tmp_dir
 cd "$(dirs -l -0)" && dirs -c
-
-# If we disabled the Steam Deck readonly file system, re-enable it
-if [ "$steam_deck_readonly_fs" -eq 1 ]; then
-  echo "Re-enabling readonly SteamOS partition"
-  steamos-readonly enable
-fi
-
