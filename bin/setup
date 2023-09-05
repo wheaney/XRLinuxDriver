@@ -23,16 +23,6 @@ if ! lsmod | grep -q uinput; then
   modprobe uinput
 fi
 
-UDEV_FILE=/etc/udev/rules.d/60-xreal-air.rules
-echo "Copying udev file to ${UDEV_FILE}"
-# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
-ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
-sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" udev/60-xreal-air.rules
-
-cp udev/60-xreal-air.rules $UDEV_FILE
-udevadm control --reload
-udevadm trigger
-
 echo "Copying driver binary and scripts to ${USER_HOME}/bin"
 if [ ! -d "$USER_HOME/bin" ]; then
   mkdir $USER_HOME/bin
@@ -47,6 +37,8 @@ if systemctl is-active --quiet xreal-air-driver; then
   systemctl stop xreal-air-driver
 fi
 
+# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
+ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" systemd/xreal-air-driver.service
 cp systemd/xreal-air-driver.service /etc/systemd/system
 chmod 644 /etc/systemd/system/xreal-air-driver.service

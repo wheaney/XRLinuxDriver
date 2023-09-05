@@ -30,9 +30,6 @@ cp ../bin/setup $PACKAGE_DIR
 cp ../bin/xreal_driver_config $PACKAGE_DIR
 cp ../bin/xreal_driver_uninstall $PACKAGE_DIR
 
-# copy the udev rule that's needed for the USB integration
-cp -r ../udev $PACKAGE_DIR
-
 # copy the systemd files needed to run our service
 cp -r ../systemd $PACKAGE_DIR
 

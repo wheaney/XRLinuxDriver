@@ -14,10 +14,6 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
-[ "$for_install" -eq 0 ] && echo "Removing the udev rule"
-rm -f /etc/udev/rules.d/60-xreal-air.rules
-udevadm control --reload
-
 [ "$for_install" -eq 0 ] && echo "Removing the systemd service"
 if systemctl is-active --quiet xreal-air-driver; then
     systemctl stop xreal-air-driver
