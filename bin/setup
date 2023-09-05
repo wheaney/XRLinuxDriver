@@ -3,6 +3,12 @@
 # This script gets packaged with the release and should do the bulk of the setup work. This allows this setup to be tied
 # to a specific release of the code, and guarantees it will never run along-side newer or older binaries.
 
+# some distros don't have systemd enabled by default, check this first
+if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
+  echo "systemd is required for this installation. Please enable it, then retry."
+  exit 1
+fi
+
 USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
