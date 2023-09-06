@@ -78,16 +78,9 @@ You can build the binary using `cmake` and there are a few dependencies for now:
 
 Fusion and hidapi source are included as Git submodules that you'll need to check out using the `git submodules` command. json-c may already be installed with your distro, and you'll want to install libevdev (e.g. `sudo apt install libevdev-dev`).
 
-### Build
+### Build & Testing
 
-The build process should be straight forward:
-
-```
-mkdir build
-cd build
-cmake ..
-make
-```
+For local testing, you'll want to use the same package as for deployment: run `bin/package` to create the gzip, then run `sudo bin/xreal_driver_setup $(pwd)/build/xrealAirLinuxDriver.tar.gz` to install and test it.
 
 ### Deployment
 
