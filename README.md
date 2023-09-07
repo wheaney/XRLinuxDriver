@@ -13,16 +13,20 @@ support. So use it at your own risk!
 
 ## Usage
 
-### Installation
+### Steam Deck via Decky Loader
 
-To use this driver:
-1. If on Steam Deck, switch to Desktop Mode
-2. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
-3. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
+For Steam Deck users, the driver is now available via the [Decky plugin loader](https://github.com/SteamDeckHomebrew/decky-loader). Just search "xreal" in the Decky store to install and use without leaving Gaming Mode. You can now enable or disable the driver and manage other driver settings via the Decky sidebar menu.
+
+You may still opt to do a manual installation using the instructions below if you enter Desktop Mode.
+
+### Manual installation
+
+1. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
+2. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
   
-Your PC should now automatically recognize when your glasses are plugged in and translate their movements to mouse movements. If you're not seeing this, check the log at `~/.xreal_driver_log` and report an Issue here with its contents.
+Your device should now automatically recognize when your glasses are plugged in and translate their movements to mouse movements. If you're not seeing this, check the log at `~/.xreal_driver_log` and report an Issue here with its contents.
 
-### Turning automatic driver usage on or off
+#### Turning automatic driver usage on or off
 
 To disable the driver and turn off mouse movements without completely removing it, you can use the config script (e.g. `~/bin/xreal_driver_config -d` to disable, and `-e` to re-enable). Run this script without arguments to see its usage. Configs are stored in the file `~/.xreal_driver_config`.
 
@@ -30,7 +34,7 @@ To disable the driver and turn off mouse movements without completely removing i
 
 Since the device movements are converted to mouse movements, they should be recognized by any PC game that supports keyboard/mouse input. This will work most naturally for games where mouse movements is used to control "look"/camera movements. For point-and-click style games, you may want to disable the driver so your glasses act as just a simple display.
 
-To adjust the sensitivity of mapping head movements to mouse movements, use the config script: `~/bin/xreal_driver_config --mouse-sensitivity 20` 
+To adjust the sensitivity of mapping head movements to mouse movements, use the Decky UI on Steam Deck, or `~/bin/xreal_driver_config --mouse-sensitivity 20` via the terminal.
 
 If you're using keyboard and mouse to control your games, then the mouse movements from this driver will simply add to your own mouse movements and they should work naturally together.
 
@@ -50,7 +54,7 @@ You'll probably want to use a utility that does what Steam's controller layouts 
 
 #### Enable joystick mode
 
-One last alternative if mouse input just won't work is to enable the driver's joystick mode, using `~/bin/xreal_driver_config --use-joystick` (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
+One last alternative if mouse input just won't work is to enable the driver's joystick mode, using the Decky UI on Steam Deck, or `~/bin/xreal_driver_config --use-joystick` via the terminal (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
 
 ### Steam Deck Game Mode
 
@@ -58,13 +62,13 @@ On Steam Deck, once you have the driver working from Desktop mode, it should als
 
 ### Updating
 
-If you already installed **release 0.2.2 and later**: to update to the latest version of the driver, just rerun the `xreal_driver_setup` file (no need to re-download the setup script).
+If using Decky, updates are installed through Decky.
 
-**Prior to release 0.2.2**: remove any old versions of `xreal_driver_setup` from your browser's downloads directory, then repeat the [Installation steps](#installation). After this, you can always re-use the same setup script to update.
+Otherwise, just rerun the `xreal_driver_setup` file. No need to redownload this script, as it will automatically download the latest installation binary for you.
 
 ### Uninstalling
 
-If you wish to completely remove the installation, run the following script as root: `~/bin/xreal_driver_uninstall`
+If you wish to completely remove the installation, run the following script as root: `~/bin/xreal_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
 
 ## Development
 
