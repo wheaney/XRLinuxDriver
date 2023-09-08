@@ -3,9 +3,6 @@
 # exit when any command fails
 set -e
 
-# check out submodules, recursively for nested ones
-git submodule update --init --recursive
-
 # build the driver
 BUILD_PATH=build
 if [ ! -d "$BUILD_PATH" ]; then

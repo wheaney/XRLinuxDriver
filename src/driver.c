@@ -1,27 +1,3 @@
-//
-// Created by thejackimonster on 29.03.23.
-//
-// Copyright (c) 2023 thejackimonster. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-//
-
 #include "device3.h"
 #include "device4.h"
 
@@ -61,6 +37,8 @@ const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 20;
 
 device3_type* glasses_imu;
+bool glasses_ready=false;
+
 bool driver_disabled=false;
 bool use_roll_axis=false;
 int mouse_sensitivity=default_mouse_sensitivity;
@@ -338,7 +316,7 @@ void *poll_glasses_imu(void *arg) {
 
     device3_clear(glasses_imu);
     while (!driver_disabled && !force_reset_threads) {
-        if (device3_read(glasses_imu, 1, false) < 0) {
+        if (device3_read(glasses_imu, 1) != DEVICE3_ERROR_NO_ERROR) {
             break;
         }
     }
@@ -346,7 +324,8 @@ void *poll_glasses_imu(void *arg) {
     if (debug_threads)
         printf("\tdebug: Exiting glasses_imu thread\n");
 
-    glasses_imu = NULL;
+    device3_close(glasses_imu);
+    glasses_ready=false;
     libevdev_uinput_destroy(uinput);
     libevdev_free(evdev);
 }
@@ -463,7 +442,7 @@ void *monitor_config_file(void *arg) {
     // hold this pthread open while the glasses are plugged in, but if they become unplugged:
     // 1. hold this thread open as long as driver is disabled, this will block from re-initializing the glasses-polling thread until the driver becomes re-enabled
     // 2. exit this thread if the driver is enabled, then we'll wait for the glasses to get plugged back in to re-initialize these threads
-    while ((glasses_imu || driver_disabled) && !force_reset_threads) {
+    while ((glasses_ready || driver_disabled) && !force_reset_threads) {
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(fd, &readfds);
@@ -535,18 +514,20 @@ int main(int argc, const char** argv) {
         exit(1);
     }
 
+    glasses_imu = malloc(sizeof(device3_type));
     while (1) {
-        glasses_imu = device3_open(handle_device_3);
-        if (!glasses_imu || !glasses_imu->ready)
+        int device_error = device3_open(glasses_imu, handle_device_3);
+        if (device_error != DEVICE3_ERROR_NO_ERROR)
             printf("Waiting for glasses\n");
 
-        while (!glasses_imu || !glasses_imu->ready) {
+        while (device_error != DEVICE3_ERROR_NO_ERROR) {
             // TODO - move to a blocking check, rather than polling for device availability
             // retry every 5 seconds until the device becomes available
             device3_close(glasses_imu);
             sleep(5);
-            glasses_imu = device3_open(handle_device_3);
+            device_error = device3_open(glasses_imu, handle_device_3);
         }
+        glasses_ready=true;
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
         pthread_t glasses_imu_thread;
