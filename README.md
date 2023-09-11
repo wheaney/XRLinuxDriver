@@ -1,4 +1,4 @@
-# Custom user-space Linux driver for the XREAL Air
+# XREAL Air Linux Game Driver
 
 ## What is this?
 
@@ -85,3 +85,7 @@ For local testing, you'll want to use the same package as for deployment: run `b
 ### Deployment
 
 To create the deployment gzip file, run `bin/package`. Upload the resulting gzip file and the `bin/xreal_driver_setup` file to a new Release.
+
+## Credits
+
+This driver wouldn't have been possible without the work of Tobias Frisch for his [base Linux driver](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver) that this uses under the hood, Matt Smith for his [Windows driver](https://github.com/MSmithDev/AirAPI_Windows/), and others that worked to [reverse engineer the glasses](https://github.com/edwatt/real_utilities/).
