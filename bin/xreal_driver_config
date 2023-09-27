@@ -24,11 +24,23 @@ then
             config_value="$2"
         fi
     elif [ "$1" == "--use-joystick" ] || [ "$1" == "-j" ]; then
-        config_key="use_joystick"
-        config_value="true"
+        config_type="string"
+        config_key="output_mode"
+        config_value="joystick"
     elif [ "$1" == "--use-mouse" ] || [ "$1" == "-m" ]; then
-        config_key="use_joystick"
-        config_value="false"
+        config_type="string"
+        config_key="output_mode"
+        config_value="mouse"
+    elif [ "$1" == "--external-only" ] || [ "$1" == "-eo" ]; then
+        config_type="string"
+        config_key="output_mode"
+        config_value="external_only"
+    elif [ "$1" == "--external-zoom" ] || [ "$1" == "-z" ]; then
+        config_key="external_zoom"
+        config_type="string"
+        if [ -n "$2" ]; then
+            config_value="$2"
+        fi
     fi
 
     if [[ -n $config_key ]]; then
@@ -82,4 +94,6 @@ Options:
   -s, --status
   -ms, --mouse-sensitivity [sensitivity_value]
   -j, --use-joystick
-  -m, --use-mouse"
+  -m, --use-mouse
+  -eo, --external-only,
+  -z, --external-zoom"

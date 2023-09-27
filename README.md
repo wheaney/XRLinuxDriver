@@ -58,6 +58,14 @@ You'll probably want to use a utility that does what Steam's controller layouts 
 
 One last alternative if mouse input just won't work is to enable the driver's joystick mode, using the Decky UI on Steam Deck, or `~/bin/xreal_driver_config --use-joystick` via the terminal (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
 
+### TODO - display settings
+If the screen appears very small in your view, you may be playing at the Deck screen's native resolution, and not at the glasses' native
+resolution. To fix this:
+1. Go to the game details in Steam, hit the Settings/cog icon, and open `Properties`, then for `Game Resolution` choose `Native`.
+2. After launching the game, if it's still small, go into the game options, and in the graphics or video settings, change the resolution (the glasses run at 1920x1080).
+
+If you *WANT* to keep a low resolution, then you can just use the `Zoom` setting to make the screen appear larger. 
+
 ### Updating
 
 If using Decky, updates are installed through Decky.
