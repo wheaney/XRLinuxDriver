@@ -18,6 +18,12 @@ if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
   $USER_HOME/bin/xreal_driver_uninstall --for-install || true
 fi
 
+if [ -e "$USER_HOME/.xreal_driver_config" ]; then
+  # replace the legacy "use_joystick" config
+  sed -i 's/use_joystick=true/output_mode=joystick/g' "$USER_HOME/.xreal_driver_config"
+  sed -i 's/use_joystick=false/output_mode=mouse/g' "$USER_HOME/.xreal_driver_config"
+fi
+
 if ! lsmod | grep -q uinput; then
   echo "Setting up uinput kernel module"
   modprobe uinput
