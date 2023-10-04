@@ -52,10 +52,10 @@ char *ipc_file_prefix;
 const char *orientation_ipc_name = "imu_euler";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
+key_t orientation_ipc_key;
+key_t zoom_ipc_key;
+key_t disabled_ipc_key;
 bool ipc_enabled = false;
-char *orientation_ipc_path = NULL;
-char *zoom_ipc_path = NULL;
-char *disabled_ipc_path = NULL;
 
 device3_type* glasses_imu;
 bool glasses_ready=false;
@@ -236,16 +236,14 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
     }
 }
 
-void write_ipc_value(char *path, void *newValue, size_t size) {
-    // TODO - cache this ftok key
-    key_t key = ftok(path, 0);
+void write_ipc_value(key_t key, void *newValue, size_t size) {
     int shmid = shmget(key, size, 0666|IPC_CREAT);
     if (shmid != -1) {
         void *shmemValue = shmat(shmid,(void*)0,0);
         memcpy(shmemValue, newValue, size);
         shmdt(shmemValue);
     } else {
-        fprintf(stderr, "Error writing shared memory value for path %s\n", path);
+        fprintf(stderr, "Error writing shared memory value\n");
         exit(1);
     }
 }
@@ -423,7 +421,7 @@ void handle_imu_event(uint64_t timestamp,
                 degree_delta(screen_center.y, e.y), // pitch
                 degree_delta(screen_center.x, e.x) // roll
             };
-            write_ipc_value(orientation_ipc_path, &orientation_values, sizeof(orientation_values));
+            write_ipc_value(orientation_ipc_key, &orientation_values, sizeof(orientation_values));
         }
 
         if (using_evdev)
@@ -501,7 +499,7 @@ void *poll_glasses_imu(void *arg) {
     device3_close(glasses_imu);
     glasses_ready=false;
     bool shader_disabled=true;
-    if (ipc_enabled) write_ipc_value(disabled_ipc_path, &shader_disabled, sizeof(shader_disabled));
+    if (ipc_enabled) write_ipc_value(disabled_ipc_key, &shader_disabled, sizeof(shader_disabled));
     if (using_evdev) {
         libevdev_uinput_destroy(uinput);
         libevdev_free(evdev);
@@ -511,7 +509,7 @@ void *poll_glasses_imu(void *arg) {
         printf("\tdebug: Exiting glasses_imu thread\n");
 }
 
-char *ipc_path(const char *name) {
+key_t ipc_key(const char *name) {
     char *path = malloc(strlen(ipc_file_prefix) + strlen(name) + 1);
     strcpy(path, ipc_file_prefix);
     strcat(path, name);
@@ -523,7 +521,10 @@ char *ipc_path(const char *name) {
     }
     fclose(ipc_file);
 
-    return path;
+    key_t key = ftok(path, 0);
+    free(path);
+
+    return key;
 }
 
 void parse_config_file(FILE *fp) {
@@ -643,14 +644,11 @@ void parse_config_file(FILE *fp) {
     if (output_mode_changed)
         force_reset_threads = true;
     if (ipc_file_prefix_changed) {
-        if (orientation_ipc_path) free_and_clear(&orientation_ipc_path);
-        if (zoom_ipc_path) free_and_clear(&zoom_ipc_path);
-        if (disabled_ipc_path) free_and_clear(&disabled_ipc_path);
 
         if (new_ipc_file_prefix) {
-            orientation_ipc_path = ipc_path(orientation_ipc_name);
-            zoom_ipc_path = ipc_path(zoom_ipc_name);
-            disabled_ipc_path = ipc_path(disabled_ipc_name);
+            orientation_ipc_key = ipc_key(orientation_ipc_name);
+            zoom_ipc_key = ipc_key(zoom_ipc_name);
+            disabled_ipc_key = ipc_key(disabled_ipc_name);
             ipc_enabled = true;
         } else {
             ipc_enabled = false;
@@ -658,8 +656,8 @@ void parse_config_file(FILE *fp) {
     }
 
     if (ipc_enabled) {
-        write_ipc_value(disabled_ipc_path, &driver_disabled, sizeof(driver_disabled));
-        if (external_zoom_changed) write_ipc_value(zoom_ipc_path, &external_zoom, sizeof(external_zoom));
+        write_ipc_value(disabled_ipc_key, &driver_disabled, sizeof(driver_disabled));
+        if (external_zoom_changed) write_ipc_value(zoom_ipc_key, &external_zoom, sizeof(external_zoom));
     } else if (strcmp(output_mode, external_only_output_mode) == 0) {
         printf("No IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
     }
@@ -780,10 +778,9 @@ int main(int argc, const char** argv) {
             device_error = device3_open(glasses_imu, handle_imu_event);
         }
 
-        // TODO - support non-float types in vkBasalt's uniform integration
         glasses_ready=true;
         bool shader_disabled=false;
-        if (ipc_enabled) write_ipc_value(disabled_ipc_path, &shader_disabled, sizeof(shader_disabled));
+        if (ipc_enabled) write_ipc_value(disabled_ipc_key, &shader_disabled, sizeof(shader_disabled));
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
         pthread_t glasses_imu_thread;
