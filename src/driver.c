@@ -49,15 +49,11 @@ const char *external_only_output_mode = "external_only";
 char *ipc_file_prefix_default = "/tmp/shader_runtime_";
 
 char *ipc_file_prefix;
-const char *pitch_ipc_name = "imu_orientation_pitch";
-const char *yaw_ipc_name = "imu_orientation_yaw";
-const char *roll_ipc_name = "imu_orientation_roll";
+const char *orientation_ipc_name = "imu_euler";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
 bool ipc_enabled = false;
-char *pitch_ipc_path = NULL;
-char *yaw_ipc_path = NULL;
-char *roll_ipc_path = NULL;
+char *orientation_ipc_path = NULL;
 char *zoom_ipc_path = NULL;
 char *disabled_ipc_path = NULL;
 
@@ -240,16 +236,16 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
     }
 }
 
-void write_ipc_value(char *path, float newValue) {
+void write_ipc_value(char *path, void *newValue, size_t size) {
+    // TODO - cache this ftok key
     key_t key = ftok(path, 0);
-    float *shmemValue;
-    int shmid = shmget(key,sizeof(*shmemValue),0666|IPC_CREAT);
+    int shmid = shmget(key, size, 0666|IPC_CREAT);
     if (shmid != -1) {
-        shmemValue = (float*) shmat(shmid,(void*)0,0);
-        memcpy(shmemValue, &newValue, sizeof(newValue));
+        void *shmemValue = shmat(shmid,(void*)0,0);
+        memcpy(shmemValue, newValue, size);
         shmdt(shmemValue);
     } else {
-        fprintf(stderr, "Error writing shared memory value\n");
+        fprintf(stderr, "Error writing shared memory value for path %s\n", path);
         exit(1);
     }
 }
@@ -422,9 +418,12 @@ void handle_imu_event(uint64_t timestamp,
 
         if (captured_screen_center && ipc_enabled) {
             // write to shared memory for anyone to consume
-            write_ipc_value(yaw_ipc_path, degree_delta(screen_center.z, e.z)); // yaw
-            write_ipc_value(pitch_ipc_path, degree_delta(screen_center.y, e.y)); // pitch
-            write_ipc_value(roll_ipc_path, degree_delta(screen_center.x, e.x)); // roll
+            float orientation_values[3] = {
+                degree_delta(screen_center.z, e.z), // yaw
+                degree_delta(screen_center.y, e.y), // pitch
+                degree_delta(screen_center.x, e.x) // roll
+            };
+            write_ipc_value(orientation_ipc_path, &orientation_values, sizeof(orientation_values));
         }
 
         if (using_evdev)
@@ -500,8 +499,9 @@ void *poll_glasses_imu(void *arg) {
     }
 
     device3_close(glasses_imu);
-    if (ipc_enabled) write_ipc_value(disabled_ipc_path, 1.0);
     glasses_ready=false;
+    bool shader_disabled=true;
+    if (ipc_enabled) write_ipc_value(disabled_ipc_path, &shader_disabled, sizeof(shader_disabled));
     if (using_evdev) {
         libevdev_uinput_destroy(uinput);
         libevdev_free(evdev);
@@ -643,27 +643,23 @@ void parse_config_file(FILE *fp) {
     if (output_mode_changed)
         force_reset_threads = true;
     if (ipc_file_prefix_changed) {
-        if (pitch_ipc_path) free_and_clear(&pitch_ipc_path);
-        if (yaw_ipc_path) free_and_clear(&yaw_ipc_path);
-        if (roll_ipc_path) free_and_clear(&roll_ipc_path);
+        if (orientation_ipc_path) free_and_clear(&orientation_ipc_path);
         if (zoom_ipc_path) free_and_clear(&zoom_ipc_path);
         if (disabled_ipc_path) free_and_clear(&disabled_ipc_path);
 
         if (new_ipc_file_prefix) {
-            pitch_ipc_path = ipc_path(pitch_ipc_name);
-            yaw_ipc_path = ipc_path(yaw_ipc_name);
-            roll_ipc_path = ipc_path(roll_ipc_name);
+            orientation_ipc_path = ipc_path(orientation_ipc_name);
             zoom_ipc_path = ipc_path(zoom_ipc_name);
             disabled_ipc_path = ipc_path(disabled_ipc_name);
             ipc_enabled = true;
-
-            write_ipc_value(disabled_ipc_path, 0.0);
         } else {
             ipc_enabled = false;
         }
     }
+
     if (ipc_enabled) {
-        if (external_zoom_changed) write_ipc_value(zoom_ipc_path, external_zoom);
+        write_ipc_value(disabled_ipc_path, &driver_disabled, sizeof(driver_disabled));
+        if (external_zoom_changed) write_ipc_value(zoom_ipc_path, &external_zoom, sizeof(external_zoom));
     } else if (strcmp(output_mode, external_only_output_mode) == 0) {
         printf("No IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
     }
@@ -785,8 +781,9 @@ int main(int argc, const char** argv) {
         }
 
         // TODO - support non-float types in vkBasalt's uniform integration
-        if (ipc_enabled) write_ipc_value(disabled_ipc_path, 0.0);
         glasses_ready=true;
+        bool shader_disabled=false;
+        if (ipc_enabled) write_ipc_value(disabled_ipc_path, &shader_disabled, sizeof(shader_disabled));
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
         pthread_t glasses_imu_thread;
