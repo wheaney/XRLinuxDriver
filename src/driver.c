@@ -1,5 +1,6 @@
 #include "device3.h"
 #include "device4.h"
+#include "buffer.h"
 
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
@@ -16,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include <glob.h>
 #include <string.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -38,6 +40,8 @@ const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 30;
+const float default_look_ahead = 15;
+const float default_look_ahead_ftm = 2.4;
 const float default_external_zoom = 1.0;
 
 const char *joystick_output_mode = "joystick";
@@ -48,11 +52,17 @@ const char *external_only_output_mode = "external_only";
 //        the plug-in library would be expected to provide this default, if this functionality is used
 char *ipc_file_prefix_default = "/tmp/shader_runtime_";
 
-char *ipc_file_prefix;
+char *ipc_file_prefix = NULL;
 const char *orientation_ipc_name = "imu_euler";
+const char *imu_velocity_ipc_name = "imu_velocity";
+const char *imu_accel_ipc_name = "imu_accel";
+const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
 key_t orientation_ipc_key;
+key_t imu_velocity_ipc_key;
+key_t imu_accel_ipc_key;
+key_t look_ahead_ms_ipc_key;
 key_t zoom_ipc_key;
 key_t disabled_ipc_key;
 bool ipc_enabled = false;
@@ -63,11 +73,14 @@ bool glasses_ready=false;
 bool driver_disabled=false;
 bool use_roll_axis=false;
 int mouse_sensitivity=default_mouse_sensitivity;
+float look_ahead=default_look_ahead;
+float look_ahead_ftm=default_look_ahead_ftm;
 float external_zoom=0.0;
 char *output_mode = NULL;
 bool debug_threads=false;
 bool debug_joystick=false;
 bool debug_multi_tap=false;
+bool debug_ipc=false;
 bool force_reset_threads=false;
 
 bool captured_screen_center=false;
@@ -259,48 +272,40 @@ float mouse_z_remainder = 0.0;
 
 // by buffering over a small number of cycles, we can smooth out noise and confidently detect quick taps
 #define MT_BUFFER_SIZE 25
-float mt_raw_buffer[MT_BUFFER_SIZE];
-float mt_accel_buffer[MT_BUFFER_SIZE];
-int mt_buffer_count = 0;
-int mt_buffer_index = 0;
-float mt_buffer_total = 0.0;
+buffer_type *mt_buffer = NULL;
 const int mt_state_idle = 0;
 const int mt_state_rise = 1;
 const int mt_state_fall = 2;
 const int mt_state_pause = 3;
 int mt_state = mt_state_idle;
-const float mt_detect_threshold = 0.25;
-const float mt_jitter_threshold = mt_detect_threshold/100;
-const float mt_idle_threshold = 0.04;
+const float mt_detect_threshold = 3500.0; // tap detection starts at acceleration of 10 (deg/sec^2)
+const float mt_pause_threshold = 100.0; // must detect a pause between taps, abs(acceleration) is less than 1 (deg/sec^2)
 uint64_t tap_start_time = 0;
+uint64_t pause_start_time = 0;
 uint64_t last_logged_peak_time = 0;
-const int max_mt_interval_ms = 500; // longest time-frame to allow between taps
-const int max_tap_rise_ms = 150; // a single tap should be very quick, ignore long accelerations
+const int max_tap_period_ms = 500; // longest time-frame to allow between tap starts/rises
+const int max_tap_rise_ms = 100; // a single tap should be very quick, ignore long accelerations
+const int min_pause_ms = 50 - MT_BUFFER_SIZE; // must detect a pause (~0 acceleration) between taps
 float peak_max = 0.0;
 int tap_count = 0;
 
 // returns the number of taps observed
-int detect_multi_tap(device3_vec3_type euler, uint64_t timestamp) {
-    FusionVector fusion_euler = {.axis = {
-        .x = euler.x,
-        .y = euler.y,
-        .z = euler.z,
-    }};
-    float next_raw_value = FusionVectorMagnitude(fusion_euler);
-    if (next_raw_value < mt_jitter_threshold) next_raw_value = 0;
-    float prev_raw_value = mt_raw_buffer[mt_buffer_index == 0 ? MT_BUFFER_SIZE-1 : mt_buffer_index-1];
-    mt_raw_buffer[mt_buffer_index] = next_raw_value;
-    if (mt_buffer_count > 0) {
-        float next_accel_value = next_raw_value - prev_raw_value;
-        float pop_accel_value = mt_accel_buffer[mt_buffer_index];
-        mt_accel_buffer[mt_buffer_index] = next_accel_value;
-        mt_buffer_total -= pop_accel_value;
-        mt_buffer_total += next_accel_value;
+int detect_multi_tap(device3_vec3_type velocities, uint64_t timestamp) {
+    if (mt_buffer == NULL) {
+        mt_buffer = create_buffer(MT_BUFFER_SIZE);
     }
 
-    if (mt_buffer_count > MT_BUFFER_SIZE) {
-        int elapsed = (timestamp - tap_start_time) / 1000000;
-        if ((tap_count > 0 || mt_state != mt_state_idle) && elapsed > max_mt_interval_ms) {
+    // the oldest value is zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
+    // push/pop, to know if the value returned will be relevant to our calculations
+    bool was_full = is_full(mt_buffer);
+    float next_value = sqrt(velocities.x * velocities.x + velocities.y * velocities.y + velocities.z * velocities.z);
+    float oldest_value = push(mt_buffer, next_value);
+
+    if (was_full) {
+        // extrapolate out to seconds, so the threshold can stay the same regardless of buffer size
+        float acceleration = (next_value - oldest_value) * cycles_per_second / MT_BUFFER_SIZE;
+        int tap_elapsed_ms = (timestamp - tap_start_time) / 1000000;
+        if ((tap_count > 0 || mt_state != mt_state_idle) && tap_elapsed_ms > max_tap_period_ms) {
             peak_max = 0.0;
             mt_state = mt_state_idle;
             int final_tap_count = tap_count;
@@ -311,25 +316,27 @@ int detect_multi_tap(device3_vec3_type euler, uint64_t timestamp) {
         } else {
             switch(mt_state) {
                 case mt_state_idle: {
-                    if (mt_buffer_total > mt_detect_threshold) {
+                    if (acceleration > mt_detect_threshold) {
                         tap_start_time = timestamp;
                         peak_max = 0.0;
                         mt_state = mt_state_rise;
-                        if (debug_multi_tap) fprintf(stdout, "\tdebug: tap-rise detected %f\n", mt_buffer_total);
+                        if (debug_multi_tap) fprintf(stdout, "\tdebug: tap-rise detected %f\n", acceleration);
                     } else {
-                        if (mt_buffer_total > peak_max) peak_max = mt_buffer_total;
-                        if ((timestamp - last_logged_peak_time)/1000000000 > 1) {
-                            if (debug_multi_tap) fprintf(stdout, "\tdebug: no-tap detected, peak was %f\n", peak_max);
-                            peak_max = 0.0;
-                            last_logged_peak_time = timestamp;
+                        if (debug_multi_tap) {
+                            if (acceleration > peak_max) peak_max = acceleration;
+                            if ((timestamp - last_logged_peak_time)/1000000000 > 1) {
+                                fprintf(stdout, "\tdebug: no-tap detected, peak was %f\n", peak_max);
+                                peak_max = 0.0;
+                                last_logged_peak_time = timestamp;
+                            }
                         }
                     }
                     break;
                 }
                 case mt_state_rise: {
-                    if (mt_buffer_total < 0) // accelerating in the opposite direction
-                        if (elapsed > max_tap_rise_ms) {
-                            if (debug_multi_tap) fprintf(stdout, "\tdebug: rise took %d, too long for a tap\n", elapsed);
+                    if (acceleration < 0) // accelerating in the opposite direction
+                        if (tap_elapsed_ms > max_tap_rise_ms) {
+                            if (debug_multi_tap) fprintf(stdout, "\tdebug: rise took %d, too long for a tap\n", tap_elapsed_ms);
                             peak_max = 0.0;
                             mt_state = mt_state_idle;
                             tap_count == 0;
@@ -340,25 +347,36 @@ int detect_multi_tap(device3_vec3_type euler, uint64_t timestamp) {
                     break;
                 }
                 case mt_state_fall: {
-                    if (mt_buffer_total > 0) // acceleration switches back, stopping the fall
+                    if (acceleration > 0) { // acceleration switches back, stopping the fall
+                        pause_start_time = timestamp;
                         mt_state = mt_state_pause;
+                    }
                     break;
                 }
                 case mt_state_pause: {
-                    if (mt_buffer_total < mt_idle_threshold && mt_buffer_total > -mt_idle_threshold)
-                        // wrap back around to idle where we can detect the next rise
-                        mt_state = mt_state_idle;
+                    if (abs(acceleration) < mt_pause_threshold) {
+                        int pause_elapsed_ms = (timestamp - pause_start_time) / 1000000;
+                        if (pause_elapsed_ms > min_pause_ms)
+                            // paused long enough, wrap back around to idle where we can detect the next rise
+                            mt_state = mt_state_idle;
+                    } else {
+                        // not idle, reset pause state timer
+                        pause_start_time = timestamp;
+                    }
                 }
             }
         }
-    } else {
-        mt_buffer_count++;
     }
-    mt_buffer_index = (mt_buffer_index+1) % MT_BUFFER_SIZE;
 
     return 0;
 }
 
+#define GYRO_BUFFERS_COUNT 3 // yaw, pitch, roll
+#define GYRO_BUFFER_SIZE 15 // look at acceleration over a small number of events
+const float buffer_to_seconds = (float) cycles_per_second / GYRO_BUFFER_SIZE;
+
+buffer_type **gyro_position_buffers = NULL;
+buffer_type **gyro_velocity_buffers = NULL;
 struct libevdev_uinput* uinput;
 void handle_imu_event(uint64_t timestamp,
 		   device3_event_type event,
@@ -367,19 +385,84 @@ void handle_imu_event(uint64_t timestamp,
         static device3_vec3_type last_euler;
         device3_quat_type q = device3_get_orientation(ahrs);
         device3_vec3_type e = device3_get_euler(q);
+
+        float delta_x = degree_delta(last_euler.z, e.z);
+        float delta_y = degree_delta(last_euler.y, e.y);
+        float delta_z = degree_delta(last_euler.x, e.x);
+
         if (ipc_enabled) {
-            // TODO - wait for calibration, add splash screen or text indicating the wait
-            if (!captured_screen_center || detect_multi_tap(e, timestamp) == 2) {
+            // TODO - wait for calibration before capturing a center, add splash screen or text indicating the wait
+            device3_vec3_type velocities = {
+                .x=delta_x * cycles_per_second,
+                .y=delta_y * cycles_per_second,
+                .z=delta_z * cycles_per_second
+            };
+            if (!captured_screen_center || detect_multi_tap(velocities, timestamp) == 2) {
                 if (captured_screen_center) printf("Double-tap detected, centering screen\n");
 
                 screen_center = e;
                 captured_screen_center=true;
             }
-        }
 
-        float delta_x = degree_delta(last_euler.z, e.z);
-        float delta_y = degree_delta(last_euler.y, e.y);
-        float delta_z = degree_delta(last_euler.x, e.x);
+            if (gyro_position_buffers == NULL || gyro_velocity_buffers == NULL) {
+                gyro_position_buffers = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                gyro_velocity_buffers = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                    gyro_position_buffers[i] = create_buffer(GYRO_BUFFER_SIZE);
+                    gyro_velocity_buffers[i] = create_buffer(GYRO_BUFFER_SIZE);
+                    if (gyro_position_buffers[i] == NULL || gyro_velocity_buffers[i] == NULL) {
+                        fprintf(stderr, "Error allocating memory\n");
+                        exit(1);
+                    }
+                }
+            }
+
+            // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
+            // push/pop, to know if the values that are returned will be relevant to our calculations
+            float was_full = is_full(gyro_position_buffers[0]);
+            float oldest_yaw_position = push(gyro_position_buffers[0], e.z);
+            float oldest_pitch_position = push(gyro_position_buffers[1], e.y);
+            float oldest_roll_position = push(gyro_position_buffers[2], e.x);
+
+            if (was_full) {
+                float yaw_velocity = degree_delta(oldest_yaw_position, e.z) * buffer_to_seconds;
+                float pitch_velocity = degree_delta(oldest_pitch_position, e.y) * buffer_to_seconds;
+                float roll_velocity = degree_delta(oldest_roll_position, e.x) * buffer_to_seconds;
+
+                was_full = is_full(gyro_velocity_buffers[0]);
+                float oldest_yaw_velocity = push(gyro_velocity_buffers[0], yaw_velocity);
+                float oldest_pitch_velocity = push(gyro_velocity_buffers[1], pitch_velocity);
+                float oldest_roll_velocity = push(gyro_velocity_buffers[2], roll_velocity);
+
+                if (was_full) {
+                    // get the average acceleration for each value over the duration of the buffer
+                    float yaw_accel = (yaw_velocity - oldest_yaw_velocity) * buffer_to_seconds;
+                    float pitch_accel = (pitch_velocity - oldest_pitch_velocity) * buffer_to_seconds;
+                    float roll_accel = (roll_velocity - oldest_roll_velocity) * buffer_to_seconds;
+
+                    float orientation_values[3] = {
+                        degree_delta(screen_center.z, e.z), // yaw
+                        degree_delta(screen_center.y, e.y), // pitch
+                        degree_delta(screen_center.x, e.x) // roll
+                    };
+                    float velocity_values[3] = {
+                        yaw_velocity,
+                        pitch_velocity,
+                        roll_velocity
+                    };
+                    float accel_values[3] = {
+                        yaw_accel,
+                        pitch_accel,
+                        roll_accel
+                    };
+
+                    // write to shared memory for anyone using the same ipc prefix to consume
+                    write_ipc_value(orientation_ipc_key, &orientation_values, sizeof(orientation_values));
+                    write_ipc_value(imu_velocity_ipc_key, &velocity_values, sizeof(velocity_values));
+                    write_ipc_value(imu_accel_ipc_key, &accel_values, sizeof(accel_values));
+                }
+            }
+        }
 
         int next_joystick_x = joystick_value(delta_x, joystick_max_degrees);
         int next_joystick_y = joystick_value(delta_y, joystick_max_degrees);
@@ -412,16 +495,6 @@ void handle_imu_event(uint64_t timestamp,
                 libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
         } else if (strcmp(output_mode, external_only_output_mode) != 0) {
             fprintf(stderr, "Unsupported output mode: %s\n", output_mode);
-        }
-
-        if (captured_screen_center && ipc_enabled) {
-            // write to shared memory for anyone to consume
-            float orientation_values[3] = {
-                degree_delta(screen_center.z, e.z), // yaw
-                degree_delta(screen_center.y, e.y), // pitch
-                degree_delta(screen_center.x, e.x) // roll
-            };
-            write_ipc_value(orientation_ipc_key, &orientation_values, sizeof(orientation_values));
         }
 
         if (using_evdev)
@@ -522,9 +595,58 @@ key_t ipc_key(const char *name) {
     fclose(ipc_file);
 
     key_t key = ftok(path, 0);
+    if (debug_ipc) printf("\tdebug: ipc_key, got key %d for path %s\n", key, path);
     free(path);
 
     return key;
+}
+
+void cleanup_ipc(char* file_prefix) {
+    if (ipc_enabled) {
+        if (debug_ipc) printf("\tdebug: cleanup_ipc, disabling IPC\n");
+        char pattern[256];
+        snprintf(pattern, sizeof(pattern), "%s*", file_prefix);
+
+        glob_t glob_result;
+        glob(pattern, GLOB_TILDE, NULL, &glob_result);
+
+        for(unsigned int i=0; i<glob_result.gl_pathc; ++i){
+            char* file = glob_result.gl_pathv[i];
+            key_t key = ftok(file, 0);
+            int shmid = shmget(key, 0, 0);
+            if (shmid != -1) {
+                if (debug_ipc) printf("\tdebug: cleanup_ipc, deleting shared memory segment with key %d\n", key);
+                shmctl(shmid, IPC_RMID, NULL);
+            } else {
+                if (debug_ipc) printf("\tdebug: cleanup_ipc, couldn't delete, no shmid for key %d\n", key);
+            }
+        }
+
+        globfree(&glob_result);
+        ipc_enabled = false;
+    } else {
+        if (debug_ipc) printf("\tdebug: cleanup_ipc, IPC not enabled, doing nothing\n");
+    }
+}
+
+void setup_ipc() {
+    if (!ipc_enabled) {
+        if (ipc_file_prefix) {
+            if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
+            orientation_ipc_key = ipc_key(orientation_ipc_name);
+            imu_velocity_ipc_key = ipc_key(imu_velocity_ipc_name);
+            imu_accel_ipc_key = ipc_key(imu_accel_ipc_name);
+            look_ahead_ms_ipc_key = ipc_key(look_ahead_ms_ipc_name);
+            zoom_ipc_key = ipc_key(zoom_ipc_name);
+            disabled_ipc_key = ipc_key(disabled_ipc_name);
+            ipc_enabled = true;
+        } else {
+            if (debug_ipc) printf("\tdebug: setup_ipc, prefix not set, disabling IPC\n");
+            ipc_enabled = false;
+        }
+    } else {
+        if (debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
+    }
 }
 
 void parse_config_file(FILE *fp) {
@@ -539,6 +661,9 @@ void parse_config_file(FILE *fp) {
     bool new_debug_joystick = false;
     bool new_debug_threads = false;
     bool new_debug_multi_tap = false;
+    bool new_debug_ipc = false;
+    float new_look_ahead = default_look_ahead;
+    float new_look_ahead_ftm = default_look_ahead_ftm;
 
     char line[1024];
     while (fgets(line, sizeof(line), fp) != NULL) {
@@ -558,6 +683,9 @@ void parse_config_file(FILE *fp) {
                 if (strcmp(token, "threads") == 0) {
                     new_debug_threads = true;
                 }
+                if (strcmp(token, "ipc") == 0) {
+                    new_debug_ipc = true;
+                }
                 token = strtok(NULL, ",");
             }
         } else if (strcmp(key, "use_roll_axis") == 0) {
@@ -570,6 +698,24 @@ void parse_config_file(FILE *fp) {
                 new_mouse_sensitivity = (int) num;
             } else {
                 fprintf(stderr, "Error parsing mouse_sensitivity value: %s\n", value);
+            }
+        } else if (strcmp(key, "look_ahead") == 0) {
+            char *endptr;
+            errno = 0;
+            float num = strtof(value, &endptr);
+            if (errno != ERANGE && endptr != value) {
+                new_look_ahead = num;
+            } else {
+                fprintf(stderr, "Error parsing look_ahead value: %s\n", value);
+            }
+        } else if (strcmp(key, "look_ahead_ftm") == 0) {
+            char *endptr;
+            errno = 0;
+            float num = strtof(value, &endptr);
+            if (errno != ERANGE && endptr != value) {
+                new_look_ahead_ftm = num;
+            } else {
+                fprintf(stderr, "Error parsing look_ahead_ftm value: %s\n", value);
             }
         } else if (strcmp(key, "external_zoom") == 0) {
             char *endptr;
@@ -603,6 +749,10 @@ void parse_config_file(FILE *fp) {
     if (mouse_sensitivity != new_mouse_sensitivity)
         fprintf(stdout, "Mouse sensitivity has changed to %d, see ~/bin/xreal_driver_config\n", new_mouse_sensitivity);
 
+    bool look_ahead_changed = look_ahead != new_look_ahead || look_ahead_ftm != new_look_ahead_ftm;
+    if (look_ahead_changed)
+        fprintf(stdout, "Look ahead has changed to %f and %f, see ~/bin/xreal_driver_config\n", new_look_ahead, new_look_ahead_ftm);
+
     bool external_zoom_changed = external_zoom != new_external_zoom;
     if (external_zoom_changed)
         fprintf(stdout, "External zoom has changed to %f, see ~/bin/xreal_driver_config\n", new_external_zoom);
@@ -615,8 +765,10 @@ void parse_config_file(FILE *fp) {
     if (new_ipc_file_prefix) {
         ipc_file_prefix_changed = (!ipc_file_prefix || strcmp(ipc_file_prefix, new_ipc_file_prefix) != 0);
     }
-    if (ipc_file_prefix_changed)
+    if (ipc_file_prefix_changed) {
+        if (ipc_enabled) cleanup_ipc(ipc_file_prefix);
         printf("IPC file prefix has been changed to '%s', see ~/bin/xreal_driver_config\n", new_ipc_file_prefix);
+    }
 
     if (!debug_joystick && new_debug_joystick)
         printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat ~/.xreal_joystick_debug' in bash\n");
@@ -629,9 +781,14 @@ void parse_config_file(FILE *fp) {
     if (debug_multi_tap != new_debug_multi_tap)
         fprintf(stdout, "Multi-tap debugging has been %s\n", new_debug_multi_tap ? "enabled" : "disabled");
 
+    if (debug_ipc != new_debug_ipc)
+        fprintf(stdout, "IPC debugging has been %s\n", new_debug_ipc ? "enabled" : "disabled");
+
     driver_disabled = new_driver_disabled;
     use_roll_axis = new_use_roll_axis;
     mouse_sensitivity = new_mouse_sensitivity;
+    look_ahead = new_look_ahead;
+    look_ahead_ftm = new_look_ahead_ftm;
     external_zoom = new_external_zoom;
     if (output_mode) free_and_clear(&output_mode);
     output_mode = new_output_mode;
@@ -640,26 +797,22 @@ void parse_config_file(FILE *fp) {
     debug_joystick = new_debug_joystick;
     debug_threads = new_debug_threads;
     debug_multi_tap = new_debug_multi_tap;
+    debug_ipc = new_debug_ipc;
 
     if (output_mode_changed)
         force_reset_threads = true;
-    if (ipc_file_prefix_changed) {
-
-        if (new_ipc_file_prefix) {
-            orientation_ipc_key = ipc_key(orientation_ipc_name);
-            zoom_ipc_key = ipc_key(zoom_ipc_name);
-            disabled_ipc_key = ipc_key(disabled_ipc_name);
-            ipc_enabled = true;
-        } else {
-            ipc_enabled = false;
-        }
-    }
+    if (ipc_file_prefix_changed)
+        setup_ipc();
 
     if (ipc_enabled) {
         write_ipc_value(disabled_ipc_key, &driver_disabled, sizeof(driver_disabled));
         if (external_zoom_changed) write_ipc_value(zoom_ipc_key, &external_zoom, sizeof(external_zoom));
+        if (look_ahead_changed) {
+            float lh_vals[2] = { look_ahead, look_ahead_ftm};
+            write_ipc_value(look_ahead_ms_ipc_key, &lh_vals, sizeof(lh_vals));
+        }
     } else if (strcmp(output_mode, external_only_output_mode) == 0) {
-        printf("No IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
+        fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
     }
 }
 
@@ -779,6 +932,7 @@ int main(int argc, const char** argv) {
         }
 
         glasses_ready=true;
+        setup_ipc();
         bool shader_disabled=false;
         if (ipc_enabled) write_ipc_value(disabled_ipc_key, &shader_disabled, sizeof(shader_disabled));
 
@@ -789,6 +943,8 @@ int main(int argc, const char** argv) {
         pthread_create(&monitor_config_file_thread, NULL, monitor_config_file, NULL);
         pthread_join(glasses_imu_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
+
+        if (ipc_enabled && !force_reset_threads) cleanup_ipc(ipc_file_prefix);
 
         if (debug_threads)
             printf("\tdebug: All threads have exited, starting over\n");

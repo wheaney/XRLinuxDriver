@@ -14,12 +14,14 @@ execute_process(COMMAND git submodule update --init --recursive
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
 
 add_executable(xrealAirLinuxDriver
+		src/buffer.c
 		src/driver.c
 )
 
 target_include_directories(xrealAirLinuxDriver
 		SYSTEM BEFORE PRIVATE
 		${LIBEVDEV_INCLUDE_DIRS}
+		${CMAKE_CURRENT_SOURCE_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary/interface_lib/include
 )
 
