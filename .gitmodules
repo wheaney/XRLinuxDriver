@@ -1,3 +1,4 @@
 [submodule "modules/xrealInterfaceLibrary"]
 	path = modules/xrealInterfaceLibrary
-	url = git@gitlab.com:wheaney/nrealAirLinuxDriver.git
+	url = git@gitlab.com:TheJackiMonster/nrealAirLinuxDriver.git
+	branch = main

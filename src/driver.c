@@ -5,7 +5,6 @@
 
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
-#include <Fusion/Fusion.h>
 
 #include <stdio.h>
 #include <stdlib.h>
