@@ -54,12 +54,14 @@ const char *external_only_output_mode = "external_only";
 char *ipc_file_prefix_default = "/tmp/shader_runtime_";
 
 char *ipc_file_prefix = NULL;
+const char *imu_data_ipc_name = "imu_data";
 const char *orientation_ipc_name = "imu_euler";
 const char *imu_velocity_ipc_name = "imu_velocity";
 const char *imu_accel_ipc_name = "imu_accel";
 const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
+key_t imu_data_ipc_key;
 key_t orientation_ipc_key;
 key_t imu_velocity_ipc_key;
 key_t imu_accel_ipc_key;
@@ -272,7 +274,7 @@ float mouse_y_remainder = 0.0;
 float mouse_z_remainder = 0.0;
 
 #define GYRO_BUFFERS_COUNT 3 // yaw, pitch, roll
-#define GYRO_BUFFER_SIZE 15 // look at acceleration over a small number of events
+#define GYRO_BUFFER_SIZE 4 // look at acceleration over a small number of events
 const float buffer_to_seconds = (float) cycles_per_second / GYRO_BUFFER_SIZE;
 
 buffer_type **gyro_position_buffers = NULL;
@@ -319,7 +321,7 @@ void handle_imu_event(uint64_t timestamp,
 
             // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
             // push/pop, to know if the values that are returned will be relevant to our calculations
-            float was_full = is_full(gyro_position_buffers[0]);
+            bool was_full = is_full(gyro_position_buffers[0]);
             float oldest_yaw_position = push(gyro_position_buffers[0], e.z);
             float oldest_pitch_position = push(gyro_position_buffers[1], e.y);
             float oldest_roll_position = push(gyro_position_buffers[2], e.x);
@@ -340,26 +342,25 @@ void handle_imu_event(uint64_t timestamp,
                     float pitch_accel = (pitch_velocity - oldest_pitch_velocity) * buffer_to_seconds;
                     float roll_accel = (roll_velocity - oldest_roll_velocity) * buffer_to_seconds;
 
-                    float orientation_values[3] = {
+                    // our shader defines this as float3x3, but vkBasalt treats matrices as if they have 4 columns:
+                    // https://github.com/DadSchoorse/vkBasalt/blob/4f97f09/src/reshade/effect_codegen_spirv.cpp#L670
+                    float imu_data[12] = {
                         degree_delta(screen_center.z, e.z), // yaw
                         degree_delta(screen_center.y, e.y), // pitch
-                        degree_delta(screen_center.x, e.x) // roll
-                    };
-                    float velocity_values[3] = {
+                        degree_delta(screen_center.x, e.x), // roll
+                        0.0,
                         yaw_velocity,
                         pitch_velocity,
-                        roll_velocity
-                    };
-                    float accel_values[3] = {
+                        roll_velocity,
+                        0.0,
                         yaw_accel,
                         pitch_accel,
-                        roll_accel
+                        roll_accel,
+                        0.0
                     };
 
                     // write to shared memory for anyone using the same ipc prefix to consume
-                    write_ipc_value(orientation_ipc_key, &orientation_values, sizeof(orientation_values));
-                    write_ipc_value(imu_velocity_ipc_key, &velocity_values, sizeof(velocity_values));
-                    write_ipc_value(imu_accel_ipc_key, &accel_values, sizeof(accel_values));
+                    write_ipc_value(imu_data_ipc_key, &imu_data, sizeof(imu_data));
                 }
             }
         }
@@ -533,6 +534,7 @@ void setup_ipc() {
     if (!ipc_enabled) {
         if (ipc_file_prefix) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
+            imu_data_ipc_key = ipc_key(imu_data_ipc_name);
             orientation_ipc_key = ipc_key(orientation_ipc_name);
             imu_velocity_ipc_key = ipc_key(imu_velocity_ipc_name);
             imu_accel_ipc_key = ipc_key(imu_accel_ipc_name);
