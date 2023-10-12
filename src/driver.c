@@ -38,8 +38,8 @@ const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 30;
-const float default_look_ahead = -5.0;
-const float default_look_ahead_ftm = 2.4;
+const float default_look_ahead = -10.0;
+const float default_look_ahead_ftm = 2.6;
 const float default_external_zoom = 1.0;
 
 const char *joystick_output_mode = "joystick";
