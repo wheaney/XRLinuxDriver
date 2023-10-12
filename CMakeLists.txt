@@ -28,5 +28,5 @@ target_include_directories(xrealAirLinuxDriver
 )
 
 target_link_libraries(xrealAirLinuxDriver
-		${LIBEVDEV_LIBRARIES} nrealAirLibrary Threads::Threads m Fusion
+		PRIVATE ${LIBEVDEV_LIBRARIES} nrealAirLibrary Threads::Threads m
 )
