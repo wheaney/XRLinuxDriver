@@ -2,6 +2,7 @@
 #include "device4.h"
 #include "buffer.h"
 #include "multitap.h"
+#include "ipc.h"
 
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
@@ -17,13 +18,10 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unistd.h>
-#include <glob.h>
 #include <string.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
 #include <math.h>
 #include <pthread.h>
 #include <inttypes.h>
@@ -40,7 +38,7 @@ const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 30;
-const float default_look_ahead = 15;
+const float default_look_ahead = -5.0;
 const float default_look_ahead_ftm = 2.4;
 const float default_external_zoom = 1.0;
 
@@ -52,7 +50,6 @@ const char *external_only_output_mode = "external_only";
 //        the plug-in library would be expected to provide this default, if this functionality is used
 char *ipc_file_prefix_default = "/tmp/shader_runtime_";
 
-char *ipc_file_prefix = NULL;
 const char *imu_data_ipc_name = "imu_data";
 const char *orientation_ipc_name = "imu_euler";
 const char *imu_velocity_ipc_name = "imu_velocity";
@@ -60,13 +57,10 @@ const char *imu_accel_ipc_name = "imu_accel";
 const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
-key_t imu_data_ipc_key;
-key_t orientation_ipc_key;
-key_t imu_velocity_ipc_key;
-key_t imu_accel_ipc_key;
-key_t look_ahead_ms_ipc_key;
-key_t zoom_ipc_key;
-key_t disabled_ipc_key;
+float *imu_data_ipc_value;
+float *look_ahead_ipc_value;
+float *zoom_ipc_value;
+bool *disabled_ipc_value;
 bool ipc_enabled = false;
 
 device3_type* glasses_imu;
@@ -251,18 +245,6 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
     }
 }
 
-void write_ipc_value(key_t key, void *newValue, size_t size) {
-    int shmid = shmget(key, size, 0666|IPC_CREAT);
-    if (shmid != -1) {
-        void *shmemValue = shmat(shmid,(void*)0,0);
-        memcpy(shmemValue, newValue, size);
-        shmdt(shmemValue);
-    } else {
-        fprintf(stderr, "Error writing shared memory value\n");
-        exit(1);
-    }
-}
-
 int joystick_debug_count = 0;
 int prev_joystick_x = 0;
 int prev_joystick_y = 0;
@@ -341,25 +323,21 @@ void handle_imu_event(uint64_t timestamp,
                     float pitch_accel = (pitch_velocity - oldest_pitch_velocity) * buffer_to_seconds;
                     float roll_accel = (roll_velocity - oldest_roll_velocity) * buffer_to_seconds;
 
+                    // write to shared memory for anyone using the same ipc prefix to consume
                     // our shader defines this as float3x3, but vkBasalt treats matrices as if they have 4 columns:
                     // https://github.com/DadSchoorse/vkBasalt/blob/4f97f09/src/reshade/effect_codegen_spirv.cpp#L670
-                    float imu_data[12] = {
-                        degree_delta(screen_center.z, e.z), // yaw
-                        degree_delta(screen_center.y, e.y), // pitch
-                        degree_delta(screen_center.x, e.x), // roll
-                        0.0,
-                        yaw_velocity,
-                        pitch_velocity,
-                        roll_velocity,
-                        0.0,
-                        yaw_accel,
-                        pitch_accel,
-                        roll_accel,
-                        0.0
-                    };
-
-                    // write to shared memory for anyone using the same ipc prefix to consume
-                    write_ipc_value(imu_data_ipc_key, &imu_data, sizeof(imu_data));
+                    imu_data_ipc_value[0] = degree_delta(screen_center.z, e.z); // yaw
+                    imu_data_ipc_value[1] = degree_delta(screen_center.y, e.y); // pitch
+                    imu_data_ipc_value[2] = degree_delta(screen_center.x, e.x); // roll
+                    imu_data_ipc_value[3] = 0.0;
+                    imu_data_ipc_value[4] = yaw_velocity;
+                    imu_data_ipc_value[5] = pitch_velocity;
+                    imu_data_ipc_value[6] = roll_velocity;
+                    imu_data_ipc_value[7] = 0.0;
+                    imu_data_ipc_value[8] = yaw_accel;
+                    imu_data_ipc_value[9] = pitch_accel;
+                    imu_data_ipc_value[10] = roll_accel;
+                    imu_data_ipc_value[11] = 0.0;
                 }
             }
         }
@@ -471,8 +449,7 @@ void *poll_glasses_imu(void *arg) {
 
     device3_close(glasses_imu);
     glasses_ready=false;
-    bool shader_disabled=true;
-    if (ipc_enabled) write_ipc_value(disabled_ipc_key, &shader_disabled, sizeof(shader_disabled));
+    if (ipc_enabled) *disabled_ipc_value = true;
     if (using_evdev) {
         libevdev_uinput_destroy(uinput);
         libevdev_free(evdev);
@@ -482,64 +459,14 @@ void *poll_glasses_imu(void *arg) {
         printf("\tdebug: Exiting glasses_imu thread\n");
 }
 
-key_t ipc_key(const char *name) {
-    char *path = malloc(strlen(ipc_file_prefix) + strlen(name) + 1);
-    strcpy(path, ipc_file_prefix);
-    strcat(path, name);
-
-    FILE *ipc_file = fopen(path, "w");
-    if (ipc_file == NULL) {
-        fprintf(stderr, "Could not create IPC shared file\n");
-        exit(1);
-    }
-    fclose(ipc_file);
-
-    key_t key = ftok(path, 0);
-    if (debug_ipc) printf("\tdebug: ipc_key, got key %d for path %s\n", key, path);
-    free(path);
-
-    return key;
-}
-
-void cleanup_ipc(char* file_prefix) {
-    if (ipc_enabled) {
-        if (debug_ipc) printf("\tdebug: cleanup_ipc, disabling IPC\n");
-        char pattern[256];
-        snprintf(pattern, sizeof(pattern), "%s*", file_prefix);
-
-        glob_t glob_result;
-        glob(pattern, GLOB_TILDE, NULL, &glob_result);
-
-        for(unsigned int i=0; i<glob_result.gl_pathc; ++i){
-            char* file = glob_result.gl_pathv[i];
-            key_t key = ftok(file, 0);
-            int shmid = shmget(key, 0, 0);
-            if (shmid != -1) {
-                if (debug_ipc) printf("\tdebug: cleanup_ipc, deleting shared memory segment with key %d\n", key);
-                shmctl(shmid, IPC_RMID, NULL);
-            } else {
-                if (debug_ipc) printf("\tdebug: cleanup_ipc, couldn't delete, no shmid for key %d\n", key);
-            }
-        }
-
-        globfree(&glob_result);
-        ipc_enabled = false;
-    } else {
-        if (debug_ipc) printf("\tdebug: cleanup_ipc, IPC not enabled, doing nothing\n");
-    }
-}
-
 void setup_ipc() {
     if (!ipc_enabled) {
-        if (ipc_file_prefix) {
+        if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
-            imu_data_ipc_key = ipc_key(imu_data_ipc_name);
-            orientation_ipc_key = ipc_key(orientation_ipc_name);
-            imu_velocity_ipc_key = ipc_key(imu_velocity_ipc_name);
-            imu_accel_ipc_key = ipc_key(imu_accel_ipc_name);
-            look_ahead_ms_ipc_key = ipc_key(look_ahead_ms_ipc_name);
-            zoom_ipc_key = ipc_key(zoom_ipc_name);
-            disabled_ipc_key = ipc_key(disabled_ipc_name);
+            setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 12, debug_ipc);
+            setup_ipc_value(look_ahead_ms_ipc_name, (void**) &look_ahead_ipc_value, sizeof(float) * 2, debug_ipc);
+            setup_ipc_value(zoom_ipc_name, (void**) &zoom_ipc_value, sizeof(float), debug_ipc);
+            setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
             ipc_enabled = true;
         } else {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix not set, disabling IPC\n");
@@ -557,6 +484,7 @@ void parse_config_file(FILE *fp) {
     float new_external_zoom = default_external_zoom;
     char *new_output_mode = malloc(strlen(mouse_output_mode) + 1);
     strcpy(new_output_mode, mouse_output_mode);
+    char *was_ipc_file_prefix = get_ipc_file_prefix();
     char *new_ipc_file_prefix = malloc(strlen(ipc_file_prefix_default) + 1);
     strcpy(new_ipc_file_prefix, ipc_file_prefix_default);
     bool new_debug_joystick = false;
@@ -664,10 +592,13 @@ void parse_config_file(FILE *fp) {
 
     bool ipc_file_prefix_changed = false;
     if (new_ipc_file_prefix) {
-        ipc_file_prefix_changed = (!ipc_file_prefix || strcmp(ipc_file_prefix, new_ipc_file_prefix) != 0);
+        ipc_file_prefix_changed = (!was_ipc_file_prefix || strcmp(was_ipc_file_prefix, new_ipc_file_prefix) != 0);
     }
     if (ipc_file_prefix_changed) {
-        if (ipc_enabled) cleanup_ipc(ipc_file_prefix);
+        if (ipc_enabled && was_ipc_file_prefix) {
+            cleanup_ipc(was_ipc_file_prefix, debug_ipc);
+            ipc_enabled = false;
+        }
         printf("IPC file prefix has been changed to '%s', see ~/bin/xreal_driver_config\n", new_ipc_file_prefix);
     }
 
@@ -693,8 +624,8 @@ void parse_config_file(FILE *fp) {
     external_zoom = new_external_zoom;
     if (output_mode) free_and_clear(&output_mode);
     output_mode = new_output_mode;
-    if (ipc_file_prefix) free_and_clear(&ipc_file_prefix);
-    ipc_file_prefix = new_ipc_file_prefix;
+    if (was_ipc_file_prefix) free_and_clear(&was_ipc_file_prefix);
+    set_ipc_file_prefix(new_ipc_file_prefix);
     debug_joystick = new_debug_joystick;
     debug_threads = new_debug_threads;
     debug_multi_tap = new_debug_multi_tap;
@@ -706,11 +637,11 @@ void parse_config_file(FILE *fp) {
         setup_ipc();
 
     if (ipc_enabled) {
-        write_ipc_value(disabled_ipc_key, &driver_disabled, sizeof(driver_disabled));
-        if (external_zoom_changed) write_ipc_value(zoom_ipc_key, &external_zoom, sizeof(external_zoom));
+        *disabled_ipc_value = driver_disabled;
+        if (external_zoom_changed) *zoom_ipc_value = external_zoom;
         if (look_ahead_changed) {
-            float lh_vals[2] = { look_ahead, look_ahead_ftm};
-            write_ipc_value(look_ahead_ms_ipc_key, &lh_vals, sizeof(lh_vals));
+            look_ahead_ipc_value[0] = look_ahead;
+            look_ahead_ipc_value[1] = look_ahead_ftm;
         }
     } else if (strcmp(output_mode, external_only_output_mode) == 0) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
@@ -834,8 +765,7 @@ int main(int argc, const char** argv) {
 
         glasses_ready=true;
         setup_ipc();
-        bool shader_disabled=false;
-        if (ipc_enabled) write_ipc_value(disabled_ipc_key, &shader_disabled, sizeof(shader_disabled));
+        if (ipc_enabled) *disabled_ipc_value = false;
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
         pthread_t glasses_imu_thread;
@@ -844,8 +774,6 @@ int main(int argc, const char** argv) {
         pthread_create(&monitor_config_file_thread, NULL, monitor_config_file, NULL);
         pthread_join(glasses_imu_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
-
-        if (ipc_enabled && !force_reset_threads) cleanup_ipc(ipc_file_prefix);
 
         if (debug_threads)
             printf("\tdebug: All threads have exited, starting over\n");
