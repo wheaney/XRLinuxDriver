@@ -51,9 +51,6 @@ const char *external_only_output_mode = "external_only";
 char *ipc_file_prefix_default = "/tmp/shader_runtime_";
 
 const char *imu_data_ipc_name = "imu_data";
-const char *orientation_ipc_name = "imu_euler";
-const char *imu_velocity_ipc_name = "imu_velocity";
-const char *imu_accel_ipc_name = "imu_accel";
 const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
