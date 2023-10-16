@@ -48,7 +48,7 @@ const char *external_only_output_mode = "external_only";
 
 // TODO - this is specific to the sombrero integration, either provide no default or move to a plug-in system where
 //        the plug-in library would be expected to provide this default, if this functionality is used
-char *ipc_file_prefix_default = "/tmp/shader_runtime_";
+char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
 const char *imu_data_ipc_name = "imu_quat_data";
 const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
@@ -461,6 +461,8 @@ void setup_ipc() {
             setup_ipc_value(zoom_ipc_name, (void**) &zoom_ipc_value, sizeof(float), debug_ipc);
             setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
             ipc_enabled = true;
+
+            printf("IPC enabled, file prefix set to '%s'\n", get_ipc_file_prefix());
         } else {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix not set, disabling IPC\n");
             ipc_enabled = false;
@@ -477,9 +479,6 @@ void parse_config_file(FILE *fp) {
     float new_external_zoom = default_external_zoom;
     char *new_output_mode = malloc(strlen(mouse_output_mode) + 1);
     strcpy(new_output_mode, mouse_output_mode);
-    char *was_ipc_file_prefix = get_ipc_file_prefix();
-    char *new_ipc_file_prefix = malloc(strlen(ipc_file_prefix_default) + 1);
-    strcpy(new_ipc_file_prefix, ipc_file_prefix_default);
     bool new_debug_joystick = false;
     bool new_debug_threads = false;
     bool new_debug_multi_tap = false;
@@ -552,9 +551,6 @@ void parse_config_file(FILE *fp) {
             free_and_clear(&new_output_mode);
             new_output_mode = malloc(strlen(value) + 1);
             strcpy(new_output_mode, value);
-        } else if (strcmp(key, "ipc_file_prefix") == 0) {
-            new_ipc_file_prefix = malloc(strlen(value) + 1);
-            strcpy(new_ipc_file_prefix, value);
         }
     }
 
@@ -583,18 +579,6 @@ void parse_config_file(FILE *fp) {
     if (output_mode_changed)
         printf("Output mode has been changed to '%s', see ~/bin/xreal_driver_config\n", new_output_mode);
 
-    bool ipc_file_prefix_changed = false;
-    if (new_ipc_file_prefix) {
-        ipc_file_prefix_changed = (!was_ipc_file_prefix || strcmp(was_ipc_file_prefix, new_ipc_file_prefix) != 0);
-    }
-    if (ipc_file_prefix_changed) {
-        if (ipc_enabled && was_ipc_file_prefix) {
-            cleanup_ipc(was_ipc_file_prefix, debug_ipc);
-            ipc_enabled = false;
-        }
-        printf("IPC file prefix has been changed to '%s', see ~/bin/xreal_driver_config\n", new_ipc_file_prefix);
-    }
-
     if (!debug_joystick && new_debug_joystick)
         printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat ~/.xreal_joystick_debug' in bash\n");
     if (debug_joystick && !new_debug_joystick)
@@ -617,8 +601,6 @@ void parse_config_file(FILE *fp) {
     external_zoom = new_external_zoom;
     if (output_mode) free_and_clear(&output_mode);
     output_mode = new_output_mode;
-    if (was_ipc_file_prefix) free_and_clear(&was_ipc_file_prefix);
-    set_ipc_file_prefix(new_ipc_file_prefix);
     debug_joystick = new_debug_joystick;
     debug_threads = new_debug_threads;
     debug_multi_tap = new_debug_multi_tap;
@@ -626,8 +608,6 @@ void parse_config_file(FILE *fp) {
 
     if (output_mode_changed)
         force_reset_threads = true;
-    if (ipc_file_prefix_changed)
-        setup_ipc();
 
     if (ipc_enabled) {
         *disabled_ipc_value = driver_disabled;
@@ -741,6 +721,9 @@ int main(int argc, const char** argv) {
             fprintf(stderr, "Another instance of this program is already running.\n");
         exit(1);
     }
+
+    set_ipc_file_prefix(sombrero_ipc_file_prefix);
+    setup_ipc();
 
     glasses_imu = malloc(sizeof(device3_type));
     while (1) {
