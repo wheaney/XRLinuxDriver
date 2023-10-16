@@ -50,7 +50,7 @@ const char *external_only_output_mode = "external_only";
 //        the plug-in library would be expected to provide this default, if this functionality is used
 char *ipc_file_prefix_default = "/tmp/shader_runtime_";
 
-const char *imu_data_ipc_name = "imu_data";
+const char *imu_data_ipc_name = "imu_quat_data";
 const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
@@ -77,7 +77,7 @@ bool debug_ipc=false;
 bool force_reset_threads=false;
 
 bool captured_screen_center=false;
-device3_vec3_type screen_center;
+device3_quat_type screen_center;
 
 static int check(char * function, int i) {
     if (i < 0) {
@@ -251,12 +251,12 @@ float mouse_x_remainder = 0.0;
 float mouse_y_remainder = 0.0;
 float mouse_z_remainder = 0.0;
 
-#define GYRO_BUFFERS_COUNT 3 // yaw, pitch, roll
-#define GYRO_BUFFER_SIZE 4 // look at acceleration over a small number of events
+#define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
+#define GYRO_BUFFER_SIZE 4 // how many events to use for smoothing out velocity
 const float buffer_to_seconds = (float) cycles_per_second / GYRO_BUFFER_SIZE;
 
-buffer_type **gyro_position_buffers = NULL;
-buffer_type **gyro_velocity_buffers = NULL;
+buffer_type **quat_stage_1_buffer = NULL;
+buffer_type **quat_stage_2_buffer = NULL;
 struct libevdev_uinput* uinput;
 void handle_imu_event(uint64_t timestamp,
 		   device3_event_type event,
@@ -280,17 +280,17 @@ void handle_imu_event(uint64_t timestamp,
             if (!captured_screen_center || detect_multi_tap(velocities, timestamp, cycles_per_second, debug_multi_tap) == 2) {
                 if (captured_screen_center) printf("Double-tap detected, centering screen\n");
 
-                screen_center = e;
+                screen_center = q;
                 captured_screen_center=true;
             }
 
-            if (gyro_position_buffers == NULL || gyro_velocity_buffers == NULL) {
-                gyro_position_buffers = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-                gyro_velocity_buffers = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+            if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
+                quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
                 for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                    gyro_position_buffers[i] = create_buffer(GYRO_BUFFER_SIZE);
-                    gyro_velocity_buffers[i] = create_buffer(GYRO_BUFFER_SIZE);
-                    if (gyro_position_buffers[i] == NULL || gyro_velocity_buffers[i] == NULL) {
+                    quat_stage_1_buffer[i] = create_buffer(GYRO_BUFFER_SIZE);
+                    quat_stage_2_buffer[i] = create_buffer(GYRO_BUFFER_SIZE);
+                    if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
                         fprintf(stderr, "Error allocating memory\n");
                         exit(1);
                     }
@@ -299,42 +299,37 @@ void handle_imu_event(uint64_t timestamp,
 
             // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
             // push/pop, to know if the values that are returned will be relevant to our calculations
-            bool was_full = is_full(gyro_position_buffers[0]);
-            float oldest_yaw_position = push(gyro_position_buffers[0], e.z);
-            float oldest_pitch_position = push(gyro_position_buffers[1], e.y);
-            float oldest_roll_position = push(gyro_position_buffers[2], e.x);
+            bool was_full = is_full(quat_stage_1_buffer[0]);
+            float stage_1_quat_w = push(quat_stage_1_buffer[0], q.w);
+            float stage_1_quat_x = push(quat_stage_1_buffer[1], q.x);
+            float stage_1_quat_y = push(quat_stage_1_buffer[2], q.y);
+            float stage_1_quat_z = push(quat_stage_1_buffer[3], q.z);
 
             if (was_full) {
-                float yaw_velocity = degree_delta(oldest_yaw_position, e.z) * buffer_to_seconds;
-                float pitch_velocity = degree_delta(oldest_pitch_position, e.y) * buffer_to_seconds;
-                float roll_velocity = degree_delta(oldest_roll_position, e.x) * buffer_to_seconds;
-
-                was_full = is_full(gyro_velocity_buffers[0]);
-                float oldest_yaw_velocity = push(gyro_velocity_buffers[0], yaw_velocity);
-                float oldest_pitch_velocity = push(gyro_velocity_buffers[1], pitch_velocity);
-                float oldest_roll_velocity = push(gyro_velocity_buffers[2], roll_velocity);
+                was_full = is_full(quat_stage_2_buffer[0]);
+                float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
+                float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
+                float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
+                float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
 
                 if (was_full) {
-                    // get the average acceleration for each value over the duration of the buffer
-                    float yaw_accel = (yaw_velocity - oldest_yaw_velocity) * buffer_to_seconds;
-                    float pitch_accel = (pitch_velocity - oldest_pitch_velocity) * buffer_to_seconds;
-                    float roll_accel = (roll_velocity - oldest_roll_velocity) * buffer_to_seconds;
-
                     // write to shared memory for anyone using the same ipc prefix to consume
-                    // our shader defines this as float3x3, but vkBasalt treats matrices as if they have 4 columns:
-                    // https://github.com/DadSchoorse/vkBasalt/blob/4f97f09/src/reshade/effect_codegen_spirv.cpp#L670
-                    imu_data_ipc_value[0] = degree_delta(screen_center.z, e.z); // yaw
-                    imu_data_ipc_value[1] = degree_delta(screen_center.y, e.y); // pitch
-                    imu_data_ipc_value[2] = degree_delta(screen_center.x, e.x); // roll
-                    imu_data_ipc_value[3] = 0.0;
-                    imu_data_ipc_value[4] = yaw_velocity;
-                    imu_data_ipc_value[5] = pitch_velocity;
-                    imu_data_ipc_value[6] = roll_velocity;
-                    imu_data_ipc_value[7] = 0.0;
-                    imu_data_ipc_value[8] = yaw_accel;
-                    imu_data_ipc_value[9] = pitch_accel;
-                    imu_data_ipc_value[10] = roll_accel;
-                    imu_data_ipc_value[11] = 0.0;
+                    imu_data_ipc_value[0] = q.x;
+                    imu_data_ipc_value[1] = q.y;
+                    imu_data_ipc_value[2] = q.z;
+                    imu_data_ipc_value[3] = q.w;
+                    imu_data_ipc_value[4] = stage_1_quat_x;
+                    imu_data_ipc_value[5] = stage_1_quat_y;
+                    imu_data_ipc_value[6] = stage_1_quat_z;
+                    imu_data_ipc_value[7] = stage_1_quat_w;
+                    imu_data_ipc_value[8] = stage_2_quat_x;
+                    imu_data_ipc_value[9] = stage_2_quat_y;
+                    imu_data_ipc_value[10] = stage_2_quat_z;
+                    imu_data_ipc_value[11] = stage_2_quat_w;
+                    imu_data_ipc_value[12] = screen_center.x;
+                    imu_data_ipc_value[13] = screen_center.y;
+                    imu_data_ipc_value[14] = screen_center.z;
+                    imu_data_ipc_value[15] = screen_center.w;
                 }
             }
         }
@@ -456,11 +451,12 @@ void *poll_glasses_imu(void *arg) {
         printf("\tdebug: Exiting glasses_imu thread\n");
 }
 
+// TODO - do this setup once from main() using the default ipc file prefix
 void setup_ipc() {
     if (!ipc_enabled) {
         if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
-            setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 12, debug_ipc);
+            setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 16, debug_ipc);
             setup_ipc_value(look_ahead_ms_ipc_name, (void**) &look_ahead_ipc_value, sizeof(float) * 2, debug_ipc);
             setup_ipc_value(zoom_ipc_name, (void**) &zoom_ipc_value, sizeof(float), debug_ipc);
             setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
