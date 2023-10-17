@@ -3,6 +3,8 @@
 #include "buffer.h"
 #include "multitap.h"
 #include "ipc.h"
+#include "device.h"
+#include "xreal.h"
 
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
@@ -38,8 +40,8 @@ const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 30;
-const float default_look_ahead = -10.0;
-const float default_look_ahead_ftm = 2.6;
+const float default_look_ahead = 0.0;
+const float default_look_ahead_ftm = 2.4;
 const float default_external_zoom = 1.0;
 
 const char *joystick_output_mode = "joystick";
@@ -51,11 +53,19 @@ const char *external_only_output_mode = "external_only";
 char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
 const char *imu_data_ipc_name = "imu_quat_data";
-const char *look_ahead_ms_ipc_name = "look_ahead_cfg";
+const char *imu_data_period_name = "imu_data_period_ms";
+const char *look_ahead_cfg_ipc_name = "look_ahead_cfg";
+const char *display_res_name = "display_res";
+const char *display_fov_name = "display_fov";
+const char *lens_distance_ratio_name = "lens_distance_ratio";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
 float *imu_data_ipc_value;
-float *look_ahead_ipc_value;
+float *imu_data_period_value;
+float *look_ahead_cfg_ipc_value;
+unsigned int *display_res_value;
+float *display_fov_value;
+float *lens_distance_ratio_value;
 float *zoom_ipc_value;
 bool *disabled_ipc_value;
 bool ipc_enabled = false;
@@ -252,8 +262,7 @@ float mouse_y_remainder = 0.0;
 float mouse_z_remainder = 0.0;
 
 #define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
-#define GYRO_BUFFER_SIZE 4 // how many events to use for smoothing out velocity
-const float buffer_to_seconds = (float) cycles_per_second / GYRO_BUFFER_SIZE;
+#define GYRO_BUFFER_SIZE 5 // how many events to use for smoothing out velocity
 
 buffer_type **quat_stage_1_buffer = NULL;
 buffer_type **quat_stage_2_buffer = NULL;
@@ -457,10 +466,22 @@ void setup_ipc() {
         if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
             setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 16, debug_ipc);
-            setup_ipc_value(look_ahead_ms_ipc_name, (void**) &look_ahead_ipc_value, sizeof(float) * 2, debug_ipc);
+            setup_ipc_value(imu_data_period_name, (void**) &imu_data_period_value, sizeof(float), debug_ipc);
+            setup_ipc_value(look_ahead_cfg_ipc_name, (void**) &look_ahead_cfg_ipc_value, sizeof(float) * 2, debug_ipc);
+            setup_ipc_value(display_res_name, (void**) &display_res_value, sizeof(unsigned int) * 2, debug_ipc);
+            setup_ipc_value(display_fov_name, (void**) &display_fov_value, sizeof(float), debug_ipc);
+            setup_ipc_value(lens_distance_ratio_name, (void**) &lens_distance_ratio_value, sizeof(float), debug_ipc);
             setup_ipc_value(zoom_ipc_name, (void**) &zoom_ipc_value, sizeof(float), debug_ipc);
             setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
             ipc_enabled = true;
+
+            // TODO - move this to a plug-in system, allow for adding different devices
+            // set IPC values that won't change
+            display_res_value[0]        = xreal_air_properties.resolution_w;
+            display_res_value[1]        = xreal_air_properties.resolution_h;
+            *display_fov_value          = xreal_air_properties.fov;
+            *lens_distance_ratio_value  = xreal_air_properties.lens_distance_ratio;
+            *imu_data_period_value      = GYRO_BUFFER_SIZE;
 
             printf("IPC enabled, file prefix set to '%s'\n", get_ipc_file_prefix());
         } else {
@@ -613,8 +634,8 @@ void parse_config_file(FILE *fp) {
         *disabled_ipc_value = driver_disabled;
         if (external_zoom_changed) *zoom_ipc_value = external_zoom;
         if (look_ahead_changed) {
-            look_ahead_ipc_value[0] = look_ahead;
-            look_ahead_ipc_value[1] = look_ahead_ftm;
+            look_ahead_cfg_ipc_value[0] = look_ahead;
+            look_ahead_cfg_ipc_value[1] = look_ahead_ftm;
         }
     } else if (strcmp(output_mode, external_only_output_mode) == 0) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
