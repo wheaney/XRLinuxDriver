@@ -44,6 +44,9 @@ const float default_look_ahead = 0.0;
 const float default_look_ahead_ftm = 2.4;
 const float default_external_zoom = 1.0;
 
+const int multi_tap_recenter_screen = 2;
+const int multi_tap_reset_calibration = 3;
+
 const char *joystick_output_mode = "joystick";
 const char *mouse_output_mode = "mouse";
 const char *external_only_output_mode = "external_only";
@@ -72,6 +75,8 @@ bool ipc_enabled = false;
 
 device3_type* glasses_imu;
 bool glasses_ready=false;
+bool glasses_calibrated=false;
+long int glasses_calibration_started_sec=0;
 
 bool driver_disabled=false;
 bool use_roll_axis=false;
@@ -252,6 +257,18 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
     }
 }
 
+void reset_calibration(bool reset_device) {
+    glasses_calibration_started_sec=0;
+    glasses_calibrated=false;
+    captured_screen_center=false;
+    if (reset_device) {
+        device3_close(glasses_imu);
+        glasses_ready=false;
+    }
+
+    if (glasses_ready && ipc_enabled) printf("Waiting on device calibration\n");
+}
+
 int joystick_debug_count = 0;
 int prev_joystick_x = 0;
 int prev_joystick_y = 0;
@@ -279,66 +296,88 @@ void handle_imu_event(uint64_t timestamp,
         float delta_y = degree_delta(last_euler.y, e.y);
         float delta_z = degree_delta(last_euler.x, e.x);
 
+        device3_vec3_type velocities = {
+            .x=delta_x * cycles_per_second,
+            .y=delta_y * cycles_per_second,
+            .z=delta_z * cycles_per_second
+        };
+        int multi_tap = detect_multi_tap(velocities, timestamp, cycles_per_second, debug_multi_tap);
+        if (multi_tap == multi_tap_reset_calibration) reset_calibration(true);
+
         if (ipc_enabled) {
-            // TODO - wait for calibration before capturing a center, add splash screen or text indicating the wait
-            device3_vec3_type velocities = {
-                .x=delta_x * cycles_per_second,
-                .y=delta_y * cycles_per_second,
-                .z=delta_z * cycles_per_second
-            };
-            if (!captured_screen_center || detect_multi_tap(velocities, timestamp, cycles_per_second, debug_multi_tap) == 2) {
-                if (captured_screen_center) printf("Double-tap detected, centering screen\n");
+            if (glasses_calibrated) {
+                if (!captured_screen_center || multi_tap == multi_tap_recenter_screen) {
+                    if (captured_screen_center) printf("Double-tap detected, centering screen\n");
 
-                screen_center = q;
-                captured_screen_center=true;
-            }
+                    screen_center = q;
+                    captured_screen_center=true;
+                }
 
-            if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
-                quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-                quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-                for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                    quat_stage_1_buffer[i] = create_buffer(GYRO_BUFFER_SIZE);
-                    quat_stage_2_buffer[i] = create_buffer(GYRO_BUFFER_SIZE);
-                    if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
-                        fprintf(stderr, "Error allocating memory\n");
-                        exit(1);
+                if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
+                    quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                    quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                    for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                        quat_stage_1_buffer[i] = create_buffer(GYRO_BUFFER_SIZE);
+                        quat_stage_2_buffer[i] = create_buffer(GYRO_BUFFER_SIZE);
+                        if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
+                            fprintf(stderr, "Error allocating memory\n");
+                            exit(1);
+                        }
                     }
                 }
-            }
 
-            // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
-            // push/pop, to know if the values that are returned will be relevant to our calculations
-            bool was_full = is_full(quat_stage_1_buffer[0]);
-            float stage_1_quat_w = push(quat_stage_1_buffer[0], q.w);
-            float stage_1_quat_x = push(quat_stage_1_buffer[1], q.x);
-            float stage_1_quat_y = push(quat_stage_1_buffer[2], q.y);
-            float stage_1_quat_z = push(quat_stage_1_buffer[3], q.z);
-
-            if (was_full) {
-                was_full = is_full(quat_stage_2_buffer[0]);
-                float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
-                float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
-                float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
-                float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
+                // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
+                // push/pop, to know if the values that are returned will be relevant to our calculations
+                bool was_full = is_full(quat_stage_1_buffer[0]);
+                float stage_1_quat_w = push(quat_stage_1_buffer[0], q.w);
+                float stage_1_quat_x = push(quat_stage_1_buffer[1], q.x);
+                float stage_1_quat_y = push(quat_stage_1_buffer[2], q.y);
+                float stage_1_quat_z = push(quat_stage_1_buffer[3], q.z);
 
                 if (was_full) {
-                    // write to shared memory for anyone using the same ipc prefix to consume
-                    imu_data_ipc_value[0] = q.x;
-                    imu_data_ipc_value[1] = q.y;
-                    imu_data_ipc_value[2] = q.z;
-                    imu_data_ipc_value[3] = q.w;
-                    imu_data_ipc_value[4] = stage_1_quat_x;
-                    imu_data_ipc_value[5] = stage_1_quat_y;
-                    imu_data_ipc_value[6] = stage_1_quat_z;
-                    imu_data_ipc_value[7] = stage_1_quat_w;
-                    imu_data_ipc_value[8] = stage_2_quat_x;
-                    imu_data_ipc_value[9] = stage_2_quat_y;
-                    imu_data_ipc_value[10] = stage_2_quat_z;
-                    imu_data_ipc_value[11] = stage_2_quat_w;
-                    imu_data_ipc_value[12] = screen_center.x;
-                    imu_data_ipc_value[13] = screen_center.y;
-                    imu_data_ipc_value[14] = screen_center.z;
-                    imu_data_ipc_value[15] = screen_center.w;
+                    was_full = is_full(quat_stage_2_buffer[0]);
+                    float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
+                    float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
+                    float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
+                    float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
+
+                    if (was_full) {
+                        // write to shared memory for anyone using the same ipc prefix to consume
+                        imu_data_ipc_value[0] = q.x;
+                        imu_data_ipc_value[1] = q.y;
+                        imu_data_ipc_value[2] = q.z;
+                        imu_data_ipc_value[3] = q.w;
+                        imu_data_ipc_value[4] = stage_1_quat_x;
+                        imu_data_ipc_value[5] = stage_1_quat_y;
+                        imu_data_ipc_value[6] = stage_1_quat_z;
+                        imu_data_ipc_value[7] = stage_1_quat_w;
+                        imu_data_ipc_value[8] = stage_2_quat_x;
+                        imu_data_ipc_value[9] = stage_2_quat_y;
+                        imu_data_ipc_value[10] = stage_2_quat_z;
+                        imu_data_ipc_value[11] = stage_2_quat_w;
+                        imu_data_ipc_value[12] = screen_center.x;
+                        imu_data_ipc_value[13] = screen_center.y;
+                        imu_data_ipc_value[14] = screen_center.z;
+                        imu_data_ipc_value[15] = screen_center.w;
+                    }
+                }
+            } else {
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+
+                if (glasses_calibration_started_sec == 0) {
+                    glasses_calibration_started_sec=tv.tv_sec;
+
+                    // reset the 4 quaternion values to (0, 0, 0, 1)
+                    for (int i = 0; i < 16; i += 4) {
+                        imu_data_ipc_value[i] = 0;
+                        imu_data_ipc_value[i + 1] = 0;
+                        imu_data_ipc_value[i + 2] = 0;
+                        imu_data_ipc_value[i + 3] = 1;
+                    }
+                } else {
+                    glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > xreal_air_properties.calibration_wait_s;
+                    if (glasses_calibrated) printf("Device calibration complete\n");
                 }
             }
         }
@@ -747,6 +786,7 @@ int main(int argc, const char** argv) {
     setup_ipc();
 
     glasses_imu = malloc(sizeof(device3_type));
+    struct timeval tv;
     while (1) {
         int device_error = device3_open(glasses_imu, handle_imu_event);
         if (device_error != DEVICE3_ERROR_NO_ERROR)
@@ -762,6 +802,7 @@ int main(int argc, const char** argv) {
 
         glasses_ready=true;
         setup_ipc();
+        reset_calibration(false);
         if (ipc_enabled) *disabled_ipc_value = false;
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
