@@ -81,8 +81,7 @@ long int glasses_calibration_started_sec=0;
 bool driver_disabled=false;
 bool use_roll_axis=false;
 int mouse_sensitivity=default_mouse_sensitivity;
-float look_ahead=default_look_ahead;
-float look_ahead_ftm=default_look_ahead_ftm;
+float look_ahead_override=0.0;
 float external_zoom=0.0;
 char *output_mode = NULL;
 bool debug_threads=false;
@@ -269,6 +268,18 @@ void reset_calibration(bool reset_device) {
     if (glasses_ready && ipc_enabled) printf("Waiting on device calibration\n");
 }
 
+void reset_imu_data() {
+    if (ipc_enabled) {
+        // reset the 4 quaternion values to (0, 0, 0, 1)
+        for (int i = 0; i < 16; i += 4) {
+            imu_data_ipc_value[i] = 0;
+            imu_data_ipc_value[i + 1] = 0;
+            imu_data_ipc_value[i + 2] = 0;
+            imu_data_ipc_value[i + 3] = 1;
+        }
+    }
+}
+
 int joystick_debug_count = 0;
 int prev_joystick_x = 0;
 int prev_joystick_y = 0;
@@ -367,14 +378,7 @@ void handle_imu_event(uint64_t timestamp,
 
                 if (glasses_calibration_started_sec == 0) {
                     glasses_calibration_started_sec=tv.tv_sec;
-
-                    // reset the 4 quaternion values to (0, 0, 0, 1)
-                    for (int i = 0; i < 16; i += 4) {
-                        imu_data_ipc_value[i] = 0;
-                        imu_data_ipc_value[i + 1] = 0;
-                        imu_data_ipc_value[i + 2] = 0;
-                        imu_data_ipc_value[i + 3] = 1;
-                    }
+                    reset_imu_data();
                 } else {
                     glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > xreal_air_properties.calibration_wait_s;
                     if (glasses_calibrated) printf("Device calibration complete\n");
@@ -501,8 +505,11 @@ void *poll_glasses_imu(void *arg) {
 
 // TODO - do this setup once from main() using the default ipc file prefix
 void setup_ipc() {
+    bool not_external_only = output_mode && strcmp(output_mode, external_only_output_mode) != 0;
     if (!ipc_enabled) {
-        if (get_ipc_file_prefix() != NULL) {
+        if (not_external_only) {
+            if (debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", output_mode);
+        } else if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
             setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 16, debug_ipc);
             setup_ipc_value(imu_data_period_name, (void**) &imu_data_period_value, sizeof(float), debug_ipc);
@@ -514,8 +521,10 @@ void setup_ipc() {
             setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
             ipc_enabled = true;
 
-            // TODO - move this to a plug-in system, allow for adding different devices
+            reset_imu_data();
+
             // set IPC values that won't change
+            // TODO - move this to a plug-in system, allow for adding different devices
             display_res_value[0]        = xreal_air_properties.resolution_w;
             display_res_value[1]        = xreal_air_properties.resolution_h;
             *display_fov_value          = xreal_air_properties.fov;
@@ -525,10 +534,15 @@ void setup_ipc() {
             printf("IPC enabled, file prefix set to '%s'\n", get_ipc_file_prefix());
         } else {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix not set, disabling IPC\n");
-            ipc_enabled = false;
         }
     } else {
-        if (debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
+        if (not_external_only) {
+            if (debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", output_mode);
+            *disabled_ipc_value = true;
+            ipc_enabled = false;
+        } else {
+            if (debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
+        }
     }
 }
 
@@ -543,8 +557,7 @@ void parse_config_file(FILE *fp) {
     bool new_debug_threads = false;
     bool new_debug_multi_tap = false;
     bool new_debug_ipc = false;
-    float new_look_ahead = default_look_ahead;
-    float new_look_ahead_ftm = default_look_ahead_ftm;
+    float new_look_ahead_override = 0.0;
 
     char line[1024];
     while (fgets(line, sizeof(line), fp) != NULL) {
@@ -585,18 +598,9 @@ void parse_config_file(FILE *fp) {
             errno = 0;
             float num = strtof(value, &endptr);
             if (errno != ERANGE && endptr != value) {
-                new_look_ahead = num;
+                new_look_ahead_override = num;
             } else {
                 fprintf(stderr, "Error parsing look_ahead value: %s\n", value);
-            }
-        } else if (strcmp(key, "look_ahead_ftm") == 0) {
-            char *endptr;
-            errno = 0;
-            float num = strtof(value, &endptr);
-            if (errno != ERANGE && endptr != value) {
-                new_look_ahead_ftm = num;
-            } else {
-                fprintf(stderr, "Error parsing look_ahead_ftm value: %s\n", value);
             }
         } else if (strcmp(key, "external_zoom") == 0) {
             char *endptr;
@@ -627,9 +631,9 @@ void parse_config_file(FILE *fp) {
     if (mouse_sensitivity != new_mouse_sensitivity)
         fprintf(stdout, "Mouse sensitivity has changed to %d, see ~/bin/xreal_driver_config\n", new_mouse_sensitivity);
 
-    bool look_ahead_changed = look_ahead != new_look_ahead || look_ahead_ftm != new_look_ahead_ftm;
+    bool look_ahead_changed = look_ahead_override != new_look_ahead_override;
     if (look_ahead_changed)
-        fprintf(stdout, "Look ahead has changed to %f and %f, see ~/bin/xreal_driver_config\n", new_look_ahead, new_look_ahead_ftm);
+        fprintf(stdout, "Look ahead override has changed to %f, see ~/bin/xreal_driver_config\n", new_look_ahead_override);
 
     bool external_zoom_changed = external_zoom != new_external_zoom;
     if (external_zoom_changed)
@@ -656,8 +660,7 @@ void parse_config_file(FILE *fp) {
     driver_disabled = new_driver_disabled;
     use_roll_axis = new_use_roll_axis;
     mouse_sensitivity = new_mouse_sensitivity;
-    look_ahead = new_look_ahead;
-    look_ahead_ftm = new_look_ahead_ftm;
+    look_ahead_override = new_look_ahead_override;
     external_zoom = new_external_zoom;
     if (output_mode) free_and_clear(&output_mode);
     output_mode = new_output_mode;
@@ -667,16 +670,17 @@ void parse_config_file(FILE *fp) {
     debug_ipc = new_debug_ipc;
 
     if (output_mode_changed)
+        // this will trigger another call to setup_ipc() before the next time the threads restart
         force_reset_threads = true;
 
     if (ipc_enabled) {
         *disabled_ipc_value = driver_disabled;
         if (external_zoom_changed) *zoom_ipc_value = external_zoom;
         if (look_ahead_changed) {
-            look_ahead_cfg_ipc_value[0] = look_ahead;
-            look_ahead_cfg_ipc_value[1] = look_ahead_ftm;
+            look_ahead_cfg_ipc_value[0] = look_ahead_override == 0 ? default_look_ahead : look_ahead_override;
+            look_ahead_cfg_ipc_value[1] = look_ahead_override == 0 ? default_look_ahead_ftm : 0.0;
         }
-    } else if (strcmp(output_mode, external_only_output_mode) == 0) {
+    } else if (!force_reset_threads && strcmp(output_mode, external_only_output_mode) == 0) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage, see ~/bin/xreal_driver_config\n");
     }
 }
@@ -786,7 +790,6 @@ int main(int argc, const char** argv) {
     setup_ipc();
 
     glasses_imu = malloc(sizeof(device3_type));
-    struct timeval tv;
     while (1) {
         int device_error = device3_open(glasses_imu, handle_imu_event);
         if (device_error != DEVICE3_ERROR_NO_ERROR)
