@@ -22,8 +22,13 @@ rm -f /etc/systemd/system/xreal-air-driver.service
 
 USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
-[ "$for_install" -eq 0 ] && echo "Removing installed files from $USER_HOME"
 if [ "$for_install" -eq 0 ]; then
+    echo "Removing installed files from $USER_HOME"
+
+    UA_EVENT_NAME="uninstall"
+    UA_CLIENT_ID="ARLinuxDriver"
+    #INJECT_UA_CALL
+
     rm -f $USER_HOME/.xreal_driver_config
     rm -f $USER_HOME/.xreal_driver_log
 fi

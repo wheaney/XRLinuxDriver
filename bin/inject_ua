@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Function to copy and replace code in scripts. Allows for code reuse without needing multiple bash files.
+copy_and_inject_ua() {
+  # Source file containing the code to be injected
+  local source_file=$1
+
+  # Directory where the scripts will be copied to
+  local copy_to_dir=$2
+
+  # Keyword in the destination file where the code will be injected
+  local keyword="#INJECT_UA_CALL"
+
+  # List of scripts to be copied and modified
+  local scripts=("${@:3}")
+
+  for script in "${scripts[@]}"; do
+    # Copy the script to the package directory
+    cp -p $script $copy_to_dir
+
+    # Get the filename of the script
+    local filename=$(basename $script)
+
+    # Destination file where the code will be injected
+    local destination_file="$copy_to_dir/$filename"
+
+    # Replace the keyword with the content of the source file
+    sed -i -e "/$keyword/r $source_file" -e "s/$keyword/UA_API_SECRET=\"${UA_API_SECRET}\"/g" $destination_file
+  done
+}
