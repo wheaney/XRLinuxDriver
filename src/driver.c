@@ -42,6 +42,7 @@ const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 30;
 const float default_look_ahead = 0.0;
 const float default_look_ahead_ftm = 2.4;
+const float default_look_ahead_override = 0.0;
 const float default_external_zoom = 1.0;
 
 const int multi_tap_recenter_screen = 2;
@@ -81,8 +82,8 @@ long int glasses_calibration_started_sec=0;
 bool driver_disabled=false;
 bool use_roll_axis=false;
 int mouse_sensitivity=default_mouse_sensitivity;
-float look_ahead_override=0.0;
-float external_zoom=0.0;
+float look_ahead_override=default_look_ahead_override;
+float external_zoom=default_external_zoom;
 char *output_mode = NULL;
 bool debug_threads=false;
 bool debug_joystick=false;
@@ -507,9 +508,7 @@ void *poll_glasses_imu(void *arg) {
 void setup_ipc() {
     bool not_external_only = output_mode && strcmp(output_mode, external_only_output_mode) != 0;
     if (!ipc_enabled) {
-        if (not_external_only) {
-            if (debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", output_mode);
-        } else if (get_ipc_file_prefix() != NULL) {
+        if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
             setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 16, debug_ipc);
             setup_ipc_value(imu_data_period_name, (void**) &imu_data_period_value, sizeof(float), debug_ipc);
@@ -531,7 +530,15 @@ void setup_ipc() {
             *lens_distance_ratio_value  = xreal_air_properties.lens_distance_ratio;
             *imu_data_period_value      = GYRO_BUFFER_SIZE;
 
-            printf("IPC enabled, file prefix set to '%s'\n", get_ipc_file_prefix());
+            // always start out disabled, let it be explicitly enabled later
+            *disabled_ipc_value = true;
+
+            if (not_external_only) {
+                if (debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", output_mode);
+                ipc_enabled = false;
+            } else {
+                printf("IPC enabled, file prefix set to '%s'\n", get_ipc_file_prefix());
+            }
         } else {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix not set, disabling IPC\n");
         }
@@ -557,7 +564,7 @@ void parse_config_file(FILE *fp) {
     bool new_debug_threads = false;
     bool new_debug_multi_tap = false;
     bool new_debug_ipc = false;
-    float new_look_ahead_override = 0.0;
+    float new_look_ahead_override = default_look_ahead_override;
 
     char line[1024];
     while (fgets(line, sizeof(line), fp) != NULL) {
