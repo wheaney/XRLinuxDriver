@@ -13,14 +13,14 @@ const int mt_state_rise = 1;
 const int mt_state_fall = 2;
 const int mt_state_pause = 3;
 int mt_state = mt_state_idle;
-const float mt_detect_threshold = 2500.0;
+const float mt_detect_threshold = 2000.0;
 const float mt_pause_threshold = 100.0;
 uint64_t tap_start_time = 0;
 uint64_t pause_start_time = 0;
 uint64_t last_logged_peak_time = 0;
 const int max_tap_period_ms = 500; // longest time-frame to allow between tap starts/rises
 const int max_tap_rise_ms = 100; // a single tap should be very quick, ignore long accelerations
-const int min_pause_ms = 50 - MT_BUFFER_SIZE; // must detect a pause (~0 acceleration) between taps
+const int min_pause_ms = 10; // must detect a pause (~0 acceleration) between taps
 float peak_max = 0.0;
 int tap_count = 0;
 
