@@ -27,6 +27,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <inttypes.h>
+#include <time.h>
 
 #define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 
@@ -64,6 +65,7 @@ const char *display_fov_name = "display_fov";
 const char *lens_distance_ratio_name = "lens_distance_ratio";
 const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
+const char *date_ipc_name = "keepalive_date";
 float *imu_data_ipc_value;
 float *imu_data_period_value;
 float *look_ahead_cfg_ipc_value;
@@ -72,6 +74,7 @@ float *display_fov_value;
 float *lens_distance_ratio_value;
 float *zoom_ipc_value;
 bool *disabled_ipc_value;
+float *date_ipc_value;
 bool ipc_enabled = false;
 
 device3_type* glasses_imu;
@@ -281,7 +284,11 @@ void reset_imu_data() {
     }
 }
 
-int joystick_debug_count = 0;
+// counter that resets every 1000 cycles, for triggering things that we don't want to do every cycle
+int imu_counter = 0;
+const int imu_counter_period = 1000;
+const int joystick_debug_period = 100;
+
 int prev_joystick_x = 0;
 int prev_joystick_y = 0;
 
@@ -317,6 +324,17 @@ void handle_imu_event(uint64_t timestamp,
         if (multi_tap == multi_tap_reset_calibration) reset_calibration(true);
 
         if (ipc_enabled) {
+            // send keepalive every counter period
+            if (imu_counter == 0) {
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+
+                // match the float4 date uniform type definition
+                date_ipc_value[0] = (float)(t->tm_year + 1900);
+                date_ipc_value[1] = (float)(t->tm_mon + 1);
+                date_ipc_value[2] = (float)t->tm_mday;
+                date_ipc_value[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
+            }
             if (glasses_calibrated) {
                 if (!captured_screen_center || multi_tap == multi_tap_recenter_screen) {
                     if (captured_screen_center) printf("Double-tap detected, centering screen\n");
@@ -424,14 +442,17 @@ void handle_imu_event(uint64_t timestamp,
             libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 
         // always use joystick debugging as it adds a helpful visual
-        if (debug_joystick && (joystick_debug_count++ % 100) == 0) {
-            joystick_debug_count = 0;
+        if (debug_joystick && (imu_counter % joystick_debug_period) == 0) {
             joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
         }
         prev_joystick_x = next_joystick_x;
         prev_joystick_y = next_joystick_y;
 
         last_euler = e;
+    }
+
+    if ((++imu_counter % imu_counter_period) == 0) {
+        imu_counter = 0;
     }
 }
 
@@ -518,6 +539,7 @@ void setup_ipc() {
             setup_ipc_value(lens_distance_ratio_name, (void**) &lens_distance_ratio_value, sizeof(float), debug_ipc);
             setup_ipc_value(zoom_ipc_name, (void**) &zoom_ipc_value, sizeof(float), debug_ipc);
             setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
+            setup_ipc_value(date_ipc_name, (void**) &date_ipc_value, sizeof(float) * 4, debug_ipc);
             ipc_enabled = true;
 
             reset_imu_data();
@@ -531,7 +553,16 @@ void setup_ipc() {
             *imu_data_period_value      = GYRO_BUFFER_SIZE;
 
             // always start out disabled, let it be explicitly enabled later
-            *disabled_ipc_value = true;
+            *disabled_ipc_value         = true;
+
+            // set defaults for everything else
+            *zoom_ipc_value             = external_zoom;
+            look_ahead_cfg_ipc_value[0] = look_ahead_override == 0 ? default_look_ahead : look_ahead_override;
+            look_ahead_cfg_ipc_value[1] = look_ahead_override == 0 ? default_look_ahead_ftm : 0.0;
+            date_ipc_value[0]           = 0.0;
+            date_ipc_value[1]           = 0.0;
+            date_ipc_value[2]           = 0.0;
+            date_ipc_value[3]           = 0.0;
 
             if (not_external_only) {
                 if (debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", output_mode);
