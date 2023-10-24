@@ -23,6 +23,8 @@ You may still opt to do a manual installation using the instructions below if yo
 
 ### Manual installation
 
+*Note: this installation is for just the base driver with mouse/joystick support. If you're looking for virtual display mode, check out the [breezy-desktop setup](https://github.com/wheaney/breezy-desktop#setup).*
+
 1. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
 2. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
   
