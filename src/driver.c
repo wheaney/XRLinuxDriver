@@ -41,8 +41,8 @@ const float joystick_max_degrees = 360.0 / cycles_per_second / 4;
 const float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
 const int joystick_resolution = max_input / joystick_max_radians;
 const int default_mouse_sensitivity = 30;
-const float default_look_ahead = 0.0;
-const float default_look_ahead_ftm = 2.4;
+const float default_look_ahead = 10.0;
+const float default_look_ahead_ftm = 1.25;
 const float default_look_ahead_override = 0.0;
 const float default_external_zoom = 1.0;
 
@@ -58,6 +58,7 @@ const char *external_only_output_mode = "external_only";
 char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
 const char *imu_data_ipc_name = "imu_quat_data";
+const char *imu_data_mutex_ipc_name = "imu_quat_data_mutex";
 const char *imu_data_period_name = "imu_data_period_ms";
 const char *look_ahead_cfg_ipc_name = "look_ahead_cfg";
 const char *display_res_name = "display_res";
@@ -67,6 +68,7 @@ const char *zoom_ipc_name = "zoom";
 const char *disabled_ipc_name = "disabled";
 const char *date_ipc_name = "keepalive_date";
 float *imu_data_ipc_value;
+pthread_mutex_t *imu_data_mutex_ipc_value;
 float *imu_data_period_value;
 float *look_ahead_cfg_ipc_value;
 unsigned int *display_res_value;
@@ -372,6 +374,8 @@ void handle_imu_event(uint64_t timestamp,
                     float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
 
                     if (was_full) {
+                        pthread_mutex_lock(imu_data_mutex_ipc_value);
+
                         // write to shared memory for anyone using the same ipc prefix to consume
                         imu_data_ipc_value[0] = q.x;
                         imu_data_ipc_value[1] = q.y;
@@ -389,6 +393,8 @@ void handle_imu_event(uint64_t timestamp,
                         imu_data_ipc_value[13] = screen_center.y;
                         imu_data_ipc_value[14] = screen_center.z;
                         imu_data_ipc_value[15] = screen_center.w;
+
+                        pthread_mutex_unlock(imu_data_mutex_ipc_value);
                     }
                 }
             } else {
@@ -532,6 +538,7 @@ void setup_ipc() {
         if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
             setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 16, debug_ipc);
+            setup_ipc_value(imu_data_mutex_ipc_name, (void**) &imu_data_mutex_ipc_value, sizeof(pthread_mutex_t), debug_ipc);
             setup_ipc_value(imu_data_period_name, (void**) &imu_data_period_value, sizeof(float), debug_ipc);
             setup_ipc_value(look_ahead_cfg_ipc_name, (void**) &look_ahead_cfg_ipc_value, sizeof(float) * 2, debug_ipc);
             setup_ipc_value(display_res_name, (void**) &display_res_value, sizeof(unsigned int) * 2, debug_ipc);
@@ -551,6 +558,14 @@ void setup_ipc() {
             *display_fov_value          = xreal_air_properties.fov;
             *lens_distance_ratio_value  = xreal_air_properties.lens_distance_ratio;
             *imu_data_period_value      = GYRO_BUFFER_SIZE;
+
+            pthread_mutexattr_t attr;
+            pthread_mutexattr_init(&attr);
+            pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+            if (pthread_mutex_init(imu_data_mutex_ipc_value, &attr) != 0) {
+                perror("pthread_mutex_init");
+                exit(1);
+            }
 
             // always start out disabled, let it be explicitly enabled later
             *disabled_ipc_value         = true;
