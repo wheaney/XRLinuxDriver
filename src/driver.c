@@ -538,7 +538,6 @@ void setup_ipc() {
         if (get_ipc_file_prefix() != NULL) {
             if (debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
             setup_ipc_value(imu_data_ipc_name, (void**) &imu_data_ipc_value, sizeof(float) * 16, debug_ipc);
-            setup_ipc_value(imu_data_mutex_ipc_name, (void**) &imu_data_mutex_ipc_value, sizeof(pthread_mutex_t), debug_ipc);
             setup_ipc_value(imu_data_period_name, (void**) &imu_data_period_value, sizeof(float), debug_ipc);
             setup_ipc_value(look_ahead_cfg_ipc_name, (void**) &look_ahead_cfg_ipc_value, sizeof(float) * 2, debug_ipc);
             setup_ipc_value(display_res_name, (void**) &display_res_value, sizeof(unsigned int) * 2, debug_ipc);
@@ -547,6 +546,15 @@ void setup_ipc() {
             setup_ipc_value(zoom_ipc_name, (void**) &zoom_ipc_value, sizeof(float), debug_ipc);
             setup_ipc_value(disabled_ipc_name, (void**) &disabled_ipc_value, sizeof(bool), debug_ipc);
             setup_ipc_value(date_ipc_name, (void**) &date_ipc_value, sizeof(float) * 4, debug_ipc);
+
+            // attempt to destroy the mutex if it already existed from a previous run
+            setup_ipc_value(imu_data_mutex_ipc_name, (void**) &imu_data_mutex_ipc_value, sizeof(pthread_mutex_t), debug_ipc);
+            int ret = pthread_mutex_destroy(imu_data_mutex_ipc_value);
+            if (ret != 0) {
+                perror("pthread_mutex_destroy");
+                if (ret != EINVAL) exit(1);
+            }
+
             ipc_enabled = true;
 
             reset_imu_data();
@@ -560,8 +568,18 @@ void setup_ipc() {
             *imu_data_period_value      = GYRO_BUFFER_SIZE;
 
             pthread_mutexattr_t attr;
-            pthread_mutexattr_init(&attr);
-            pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+            if (pthread_mutexattr_init(&attr) != 0) {
+                perror("pthread_mutexattr_init");
+                exit(1);
+            }
+            if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
+                perror("pthread_mutexattr_setpshared");
+                exit(1);
+            }
+            if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) != 0) {
+                perror("pthread_mutexattr_setrobust");
+                exit(1);
+            }
             if (pthread_mutex_init(imu_data_mutex_ipc_value, &attr) != 0) {
                 perror("pthread_mutex_init");
                 exit(1);
