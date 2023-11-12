@@ -7,12 +7,14 @@
 
 // by buffering over a small number of cycles, we can smooth out noise and confidently detect quick taps
 #define MT_BUFFER_SIZE 25
+
+#define MT_STATE_IDLE 0
+#define MT_STATE_RISE 1
+#define MT_STATE_FALL 2
+#define MT_STATE_PAUSE 3
+
 buffer_type *mt_buffer = NULL;
-const int mt_state_idle = 0;
-const int mt_state_rise = 1;
-const int mt_state_fall = 2;
-const int mt_state_pause = 3;
-int mt_state = mt_state_idle;
+int mt_state = MT_STATE_IDLE;
 const float mt_detect_threshold = 2000.0;
 const float mt_pause_threshold = 100.0;
 uint64_t tap_start_time = 0;
@@ -40,9 +42,9 @@ int detect_multi_tap(device3_vec3_type velocities, uint64_t timestamp, const int
         // extrapolate out to seconds, so the threshold can stay the same regardless of buffer size
         float acceleration = (next_value - oldest_value) * cycles_per_second / MT_BUFFER_SIZE;
         int tap_elapsed_ms = (timestamp - tap_start_time) / 1000000;
-        if ((tap_count > 0 || mt_state != mt_state_idle) && tap_elapsed_ms > max_tap_period_ms) {
+        if ((tap_count > 0 || mt_state != MT_STATE_IDLE) && tap_elapsed_ms > max_tap_period_ms) {
             peak_max = 0.0;
-            mt_state = mt_state_idle;
+            mt_state = MT_STATE_IDLE;
             int final_tap_count = tap_count;
             tap_count = 0;
 
@@ -50,11 +52,11 @@ int detect_multi_tap(device3_vec3_type velocities, uint64_t timestamp, const int
             return final_tap_count;
         } else {
             switch(mt_state) {
-                case mt_state_idle: {
+                case MT_STATE_IDLE: {
                     if (acceleration > mt_detect_threshold) {
                         tap_start_time = timestamp;
                         peak_max = 0.0;
-                        mt_state = mt_state_rise;
+                        mt_state = MT_STATE_RISE;
                         if (debug_multi_tap) fprintf(stdout, "\tdebug: tap-rise detected %f\n", acceleration);
                     } else {
                         if (debug_multi_tap) {
@@ -68,32 +70,32 @@ int detect_multi_tap(device3_vec3_type velocities, uint64_t timestamp, const int
                     }
                     break;
                 }
-                case mt_state_rise: {
+                case MT_STATE_RISE: {
                     if (acceleration < 0) // accelerating in the opposite direction
                         if (tap_elapsed_ms > max_tap_rise_ms) {
                             if (debug_multi_tap) fprintf(stdout, "\tdebug: rise took %d, too long for a tap\n", tap_elapsed_ms);
                             peak_max = 0.0;
-                            mt_state = mt_state_idle;
+                            mt_state = MT_STATE_IDLE;
                             tap_count == 0;
                         } else {
                             tap_count++;
-                            mt_state = mt_state_fall;
+                            mt_state = MT_STATE_FALL;
                         }
                     break;
                 }
-                case mt_state_fall: {
+                case MT_STATE_FALL: {
                     if (acceleration > 0) { // acceleration switches back, stopping the fall
                         pause_start_time = timestamp;
-                        mt_state = mt_state_pause;
+                        mt_state = MT_STATE_PAUSE;
                     }
                     break;
                 }
-                case mt_state_pause: {
+                case MT_STATE_PAUSE: {
                     if (fabs(acceleration) < mt_pause_threshold) {
                         int pause_elapsed_ms = (timestamp - pause_start_time) / 1000000;
                         if (pause_elapsed_ms > min_pause_ms)
                             // paused long enough, wrap back around to idle where we can detect the next rise
-                            mt_state = mt_state_idle;
+                            mt_state = MT_STATE_IDLE;
                     } else {
                         // not idle, reset pause state timer
                         pause_start_time = timestamp;
