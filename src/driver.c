@@ -308,7 +308,7 @@ struct libevdev_uinput* uinput;
 void handle_imu_event(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
-    if (uinput && event == DEVICE3_EVENT_UPDATE) {
+    if (event == DEVICE3_EVENT_UPDATE) {
         static device3_vec3_type last_euler;
         device3_quat_type q = device3_get_orientation(ahrs);
         device3_vec3_type e = device3_get_euler(q);
@@ -414,38 +414,40 @@ void handle_imu_event(uint64_t timestamp,
         int next_joystick_x = joystick_value(delta_x, joystick_max_degrees);
         int next_joystick_y = joystick_value(delta_y, joystick_max_degrees);
 
-        bool using_evdev = false;
-        if (strcmp(output_mode, joystick_output_mode) == 0) {
-            using_evdev = true;
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
-        } else if (strcmp(output_mode, mouse_output_mode) == 0) {
-            using_evdev = true;
+        if (uinput) {
+            bool using_evdev = false;
+            if (strcmp(output_mode, joystick_output_mode) == 0) {
+                using_evdev = true;
+                libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
+                libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
+                libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(delta_z, joystick_max_degrees));
+            } else if (strcmp(output_mode, mouse_output_mode) == 0) {
+                using_evdev = true;
 
-            // smooth out the mouse values using the remainders left over from previous writes
-            float next_x = delta_x * mouse_sensitivity + mouse_x_remainder;
-            int next_x_int = round(next_x);
-            mouse_x_remainder = next_x - next_x_int;
+                // smooth out the mouse values using the remainders left over from previous writes
+                float next_x = delta_x * mouse_sensitivity + mouse_x_remainder;
+                int next_x_int = round(next_x);
+                mouse_x_remainder = next_x - next_x_int;
 
-            float next_y = delta_y * mouse_sensitivity + mouse_y_remainder;
-            int next_y_int = round(next_y);
-            mouse_y_remainder = next_y - next_y_int;
+                float next_y = delta_y * mouse_sensitivity + mouse_y_remainder;
+                int next_y_int = round(next_y);
+                mouse_y_remainder = next_y - next_y_int;
 
-            float next_z = delta_z * mouse_sensitivity + mouse_z_remainder;
-            int next_z_int = round(next_z);
-            mouse_z_remainder = next_z - next_z_int;
+                float next_z = delta_z * mouse_sensitivity + mouse_z_remainder;
+                int next_z_int = round(next_z);
+                mouse_z_remainder = next_z - next_z_int;
 
-            libevdev_uinput_write_event(uinput, EV_REL, REL_X, next_x_int);
-            libevdev_uinput_write_event(uinput, EV_REL, REL_Y, next_y_int);
-            if (use_roll_axis)
-                libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
-        } else if (strcmp(output_mode, external_only_output_mode) != 0) {
-            fprintf(stderr, "Unsupported output mode: %s\n", output_mode);
+                libevdev_uinput_write_event(uinput, EV_REL, REL_X, next_x_int);
+                libevdev_uinput_write_event(uinput, EV_REL, REL_Y, next_y_int);
+                if (use_roll_axis)
+                    libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
+            } else if (strcmp(output_mode, external_only_output_mode) != 0) {
+                fprintf(stderr, "Unsupported output mode: %s\n", output_mode);
+            }
+
+            if (using_evdev)
+                libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
         }
-
-        if (using_evdev)
-            libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 
         // always use joystick debugging as it adds a helpful visual
         if (debug_joystick && (imu_counter % joystick_debug_period) == 0) {
