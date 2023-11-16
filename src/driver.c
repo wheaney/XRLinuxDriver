@@ -300,7 +300,7 @@ float mouse_y_remainder = 0.0;
 float mouse_z_remainder = 0.0;
 
 #define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
-#define GYRO_BUFFER_SIZE 20 // how many events to use for smoothing out velocity
+#define GYRO_BUFFER_SIZE 10 // how many events to use for smoothing out velocity
 
 buffer_type **quat_stage_1_buffer = NULL;
 buffer_type **quat_stage_2_buffer = NULL;
