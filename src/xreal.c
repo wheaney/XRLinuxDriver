@@ -10,38 +10,43 @@
 
 #define XREAL_TS_TO_MS_FACTOR 1000000
 
-imu_event_handler event_handler;
+imu_event_handler xreal_event_handler;
 void handle_xreal_event(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
-    if (!event_handler) {
-        fprintf(stderr, "event_handler not initialized, device_connect should be called first");
-        exit(1);
-    }
+    if (!xreal_event_handler) {
+        fprintf(stderr, "xreal_event_handler not initialized, device_connect should be called first\n");
+    } else {
+        if (event == DEVICE3_EVENT_UPDATE) {
+            device3_quat_type quat = device3_get_orientation(ahrs);
+            device3_vec3_type euler = device3_get_euler(quat);
+            imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
+            imu_vector_type imu_vec = { .x = euler.x, .y = euler.y, .z = euler.z };
 
-    if (event == DEVICE3_EVENT_UPDATE) {
-        device3_quat_type quat = device3_get_orientation(ahrs);
-        device3_vec3_type euler = device3_get_euler(quat);
-        imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
-        imu_vector_type imu_vec = { .x = euler.x, .y = euler.y, .z = euler.z };
-
-        event_handler((uint32_t) (timestamp / XREAL_TS_TO_MS_FACTOR), imu_quat, imu_vec);
+            xreal_event_handler((uint32_t) (timestamp / XREAL_TS_TO_MS_FACTOR), imu_quat, imu_vec);
+        }
     }
 }
 
 device3_type* glasses_imu;
-bool device_connect(imu_event_handler handler) {
+bool xreal_device_connect(imu_event_handler handler) {
     if (!glasses_imu) {
         glasses_imu = malloc(sizeof(device3_type));
     }
-    event_handler = handler;
 
     int device_error = device3_open(glasses_imu, handle_xreal_event);
 
-    return device_error == DEVICE3_ERROR_NO_ERROR;
+    bool success = device_error == DEVICE3_ERROR_NO_ERROR;
+    if (success) xreal_event_handler = handler;
+
+    return success;
 };
 
-void block_on_device(should_disconnect_callback should_disconnect_func) {
+void xreal_device_cleanup() {
+    device3_close(glasses_imu);
+};
+
+void xreal_block_on_device(should_disconnect_callback should_disconnect_func) {
     device3_clear(glasses_imu);
     while (!should_disconnect_func()) {
         if (device3_read(glasses_imu, 1) != DEVICE3_ERROR_NO_ERROR) {
@@ -49,19 +54,15 @@ void block_on_device(should_disconnect_callback should_disconnect_func) {
         }
     }
 
-    device3_close(glasses_imu);
+    xreal_device_cleanup();
 };
 
-bool device_is_sbs_mode() {
+bool xreal_device_is_sbs_mode() {
     return false;
 };
 
-bool device_set_sbs_mode(bool enabled) {
+bool xreal_device_set_sbs_mode(bool enabled) {
     return false;
-};
-
-void device_cleanup() {
-    device3_close(glasses_imu);
 };
 
 const device_properties_type xreal_air_properties = {
@@ -74,9 +75,9 @@ const device_properties_type xreal_air_properties = {
     .imu_buffer_size        = 10,
     .look_ahead_constant    = 10.0,
     .look_ahead_frametime_multiplier = 0.3,
-    .device_connect_func = device_connect,
-    .block_on_device_func = block_on_device,
-    .device_is_sbs_mode_func = device_is_sbs_mode,
-    .device_set_sbs_mode_func = device_set_sbs_mode,
-    .device_cleanup_func = device_cleanup
+    .device_connect_func = xreal_device_connect,
+    .block_on_device_func = xreal_block_on_device,
+    .device_is_sbs_mode_func = xreal_device_is_sbs_mode,
+    .device_set_sbs_mode_func = xreal_device_set_sbs_mode,
+    .device_cleanup_func = xreal_device_cleanup
 };

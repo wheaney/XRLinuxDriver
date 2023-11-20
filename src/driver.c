@@ -7,7 +7,7 @@
 #include "multitap.h"
 #include "outputs.h"
 #include "strings.h"
-#include "xreal.h"
+#include "viture.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -366,7 +366,7 @@ void set_device(const device_properties_type dev) {
 int main(int argc, const char** argv) {
     config = default_config();
     device = malloc(sizeof(device_properties_type));
-    set_device(xreal_air_properties);
+    set_device(viture_one_properties);
 
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];
