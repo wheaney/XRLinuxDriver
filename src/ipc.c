@@ -1,26 +1,71 @@
+#include <errno.h>
+#include <glob.h>
+#include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <glob.h>
 
 #include "ipc.h"
 
-char *ipc_file_prefix = NULL;
+const char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
-void set_ipc_file_prefix(char *new_prefix) {
-    ipc_file_prefix = new_prefix;
-}
+const char *imu_data_ipc_name = "imu_quat_data";
+const char *imu_data_mutex_ipc_name = "imu_quat_data_mutex";
+const char *imu_data_period_name = "imu_data_period_ms";
+const char *look_ahead_cfg_ipc_name = "look_ahead_cfg";
+const char *display_res_ipc_name = "display_res";
+const char *display_fov_ipc_name = "display_fov";
+const char *lens_distance_ratio_ipc_name = "lens_distance_ratio";
+const char *zoom_ipc_name = "zoom";
+const char *disabled_ipc_name = "disabled";
+const char *date_ipc_name = "keepalive_date";
 
-char *get_ipc_file_prefix() {
-    return ipc_file_prefix;
+bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
+    setup_ipc_value(imu_data_ipc_name, (void**) &ipc_values->imu_data, sizeof(float) * 16, debug);
+    setup_ipc_value(imu_data_period_name, (void**) &ipc_values->imu_data_period, sizeof(float), debug);
+    setup_ipc_value(look_ahead_cfg_ipc_name, (void**) &ipc_values->look_ahead_cfg, sizeof(float) * 2, debug);
+    setup_ipc_value(display_res_ipc_name, (void**) &ipc_values->display_res, sizeof(unsigned int) * 2, debug);
+    setup_ipc_value(display_fov_ipc_name, (void**) &ipc_values->display_fov, sizeof(float), debug);
+    setup_ipc_value(lens_distance_ratio_ipc_name, (void**) &ipc_values->lens_distance_ratio, sizeof(float), debug);
+    setup_ipc_value(zoom_ipc_name, (void**) &ipc_values->zoom, sizeof(float), debug);
+    setup_ipc_value(disabled_ipc_name, (void**) &ipc_values->disabled, sizeof(bool), debug);
+    setup_ipc_value(date_ipc_name, (void**) &ipc_values->date, sizeof(float) * 4, debug);
+
+    // attempt to destroy the mutex if it already existed from a previous run
+    setup_ipc_value(imu_data_mutex_ipc_name, (void**) &ipc_values->imu_data_mutex, sizeof(pthread_mutex_t), debug);
+    int ret = pthread_mutex_destroy(ipc_values->imu_data_mutex);
+    if (ret != 0) {
+        perror("pthread_mutex_destroy");
+        if (ret != EINVAL) return false;
+    }
+
+    pthread_mutexattr_t attr;
+    if (pthread_mutexattr_init(&attr) != 0) {
+        perror("pthread_mutexattr_init");
+        return false;
+    }
+    if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
+        perror("pthread_mutexattr_setpshared");
+        return false;
+    }
+    if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) != 0) {
+        perror("pthread_mutexattr_setrobust");
+        return false;
+    }
+    if (pthread_mutex_init(ipc_values->imu_data_mutex, &attr) != 0) {
+        perror("pthread_mutex_init");
+        return false;
+    }
+
+    return true;
 }
 
 void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debug) {
-    char *path = malloc(strlen(ipc_file_prefix) + strlen(name) + 1);
-    strcpy(path, ipc_file_prefix);
+    char *path = malloc(strlen(sombrero_ipc_file_prefix) + strlen(name) + 1);
+    strcpy(path, sombrero_ipc_file_prefix);
     strcat(path, name);
 
     FILE *ipc_file = fopen(path, "w");
