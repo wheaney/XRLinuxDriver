@@ -69,21 +69,20 @@ void handle_imu_event(uint64_t timestamp,
         device3_vec3_type euler_deltas = get_euler_deltas(euler);
         device3_vec3_type euler_velocities = get_euler_velocities(device, euler_deltas);
 
-        handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled && glasses_calibrated, ipc_values, device, config);
-
         uint32_t timestamp_ms = (uint32_t) (timestamp / device->imu_ts_to_ms_factor);
         int multi_tap = detect_multi_tap(euler_velocities,
                                          timestamp_ms,
                                          config->debug_multi_tap);
         if (multi_tap == MT_RESET_CALIBRATION) reset_calibration(true);
         if (ipc_enabled) {
-            if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN) {
-                if (captured_screen_center) printf("Double-tap detected, centering screen\n");
+            if (glasses_calibrated) {
+                if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN) {
+                    if (captured_screen_center) printf("Double-tap detected, centering screen\n");
 
-                screen_center = quat;
-                captured_screen_center=true;
-            }
-            if (!glasses_calibrated) {
+                    screen_center = quat;
+                    captured_screen_center=true;
+                }
+            } else {
                 struct timeval tv;
                 gettimeofday(&tv, NULL);
 
@@ -96,6 +95,8 @@ void handle_imu_event(uint64_t timestamp,
                 }
             }
         }
+
+        handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
     }
 }
 

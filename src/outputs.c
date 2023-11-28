@@ -232,9 +232,9 @@ void deinit_outputs(driver_config_type *config) {
 }
 
 void handle_imu_update(device3_quat_type quat, device3_vec3_type euler_deltas, device3_quat_type screen_center,
-                       bool send_ipc, ipc_values_type *ipc_values, device_properties_type *device,
+                       bool ipc_enabled, bool send_imu_data, ipc_values_type *ipc_values, device_properties_type *device,
                        driver_config_type *config) {
-    if (send_ipc) {
+    if (ipc_enabled) {
         // send keepalive every counter period
         if (imu_counter == 0) {
             time_t now = time(NULL);
@@ -247,56 +247,58 @@ void handle_imu_update(device3_quat_type quat, device3_vec3_type euler_deltas, d
             ipc_values->date[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
         }
 
-        if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
-            quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-            quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-            for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
-                quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
-                if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
-                    fprintf(stderr, "Error allocating memory\n");
-                    exit(1);
+        if (send_imu_data) {
+            if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
+                quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                    quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
+                    quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
+                    if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
+                        fprintf(stderr, "Error allocating memory\n");
+                        exit(1);
+                    }
                 }
             }
-        }
 
-        // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
-        // push/pop, to know if the values that are returned will be relevant to our calculations
-        bool was_full = is_full(quat_stage_1_buffer[0]);
-        float stage_1_quat_w = push(quat_stage_1_buffer[0], quat.w);
-        float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
-        float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
-        float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
-
-        if (was_full) {
-            was_full = is_full(quat_stage_2_buffer[0]);
-            float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
-            float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
-            float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
-            float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
+            // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
+            // push/pop, to know if the values that are returned will be relevant to our calculations
+            bool was_full = is_full(quat_stage_1_buffer[0]);
+            float stage_1_quat_w = push(quat_stage_1_buffer[0], quat.w);
+            float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
+            float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
+            float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
 
             if (was_full) {
-                pthread_mutex_lock(ipc_values->imu_data_mutex);
+                was_full = is_full(quat_stage_2_buffer[0]);
+                float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
+                float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
+                float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
+                float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
 
-                // write to shared memory for anyone using the same ipc prefix to consume
-                ipc_values->imu_data[0] = quat.x;
-                ipc_values->imu_data[1] = quat.y;
-                ipc_values->imu_data[2] = quat.z;
-                ipc_values->imu_data[3] = quat.w;
-                ipc_values->imu_data[4] = stage_1_quat_x;
-                ipc_values->imu_data[5] = stage_1_quat_y;
-                ipc_values->imu_data[6] = stage_1_quat_z;
-                ipc_values->imu_data[7] = stage_1_quat_w;
-                ipc_values->imu_data[8] = stage_2_quat_x;
-                ipc_values->imu_data[9] = stage_2_quat_y;
-                ipc_values->imu_data[10] = stage_2_quat_z;
-                ipc_values->imu_data[11] = stage_2_quat_w;
-                ipc_values->imu_data[12] = screen_center.x;
-                ipc_values->imu_data[13] = screen_center.y;
-                ipc_values->imu_data[14] = screen_center.z;
-                ipc_values->imu_data[15] = screen_center.w;
+                if (was_full) {
+                    pthread_mutex_lock(ipc_values->imu_data_mutex);
 
-                pthread_mutex_unlock(ipc_values->imu_data_mutex);
+                    // write to shared memory for anyone using the same ipc prefix to consume
+                    ipc_values->imu_data[0] = quat.x;
+                    ipc_values->imu_data[1] = quat.y;
+                    ipc_values->imu_data[2] = quat.z;
+                    ipc_values->imu_data[3] = quat.w;
+                    ipc_values->imu_data[4] = stage_1_quat_x;
+                    ipc_values->imu_data[5] = stage_1_quat_y;
+                    ipc_values->imu_data[6] = stage_1_quat_z;
+                    ipc_values->imu_data[7] = stage_1_quat_w;
+                    ipc_values->imu_data[8] = stage_2_quat_x;
+                    ipc_values->imu_data[9] = stage_2_quat_y;
+                    ipc_values->imu_data[10] = stage_2_quat_z;
+                    ipc_values->imu_data[11] = stage_2_quat_w;
+                    ipc_values->imu_data[12] = screen_center.x;
+                    ipc_values->imu_data[13] = screen_center.y;
+                    ipc_values->imu_data[14] = screen_center.z;
+                    ipc_values->imu_data[15] = screen_center.w;
+
+                    pthread_mutex_unlock(ipc_values->imu_data_mutex);
+                }
             }
         }
     }
