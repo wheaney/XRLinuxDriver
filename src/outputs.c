@@ -227,12 +227,18 @@ void init_outputs(device_properties_type *device, driver_config_type *config) {
 }
 
 void deinit_outputs(driver_config_type *config) {
-    if (uinput) libevdev_uinput_destroy(uinput);
-    if (evdev) libevdev_free(evdev);
+    if (uinput) {
+        libevdev_uinput_destroy(uinput);
+        uinput = NULL;
+    }
+    if (evdev) {
+        libevdev_free(evdev);
+        evdev = NULL;
+    }
 }
 
 void handle_imu_update(device3_quat_type quat, device3_vec3_type euler_deltas, device3_quat_type screen_center,
-                       bool ipc_enabled, bool send_imu_data, ipc_values_type *ipc_values, device_properties_type *device,
+                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values, device_properties_type *device,
                        driver_config_type *config) {
     if (ipc_enabled) {
         // send keepalive every counter period
@@ -247,7 +253,7 @@ void handle_imu_update(device3_quat_type quat, device3_vec3_type euler_deltas, d
             ipc_values->date[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
         }
 
-        if (send_imu_data) {
+        if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
                 quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
                 quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);

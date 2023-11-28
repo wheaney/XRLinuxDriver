@@ -16,7 +16,7 @@ device3_vec3_type get_euler_deltas(device3_vec3_type euler);
 device3_vec3_type get_euler_velocities(device_properties_type *device, device3_vec3_type euler_deltas);
 
 void handle_imu_update(device3_quat_type quat, device3_vec3_type euler_deltas, device3_quat_type screen_center,
-                       bool ipc_enabled, bool send_imu_data, ipc_values_type *ipc_values, device_properties_type *device,
+                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values, device_properties_type *device,
                        driver_config_type *config);
 
 void reset_imu_data(ipc_values_type *ipc_values);

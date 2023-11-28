@@ -32,7 +32,10 @@ void init_multi_tap(int init_imu_cycles_per_s) {
     imu_cycles_per_s = init_imu_cycles_per_s;
     mt_buffer_size = ceil((float)MT_BUFFER_MS / 1000.0 * imu_cycles_per_s);
 
-    if (mt_buffer) free(mt_buffer);
+    if (mt_buffer) {
+        free(mt_buffer);
+        mt_buffer = NULL;
+    }
     mt_buffer = create_buffer(mt_buffer_size);
 }
 
