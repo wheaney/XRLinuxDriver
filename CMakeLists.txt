@@ -15,9 +15,14 @@ add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
 
 add_executable(xrealAirLinuxDriver
 		src/buffer.c
+		src/config.c
+		src/driver.c
+		src/files.c
 		src/ipc.c
 		src/multitap.c
-		src/driver.c
+		src/outputs.c
+		src/strings.c
+		src/xreal.c
 )
 
 target_include_directories(xrealAirLinuxDriver
