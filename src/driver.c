@@ -1,8 +1,7 @@
 #include "buffer.h"
 #include "config.h"
 #include "device.h"
-#include "device3.h"
-#include "device4.h"
+#include "imu.h"
 #include "files.h"
 #include "ipc.h"
 #include "multitap.h"
@@ -38,88 +37,77 @@ device_properties_type *device;
 ipc_values_type *ipc_values;
 
 bool ipc_enabled = false;
-
-device3_type* glasses_imu;
 bool glasses_ready=false;
 bool glasses_calibrated=false;
 long int glasses_calibration_started_sec=0;
 bool force_reset_threads=false;
 
 bool captured_screen_center=false;
-device3_quat_type screen_center;
+imu_quat_type screen_center;
 
 void reset_calibration(bool reset_device) {
     glasses_calibration_started_sec=0;
     glasses_calibrated=false;
     captured_screen_center=false;
     if (reset_device) {
-        device3_close(glasses_imu);
+        device->device_cleanup_func();
         glasses_ready=false;
     }
 
     if (glasses_ready && ipc_enabled) printf("Waiting on device calibration\n");
 }
 
-void handle_imu_event(uint64_t timestamp,
-		   device3_event_type event,
-		   const device3_ahrs_type* ahrs) {
-    if (event == DEVICE3_EVENT_UPDATE) {
-        device3_quat_type quat = device3_get_orientation(ahrs);
-        device3_vec3_type euler = device3_get_euler(quat);
-        device3_vec3_type euler_deltas = get_euler_deltas(euler);
-        device3_vec3_type euler_velocities = get_euler_velocities(device, euler_deltas);
+void handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vector_type euler) {
+    imu_vector_type euler_deltas = get_euler_deltas(euler);
+    imu_vector_type euler_velocities = get_euler_velocities(device, euler_deltas);
 
-        uint32_t timestamp_ms = (uint32_t) (timestamp / device->imu_ts_to_ms_factor);
-        int multi_tap = detect_multi_tap(euler_velocities,
-                                         timestamp_ms,
-                                         config->debug_multi_tap);
-        if (multi_tap == MT_RESET_CALIBRATION) reset_calibration(true);
-        if (ipc_enabled) {
-            if (glasses_calibrated) {
-                if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN) {
-                    if (captured_screen_center) printf("Double-tap detected, centering screen\n");
+    int multi_tap = detect_multi_tap(euler_velocities,
+                                     timestamp_ms,
+                                     config->debug_multi_tap);
+    if (multi_tap == MT_RESET_CALIBRATION) reset_calibration(true);
+    if (ipc_enabled) {
+        if (glasses_calibrated) {
+            if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN) {
+                if (captured_screen_center) printf("Double-tap detected, centering screen\n");
 
-                    screen_center = quat;
-                    captured_screen_center=true;
-                }
+                screen_center = quat;
+                captured_screen_center=true;
+            }
+        } else {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+
+            if (glasses_calibration_started_sec == 0) {
+                glasses_calibration_started_sec=tv.tv_sec;
+                reset_imu_data(ipc_values);
             } else {
-                struct timeval tv;
-                gettimeofday(&tv, NULL);
-
-                if (glasses_calibration_started_sec == 0) {
-                    glasses_calibration_started_sec=tv.tv_sec;
-                    reset_imu_data(ipc_values);
-                } else {
-                    glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
-                    if (glasses_calibrated) printf("Device calibration complete\n");
-                }
+                glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
+                if (glasses_calibrated) printf("Device calibration complete\n");
             }
         }
-
-        handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
     }
+
+    handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
 }
 
-// pthread function to create the virtual controller and poll the glasses
-void *poll_glasses_imu(void *arg) {
+bool should_disconnect_device() {
+    return config->disabled || force_reset_threads;
+}
+
+// pthread function to create outputs and block on the device
+void *block_on_device_thread_func(void *arg) {
     fprintf(stdout, "Device connected, redirecting input to %s...\n", config->output_mode);
 
     init_outputs(device, config);
 
-    device3_clear(glasses_imu);
-    while (!config->disabled && !force_reset_threads) {
-        if (device3_read(glasses_imu, 1) != DEVICE3_ERROR_NO_ERROR) {
-            break;
-        }
-    }
+    device->block_on_device_func(should_disconnect_device);
 
-    device3_close(glasses_imu);
     glasses_ready=false;
     if (ipc_enabled) *ipc_values->disabled = true;
     deinit_outputs(config);
 
     if (config->debug_threads)
-        printf("\tdebug: Exiting glasses_imu thread\n");
+        printf("\tdebug: Exiting block_on_device thread\n");
 }
 
 // TODO - do this setup once from main() using the default ipc file prefix
@@ -296,7 +284,7 @@ void parse_config_file(FILE *fp) {
 }
 
 // pthread function to monitor the config file for changes
-void *monitor_config_file(void *arg) {
+void *monitor_config_file_thread_func(void *arg) {
     char filename[1024];
     FILE *fp = get_or_create_home_file(".xreal_driver_config", "r", &filename[0], NULL);
     if (!fp)
@@ -404,18 +392,18 @@ int main(int argc, const char** argv) {
 
     setup_ipc();
 
-    glasses_imu = malloc(sizeof(device3_type));
+
     while (1) {
-        int device_error = device3_open(glasses_imu, handle_imu_event);
-        if (device_error != DEVICE3_ERROR_NO_ERROR)
+        bool device_connected = device->device_connect_func(handle_imu_event);
+        if (!device_connected)
             printf("Waiting for glasses\n");
 
-        while (device_error != DEVICE3_ERROR_NO_ERROR) {
+        while (!device_connected) {
             // TODO - move to a blocking check, rather than polling for device availability
             // retry every 5 seconds until the device becomes available
-            device3_close(glasses_imu);
+            device->device_cleanup_func();
             sleep(5);
-            device_error = device3_open(glasses_imu, handle_imu_event);
+            device_connected = device->device_connect_func(handle_imu_event);
         }
 
         glasses_ready=true;
@@ -424,11 +412,11 @@ int main(int argc, const char** argv) {
         if (ipc_enabled) *ipc_values->disabled = false;
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
-        pthread_t glasses_imu_thread;
+        pthread_t device_thread;
         pthread_t monitor_config_file_thread;
-        pthread_create(&glasses_imu_thread, NULL, poll_glasses_imu, NULL);
-        pthread_create(&monitor_config_file_thread, NULL, monitor_config_file, NULL);
-        pthread_join(glasses_imu_thread, NULL);
+        pthread_create(&device_thread, NULL, block_on_device_thread_func, NULL);
+        pthread_create(&monitor_config_file_thread, NULL, monitor_config_file_thread_func, NULL);
+        pthread_join(device_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
 
         if (config->debug_threads)

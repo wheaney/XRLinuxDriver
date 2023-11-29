@@ -1,7 +1,7 @@
 #include "buffer.h"
 #include "config.h"
 #include "device.h"
-#include "device3.h"
+#include "imu.h"
 #include "files.h"
 #include "ipc.h"
 #include "outputs.h"
@@ -156,9 +156,9 @@ float degree_delta(float prev, float next) {
     return delta;
 }
 
-device3_vec3_type get_euler_deltas(device3_vec3_type euler) {
-    static device3_vec3_type prev_euler;
-    device3_vec3_type deltas = {
+imu_vector_type get_euler_deltas(imu_vector_type euler) {
+    static imu_vector_type prev_euler;
+    imu_vector_type deltas = {
         .x=degree_delta(prev_euler.z, euler.z),
         .y=degree_delta(prev_euler.y, euler.y),
         .z=degree_delta(prev_euler.x, euler.x)
@@ -168,8 +168,8 @@ device3_vec3_type get_euler_deltas(device3_vec3_type euler) {
     return deltas;
 }
 
-device3_vec3_type get_euler_velocities(device_properties_type *device, device3_vec3_type euler_deltas) {
-    device3_vec3_type velocities = {
+imu_vector_type get_euler_velocities(device_properties_type *device, imu_vector_type euler_deltas) {
+    imu_vector_type velocities = {
         .x=euler_deltas.x * device->imu_cycles_per_s,
         .y=euler_deltas.y * device->imu_cycles_per_s,
         .z=euler_deltas.z * device->imu_cycles_per_s
@@ -237,7 +237,7 @@ void deinit_outputs(driver_config_type *config) {
     }
 }
 
-void handle_imu_update(device3_quat_type quat, device3_vec3_type euler_deltas, device3_quat_type screen_center,
+void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_quat_type screen_center,
                        bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values, device_properties_type *device,
                        driver_config_type *config) {
     if (ipc_enabled) {
