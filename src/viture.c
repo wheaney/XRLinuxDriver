@@ -70,7 +70,7 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
         imu_quat_type quat = eulerToQuaternion(euler);
 
         viture_event_handler(timestamp, quat, euler);
-	}
+    }
 }
 
 void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t ts) {
