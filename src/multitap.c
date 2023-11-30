@@ -47,12 +47,12 @@ void init_multi_tap(int init_imu_cycles_per_s) {
 }
 
 // returns the number of taps observed
-int detect_multi_tap(imu_vector_type velocities, uint32_t timestamp, bool debug) {
+int detect_multi_tap(imu_euler_type velocities, uint32_t timestamp, bool debug) {
     if (mt_buffer) {
         // the oldest value is zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
         // push/pop, to know if the value returned will be relevant to our calculations
         bool was_full = is_full(mt_buffer);
-        float next_value = sqrt(velocities.x * velocities.x + velocities.y * velocities.y + velocities.z * velocities.z);
+        float next_value = sqrt(velocities.roll * velocities.roll + velocities.pitch * velocities.pitch + velocities.yaw * velocities.yaw);
         float oldest_value = push(mt_buffer, next_value);
 
         if (was_full) {

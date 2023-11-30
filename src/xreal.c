@@ -24,8 +24,6 @@ const char* device_name_air_1 = "XREAL Air";
 const char* device_name_air_2 = "XREAL Air 2";
 const char* device_name_air_2_pro = "XREAL Air 2 Pro";
 
-const imu_quat_type nwu_conversion_quat = {.x = 0, .y = 0, .z = 0.7071, .w = 0.7071};
-
 const device_properties_type xreal_air_properties = {
     .name                               = NULL,
     .hid_vendor_id                      = 0,
@@ -54,9 +52,8 @@ void handle_xreal_event(uint64_t timestamp,
     uint32_t elapsed_from_last_utilized = ts - last_utilized_event_ts;
     if (event == DEVICE3_EVENT_UPDATE && elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
         device3_quat_type quat = device3_get_orientation(ahrs);
-        imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
-        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, nwu_conversion_quat);
-        imu_vector_type nwu_euler = quaternion_to_euler(nwu_quat);
+        imu_quat_type nwu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
+        imu_euler_type nwu_euler = quaternion_to_euler(imu_quat);
         driver_handle_imu_event(ts, nwu_quat, nwu_euler);
 
         last_utilized_event_ts = ts;
@@ -125,11 +122,8 @@ device3_error_type xreal_device_read() {
 
 void xreal_block_on_device() {
     device3_clear(glasses_imu);
-    while (!driver_device_should_disconnect()) {
-        if (xreal_device_read() != DEVICE3_ERROR_NO_ERROR) {
-            break;
-        }
-    }
+    device3_calibrate(glasses_imu, 1000, true, true, false);
+    while (!driver_device_should_disconnect() && device3_read(glasses_imu, 1) == DEVICE3_ERROR_NO_ERROR);
 
     xreal_device_cleanup();
 };

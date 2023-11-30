@@ -69,10 +69,9 @@ void reset_calibration(bool reset_device) {
     } else if (ipc_enabled) printf("Waiting on device calibration\n");
 }
 
-void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vector_type euler) {
+void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler) {
     if (device) {
-        imu_vector_type euler_deltas = get_euler_deltas(euler);
-        imu_vector_type euler_velocities = get_euler_velocities(device, euler_deltas);
+        imu_euler_type euler_velocities = get_euler_velocities(device, euler);
 
         int multi_tap = detect_multi_tap(euler_velocities,
                                          timestamp_ms,
@@ -109,7 +108,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vect
             }
         }
 
-        handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
+        handle_imu_update(quat, euler_velocities, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
     }
 }
 
