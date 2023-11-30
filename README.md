@@ -6,7 +6,9 @@
 
 ## What is this?
 
-This driver allows your Linux device (including Steam Deck) to automatically recognize XREAL Air glasses when they're plugged in, and convert the accelerometer movements of the glasses into mouse movements that PC games can use.
+This driver allows your Linux device (including Steam Deck) to automatically recognize XREAL Air glasses when they're plugged in, and convert the accelerometer movements of the glasses into mouse movements that PC games can use. 
+
+If you're looking for a 3dof virtual display, this driver by itself does not provide that functionality; instead, see [Breezy](https://github.com/wheaney/breezy-desktop) or [use the Steam Deck plugin](#steam-deck-via-decky-loader) which installs Breezy under the hood.
 
 ## Before use
 
