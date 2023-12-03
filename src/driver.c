@@ -30,9 +30,9 @@
 #include <sys/time.h>
 
 #define NUM_SUPPORTED_DEVICE_DRIVERS 2
-const device_properties_type* device_drivers[NUM_SUPPORTED_DEVICE_DRIVERS] = {
-    &xreal_air_properties,
-    &viture_one_properties
+const device_driver_type* device_drivers[NUM_SUPPORTED_DEVICE_DRIVERS] = {
+    &xreal_driver,
+    &viture_driver
 };
 
 #define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
@@ -40,6 +40,7 @@ const device_properties_type* device_drivers[NUM_SUPPORTED_DEVICE_DRIVERS] = {
 #define MT_RESET_CALIBRATION 3
 
 driver_config_type *config;
+device_driver_type *device_driver;
 device_properties_type *device;
 ipc_values_type *ipc_values;
 
@@ -57,7 +58,7 @@ void reset_calibration(bool reset_device) {
     glasses_calibrated=false;
     captured_screen_center=false;
     if (reset_device) {
-        device->device_cleanup_func();
+        device_driver->device_cleanup_func();
         glasses_ready=false;
     }
 
@@ -107,7 +108,7 @@ void *block_on_device_thread_func(void *arg) {
 
     init_outputs(device, config);
 
-    device->block_on_device_func(should_disconnect_device);
+    device_driver->block_on_device_func(should_disconnect_device);
 
     glasses_ready=false;
     if (ipc_enabled) *ipc_values->disabled = true;
@@ -367,15 +368,15 @@ void *monitor_config_file_thread_func(void *arg) {
 
 bool search_for_device() {
     for (int i = 0; i < NUM_SUPPORTED_DEVICE_DRIVERS; i++) {
-        const device_properties_type *dev = device_drivers[i];
-        bool device_connected = dev->device_connect_func(handle_imu_event);
-        if (device_connected) {
-            init_multi_tap(dev->imu_cycles_per_s);
-            *device = *dev;
+        device_driver = device_drivers[i];
+        device = device_driver->device_connect_func(handle_imu_event);
+        if (device) {
+            init_multi_tap(device->imu_cycles_per_s);
 
             return true;
         } else {
-            dev->device_cleanup_func();
+            device_driver->device_cleanup_func();
+            device_driver = NULL;
         }
     }
 
@@ -384,7 +385,6 @@ bool search_for_device() {
 
 int main(int argc, const char** argv) {
     config = default_config();
-    device = malloc(sizeof(device_properties_type));
 
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];

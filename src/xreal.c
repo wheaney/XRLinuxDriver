@@ -1,7 +1,7 @@
 #include "device.h"
 #include "device3.h"
-#include "imu.h"
 #include "driver.h"
+#include "imu.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,6 +9,20 @@
 #include <stdlib.h>
 
 #define XREAL_TS_TO_MS_FACTOR 1000000
+
+const device_properties_type xreal_air_properties = {
+    .hid_vendor_id                      = 0,
+    .hid_product_id                     = 0,
+    .resolution_w                       = 1920,
+    .resolution_h                       = 1080,
+    .fov                                = 46.0,
+    .lens_distance_ratio                = 0.035,
+    .calibration_wait_s                 = 15,
+    .imu_cycles_per_s                   = 1000,
+    .imu_buffer_size                    = 10,
+    .look_ahead_constant                = 10.0,
+    .look_ahead_frametime_multiplier    = 0.3
+};
 
 imu_event_handler xreal_event_handler;
 void handle_xreal_event(uint64_t timestamp,
@@ -29,7 +43,7 @@ void handle_xreal_event(uint64_t timestamp,
 }
 
 device3_type* glasses_imu;
-bool xreal_device_connect(imu_event_handler handler) {
+device_properties_type* xreal_device_connect(imu_event_handler handler) {
     if (!glasses_imu) {
         glasses_imu = malloc(sizeof(device3_type));
     }
@@ -37,9 +51,18 @@ bool xreal_device_connect(imu_event_handler handler) {
     int device_error = device3_open(glasses_imu, handle_xreal_event);
 
     bool success = device_error == DEVICE3_ERROR_NO_ERROR;
-    if (success) xreal_event_handler = handler;
+    if (success) {
+        xreal_event_handler = handler;
+        device_properties_type* device = malloc(sizeof(device_properties_type));
+        *device = xreal_air_properties;
 
-    return success;
+        device->hid_product_id = glasses_imu->product_id;
+        device->hid_vendor_id = glasses_imu->vendor_id;
+
+        return device;
+    }
+
+    return NULL;
 };
 
 void xreal_device_cleanup() {
@@ -65,19 +88,10 @@ bool xreal_device_set_sbs_mode(bool enabled) {
     return false;
 };
 
-const device_properties_type xreal_air_properties = {
-    .resolution_w           = 1920,
-    .resolution_h           = 1080,
-    .fov                    = 46.0,
-    .lens_distance_ratio    = 0.035,
-    .calibration_wait_s     = 15,
-    .imu_cycles_per_s       = 1000,
-    .imu_buffer_size        = 10,
-    .look_ahead_constant    = 10.0,
-    .look_ahead_frametime_multiplier = 0.3,
-    .device_connect_func = xreal_device_connect,
-    .block_on_device_func = xreal_block_on_device,
-    .device_is_sbs_mode_func = xreal_device_is_sbs_mode,
-    .device_set_sbs_mode_func = xreal_device_set_sbs_mode,
-    .device_cleanup_func = xreal_device_cleanup
+const device_driver_type xreal_driver = {
+    .device_connect_func                = xreal_device_connect,
+    .block_on_device_func               = xreal_block_on_device,
+    .device_is_sbs_mode_func            = xreal_device_is_sbs_mode,
+    .device_set_sbs_mode_func           = xreal_device_set_sbs_mode,
+    .device_cleanup_func                = xreal_device_cleanup
 };

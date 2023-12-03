@@ -11,6 +11,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+const device_properties_type viture_one_properties = {
+    .hid_vendor_id                      = 0,
+    .hid_product_id                     = 0,
+    .resolution_w                       = 1920,
+    .resolution_h                       = 1080,
+    .fov                                = 46.0,
+    .lens_distance_ratio                = 0.035,
+    .calibration_wait_s                 = 1,
+    .imu_cycles_per_s                   = 60,
+    .imu_buffer_size                    = 1,
+    .look_ahead_constant                = 10.0,
+    .look_ahead_frametime_multiplier    = 0.3
+};
+
+const imu_quat_type conversion_quat = {.x = 0.5, .y = -0.5, .z = -0.5, .w = 0.5};
+
 static float makeFloat(uint8_t *data)
 {
 	float value = 0;
@@ -62,14 +78,16 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
         float eulerYaw = makeFloat(data + 8);
 
         imu_vector_type euler = {
-            .x = -eulerPitch,
-            .y = eulerYaw,
-            .z = -eulerRoll
+            .x = eulerRoll,
+            .y = eulerPitch,
+            .z = eulerYaw
         };
 
-        imu_quat_type quat = eulerToQuaternion(euler);
+        imu_quat_type imu_quat = eulerToQuaternion(euler);
+        imu_quat_type converted_quat = multiply_quaternions(imu_quat, conversion_quat);
+        imu_vector_type converted_euler = quaternion_to_euler(converted_quat);
 
-        viture_event_handler(timestamp, quat, euler);
+        viture_event_handler(timestamp, converted_quat, converted_euler);
     }
 }
 
@@ -77,14 +95,23 @@ void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t t
     // TODO
 }
 
-bool viture_device_connect(imu_event_handler handler) {
+device_properties_type* viture_device_connect(imu_event_handler handler) {
     bool success = init(handle_viture_event, viture_mcu_callback);
     if (success) {
         viture_event_handler = handler;
         set_imu(true);
+
+        device_properties_type* device = malloc(sizeof(device_properties_type));
+        *device = viture_one_properties;
+
+        // TODO - set these to the real values
+        device->hid_product_id = 0;
+        device->hid_vendor_id = 0;
+
+        return device;
     }
 
-    return success;
+    return NULL;
 };
 
 void viture_device_cleanup() {
@@ -108,19 +135,10 @@ bool viture_device_set_sbs_mode(bool enabled) {
     return set_3d(enabled);
 };
 
-const device_properties_type viture_one_properties = {
-    .resolution_w           = 1920,
-    .resolution_h           = 1080,
-    .fov                    = 46.0,
-    .lens_distance_ratio    = 0.035,
-    .calibration_wait_s     = 1,
-    .imu_cycles_per_s       = 60,
-    .imu_buffer_size        = 1,
-    .look_ahead_constant    = 10.0,
-    .look_ahead_frametime_multiplier = 0.3,
-    .device_connect_func = viture_device_connect,
-    .block_on_device_func = viture_block_on_device,
-    .device_is_sbs_mode_func = viture_device_is_sbs_mode,
-    .device_set_sbs_mode_func = viture_device_set_sbs_mode,
-    .device_cleanup_func = viture_device_cleanup
+const device_driver_type viture_driver = {
+    .device_connect_func                = viture_device_connect,
+    .block_on_device_func               = viture_block_on_device,
+    .device_is_sbs_mode_func            = viture_device_is_sbs_mode,
+    .device_set_sbs_mode_func           = viture_device_set_sbs_mode,
+    .device_cleanup_func                = viture_device_cleanup
 };
