@@ -243,6 +243,7 @@ void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_qua
     if (ipc_enabled) {
         // send keepalive every counter period
         if (imu_counter == 0) {
+//            printf("QUAT: %f %f %f %f\n", quat.w, quat.x, quat.y, quat.z);
             time_t now = time(NULL);
             struct tm *t = localtime(&now);
 

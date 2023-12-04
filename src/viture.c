@@ -25,9 +25,10 @@ const device_properties_type viture_one_properties = {
     .look_ahead_frametime_multiplier    = 0.3
 };
 
+// TODO - update shader so this can be converted to NWU
 const imu_quat_type conversion_quat = {.x = 0.5, .y = -0.5, .z = -0.5, .w = 0.5};
 
-static float makeFloat(uint8_t *data)
+static float float_from_imu_data(uint8_t *data)
 {
 	float value = 0;
 	uint8_t tem[4];
@@ -39,51 +40,22 @@ static float makeFloat(uint8_t *data)
 	return value;
 }
 
-float degToRad(float deg) {
-    return deg * M_PI / 180.0f;
-}
-
-imu_quat_type eulerToQuaternion(imu_vector_type euler) {
-    // Convert degrees to radians
-    float x = degToRad(euler.x);
-    float y = degToRad(euler.y);
-    float z = degToRad(euler.z);
-
-    imu_quat_type q;
-
-    // Compute the half angles
-    float cx = cos(x * 0.5f);
-    float cy = cos(y * 0.5f);
-    float cz = cos(z * 0.5f);
-    float sx = sin(x * 0.5f);
-    float sy = sin(y * 0.5f);
-    float sz = sin(z * 0.5f);
-
-    // Compute the quaternion components
-    q.w = cx * cy * cz + sx * sy * sz;
-    q.x = sx * cy * cz - cx * sy * sz;
-    q.y = cx * sy * cz + sx * cy * sz;
-    q.z = cx * cy * sz - sx * sy * cz;
-
-    return q;
-}
-
 imu_event_handler viture_event_handler;
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     if (!viture_event_handler) {
         fprintf(stderr, "viture_event_handler not initialized, device_connect should be called first\n");
     } else {
-        float eulerRoll = makeFloat(data);
-        float eulerPitch = makeFloat(data + 4);
-        float eulerYaw = makeFloat(data + 8);
+        float euler_roll = float_from_imu_data(data);
+        float euler_pitch = float_from_imu_data(data + 4);
+        float euler_yaw = float_from_imu_data(data + 8);
 
         imu_vector_type euler = {
-            .x = eulerRoll,
-            .y = eulerPitch,
-            .z = eulerYaw
+            .x = euler_roll,
+            .y = euler_pitch,
+            .z = euler_yaw
         };
 
-        imu_quat_type imu_quat = eulerToQuaternion(euler);
+        imu_quat_type imu_quat = euler_to_quaternion(euler);
         imu_quat_type converted_quat = multiply_quaternions(imu_quat, conversion_quat);
         imu_vector_type converted_euler = quaternion_to_euler(converted_quat);
 
