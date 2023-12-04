@@ -16,6 +16,11 @@
  *
  */
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // The result of Command into the glass like set_imu
 #define    ERR_SUCCESS  0
 #define    ERR_FAILURE  1
@@ -23,7 +28,7 @@
 #define    ERR_NOT_ENOUGH_MEMORY  3
 #define    ERR_UNSUPPORTED_CMD  4
 #define    ERR_CRC_MISMATCH  5
-#define    ERR_VER_MISMATCH  6  
+#define    ERR_VER_MISMATCH  6
 #define    ERR_MSG_ID_MISMATCH  7
 #define    ERR_MSG_STX_MISMATCH  8
 #define    ERR_CODE_NOT_WRITTEN  9
@@ -32,9 +37,14 @@
 #define STATE_OPEN 1
 #define STATE_OFF 0
 
+#define ERR_WRITE_FAIL -1
+#define ERR_RSP_ERROR -2
+#define ERR_TIMEOUT -3
+
+
 /**
  * Callback for IMU Data
- * data the first 12 byte is the data of IMU, others are reserved   
+ * data the first 12 byte is the data of IMU, others are reserved
  *	uint8_t eulerRoll[4];
  *	uint8_t eulerPitch[4];
  *	uint8_t eulerYaw[4];
@@ -71,7 +81,7 @@ int set_imu(bool onOff);
 
 /**
  * return the imu report state
- * 1 means the glass will report the imu data, 0 means not
+ * 1 means the glass will report the imu data, 0 means not, <0 means error
  */
 int get_imu_state();
 
@@ -83,8 +93,12 @@ int set_3d(bool onOff);
 
 /**
  * return the resolution state
- * 1 means 3840*1080, 0 means 1920*1080
+ * 1 means 3840*1080, 0 means 1920*1080, <0 means error
  */
 int get_3d_state();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //GLASSES_CONTROLLER_AIR_OTA_H
