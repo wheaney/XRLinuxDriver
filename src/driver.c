@@ -416,8 +416,8 @@ int main(int argc, const char** argv) {
                 first_device_search_attempt = false;
             }
 
-            // retry every 5 seconds until a device becomes available
-            sleep(5);
+            // retry every second until a device becomes available
+            sleep(1);
         }
 
         glasses_ready=true;

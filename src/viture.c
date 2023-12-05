@@ -1,7 +1,7 @@
 #include "device.h"
-#include "viture_one_sdk.h"
-#include "imu.h"
 #include "driver.h"
+#include "imu.h"
+#include "viture_one_sdk.h"
 
 #include <math.h>
 #include <unistd.h>
@@ -16,17 +16,14 @@ const device_properties_type viture_one_properties = {
     .hid_product_id                     = 0,
     .resolution_w                       = 1920,
     .resolution_h                       = 1080,
-    .fov                                = 46.0,
-    .lens_distance_ratio                = 0.035,
+    .fov                                = 40.0,
+    .lens_distance_ratio                = 0.0275,
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
     .imu_buffer_size                    = 1,
     .look_ahead_constant                = 10.0,
     .look_ahead_frametime_multiplier    = 0.3
 };
-
-// TODO - update shader so this can be converted to NWU
-const imu_quat_type conversion_quat = {.x = 0.5, .y = -0.5, .z = -0.5, .w = 0.5};
 
 static float float_from_imu_data(uint8_t *data)
 {
@@ -38,6 +35,33 @@ static float float_from_imu_data(uint8_t *data)
 	tem[3] = data[0];
 	memcpy(&value, tem, 4);
 	return value;
+}
+
+// VITURE seems to need ZXY ordering
+// used https://github.com/mrdoob/three.js/blob/dev/src/math/Quaternion.js#L222 as reference
+imu_quat_type zxy_euler_to_quaternion(imu_vector_type euler) {
+    // Convert degrees to radians
+    float x = degree_to_radian(euler.x);
+    float y = degree_to_radian(euler.y);
+    float z = degree_to_radian(euler.z);
+
+    // Compute the half angles
+    float cx = cos(x * 0.5f);
+    float cy = cos(y * 0.5f);
+    float cz = cos(z * 0.5f);
+    float sx = sin(x * 0.5f);
+    float sy = sin(y * 0.5f);
+    float sz = sin(z * 0.5f);
+
+    // Compute the quaternion components
+    imu_quat_type q = {
+        .x = sx * cy * cz - cx * sy * sz,
+        .y = cx * sy * cz + sx * cy * sz,
+        .z = cx * cy * sz + sx * sy * cz,
+        .w = cx * cy * cz - sx * sy * sz
+    };
+
+    return normalize_quaternion(q);
 }
 
 imu_event_handler viture_event_handler;
@@ -55,11 +79,9 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
             .z = euler_yaw
         };
 
-        imu_quat_type imu_quat = euler_to_quaternion(euler);
-        imu_quat_type converted_quat = multiply_quaternions(imu_quat, conversion_quat);
-        imu_vector_type converted_euler = quaternion_to_euler(converted_quat);
+        imu_quat_type quat = zxy_euler_to_quaternion(euler);
 
-        viture_event_handler(timestamp, converted_quat, converted_euler);
+        viture_event_handler(timestamp, quat, euler);
     }
 }
 
@@ -92,8 +114,14 @@ void viture_device_cleanup() {
 };
 
 void viture_block_on_device(should_disconnect_callback should_disconnect_func) {
-    while (!should_disconnect_func() && get_imu_state() == 1) {
+    int imu_state = get_imu_state();
+    while (!should_disconnect_func() && (imu_state == STATE_OPEN || imu_state == ERR_TIMEOUT)) {
         sleep(1);
+        imu_state = get_imu_state();
+    }
+
+    if (imu_state < 0) {
+        fprintf(stderr, "VITURE glasses error %d\n", imu_state);
     }
 
     viture_device_cleanup();
