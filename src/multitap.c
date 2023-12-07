@@ -18,20 +18,26 @@ int mt_buffer_size;
 int imu_cycles_per_s;
 buffer_type *mt_buffer = NULL;
 int mt_state = MT_STATE_IDLE;
-const float mt_detect_threshold = 2000.0;
+const float mt_detect_threshold = 1000.0;
 const float mt_pause_threshold = 100.0;
 uint64_t tap_start_time = 0;
 uint64_t pause_start_time = 0;
 uint64_t last_logged_peak_time = 0;
-const int max_tap_period_ms = 500; // longest time-frame to allow between tap starts/rises
-const int max_tap_rise_ms = 100; // a single tap should be very quick, ignore long accelerations
+const int max_tap_period_ms = 750; // longest time-frame to allow between tap starts/rises
+const int max_tap_duration_ms = 70; // a single tap should be very quick, ignore long accelerations
 const int min_pause_ms = 10; // must detect a pause (~0 acceleration) between taps
 float peak_max = 0.0;
 int tap_count = 0;
 
+float accel_adjust_constant;
+
 void init_multi_tap(int init_imu_cycles_per_s) {
     imu_cycles_per_s = init_imu_cycles_per_s;
-    mt_buffer_size = ceil((float)MT_BUFFER_MS / 1000.0 * imu_cycles_per_s);
+    float desired_buffer_size = (float)MT_BUFFER_MS / 1000.0 * imu_cycles_per_s;
+    mt_buffer_size = floor(desired_buffer_size);
+
+    // this is the ratio based on how much we had to round
+    accel_adjust_constant = (float)mt_buffer_size/desired_buffer_size;
 
     if (mt_buffer) {
         free(mt_buffer);
@@ -51,7 +57,7 @@ int detect_multi_tap(imu_vector_type velocities, uint32_t timestamp, bool debug)
 
         if (was_full) {
             // extrapolate out to seconds, so the threshold can stay the same regardless of buffer size
-            float acceleration = (next_value - oldest_value) * (float)imu_cycles_per_s / mt_buffer_size;
+            float acceleration = (next_value - oldest_value) * (float)imu_cycles_per_s / mt_buffer_size * accel_adjust_constant;
             int tap_elapsed_ms = timestamp - tap_start_time;
             if ((tap_count > 0 || mt_state != MT_STATE_IDLE) && tap_elapsed_ms > max_tap_period_ms) {
                 peak_max = 0.0;
@@ -83,21 +89,21 @@ int detect_multi_tap(imu_vector_type velocities, uint32_t timestamp, bool debug)
                     }
                     case MT_STATE_RISE: {
                         if (acceleration < 0) // accelerating in the opposite direction
-                            if (tap_elapsed_ms > max_tap_rise_ms) {
-                                if (debug) fprintf(stdout, "\tdebug: rise took %d, too long for a tap\n", tap_elapsed_ms);
+                            mt_state = MT_STATE_FALL;
+                        break;
+                    }
+                    case MT_STATE_FALL: {
+                        if (acceleration > 0) { // acceleration switches back, stopping the fall
+                            if (tap_elapsed_ms > max_tap_duration_ms) {
+                                if (debug) fprintf(stdout, "\tdebug: rise and fall took %d, too long for a tap\n", tap_elapsed_ms);
                                 peak_max = 0.0;
                                 mt_state = MT_STATE_IDLE;
                                 tap_count == 0;
                             } else {
                                 tap_count++;
-                                mt_state = MT_STATE_FALL;
+                                pause_start_time = timestamp;
+                                mt_state = MT_STATE_PAUSE;
                             }
-                        break;
-                    }
-                    case MT_STATE_FALL: {
-                        if (acceleration > 0) { // acceleration switches back, stopping the fall
-                            pause_start_time = timestamp;
-                            mt_state = MT_STATE_PAUSE;
                         }
                         break;
                     }

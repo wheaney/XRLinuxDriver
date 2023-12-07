@@ -7,6 +7,7 @@
 #include "multitap.h"
 #include "outputs.h"
 #include "strings.h"
+#include "viture.h"
 #include "xreal.h"
 
 #include <dirent.h>
@@ -28,11 +29,18 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define NUM_SUPPORTED_DEVICE_DRIVERS 2
+const device_driver_type* device_drivers[NUM_SUPPORTED_DEVICE_DRIVERS] = {
+    &xreal_driver,
+    &viture_driver
+};
+
 #define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 #define MT_RECENTER_SCREEN 2
 #define MT_RESET_CALIBRATION 3
 
 driver_config_type *config;
+device_driver_type *device_driver;
 device_properties_type *device;
 ipc_values_type *ipc_values;
 
@@ -50,7 +58,7 @@ void reset_calibration(bool reset_device) {
     glasses_calibrated=false;
     captured_screen_center=false;
     if (reset_device) {
-        device->device_cleanup_func();
+        device_driver->device_cleanup_func();
         glasses_ready=false;
     }
 
@@ -100,7 +108,7 @@ void *block_on_device_thread_func(void *arg) {
 
     init_outputs(device, config);
 
-    device->block_on_device_func(should_disconnect_device);
+    device_driver->block_on_device_func(should_disconnect_device);
 
     glasses_ready=false;
     if (ipc_enabled) *ipc_values->disabled = true;
@@ -110,7 +118,6 @@ void *block_on_device_thread_func(void *arg) {
         printf("\tdebug: Exiting block_on_device thread\n");
 }
 
-// TODO - do this setup once from main() using the default ipc file prefix
 void setup_ipc() {
     bool not_external_only = config->output_mode && !is_external_mode(config);
     if (!ipc_enabled) {
@@ -118,30 +125,6 @@ void setup_ipc() {
         if (!ipc_values) ipc_values = malloc(sizeof(*ipc_values));
         if (setup_ipc_values(ipc_values, config->debug_ipc)) {
             ipc_enabled = true;
-
-            reset_imu_data(ipc_values);
-
-            // set IPC values that won't change
-            // TODO - move this to a plug-in system, allow for adding different devices
-            ipc_values->display_res[0]        = device->resolution_w;
-            ipc_values->display_res[1]        = device->resolution_h;
-            *ipc_values->display_fov          = device->fov;
-            *ipc_values->lens_distance_ratio  = device->lens_distance_ratio;
-            *ipc_values->imu_data_period      = 1000.0 * (float)device->imu_buffer_size / device->imu_cycles_per_s;
-
-            // always start out disabled, let it be explicitly enabled later
-            *ipc_values->disabled             = true;
-
-            // set defaults for everything else
-            *ipc_values->zoom                 = config->external_zoom;
-            ipc_values->look_ahead_cfg[0]     = config->look_ahead_override == 0 ?
-                                                    device->look_ahead_constant : config->look_ahead_override;
-            ipc_values->look_ahead_cfg[1]     = config->look_ahead_override == 0 ?
-                                                    device->look_ahead_frametime_multiplier : 0.0;
-            ipc_values->date[0]               = 0.0;
-            ipc_values->date[1]               = 0.0;
-            ipc_values->date[2]               = 0.0;
-            ipc_values->date[3]               = 0.0;
 
             if (not_external_only) {
                 if (config->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config->output_mode);
@@ -161,6 +144,31 @@ void setup_ipc() {
         } else {
             if (config->debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
         }
+    }
+
+    if (ipc_enabled) {
+        reset_imu_data(ipc_values);
+
+        // set IPC values that won't change after a device is set
+        ipc_values->display_res[0]        = device->resolution_w;
+        ipc_values->display_res[1]        = device->resolution_h;
+        *ipc_values->display_fov          = device->fov;
+        *ipc_values->lens_distance_ratio  = device->lens_distance_ratio;
+        *ipc_values->imu_data_period      = 1000.0 * (float)device->imu_buffer_size / device->imu_cycles_per_s;
+
+        // always start out disabled, let it be explicitly enabled later
+        *ipc_values->disabled             = true;
+
+        // set defaults for everything else
+        *ipc_values->zoom                 = config->external_zoom;
+        ipc_values->look_ahead_cfg[0]     = config->look_ahead_override == 0 ?
+                                                device->look_ahead_constant : config->look_ahead_override;
+        ipc_values->look_ahead_cfg[1]     = config->look_ahead_override == 0 ?
+                                                device->look_ahead_frametime_multiplier : 0.0;
+        ipc_values->date[0]               = 0.0;
+        ipc_values->date[1]               = 0.0;
+        ipc_values->date[2]               = 0.0;
+        ipc_values->date[3]               = 0.0;
     }
 }
 
@@ -209,7 +217,7 @@ void update_config_from_file(FILE *fp) {
     update_config(&config, new_config);
 
     if (output_mode_changed)
-        // this will trigger another call to setup_ipc() before the next time the threads restart
+        // do this to trigger another call to setup_ipc() before the next time the threads restart
         force_reset_threads = true;
 
     if (ipc_enabled) {
@@ -301,15 +309,25 @@ void *monitor_config_file_thread_func(void *arg) {
     close(fd);
 }
 
-void set_device(const device_properties_type dev) {
-    *device = dev;
-    init_multi_tap(device->imu_cycles_per_s);
+bool search_for_device() {
+    for (int i = 0; i < NUM_SUPPORTED_DEVICE_DRIVERS; i++) {
+        device_driver = device_drivers[i];
+        device = device_driver->device_connect_func(handle_imu_event);
+        if (device) {
+            init_multi_tap(device->imu_cycles_per_s);
+
+            return true;
+        } else {
+            device_driver->device_cleanup_func();
+            device_driver = NULL;
+        }
+    }
+
+    return false;
 }
 
 int main(int argc, const char** argv) {
     config = default_config();
-    device = malloc(sizeof(device_properties_type));
-    set_device(xreal_air_properties);
 
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];
@@ -333,20 +351,16 @@ int main(int argc, const char** argv) {
         exit(1);
     }
 
-    setup_ipc();
-
-
     while (1) {
-        bool device_connected = device->device_connect_func(handle_imu_event);
-        if (!device_connected)
-            printf("Waiting for glasses\n");
+        bool first_device_search_attempt = true;
+        while (!search_for_device()) {
+            if (first_device_search_attempt) {
+                printf("Waiting for glasses\n");
+                first_device_search_attempt = false;
+            }
 
-        while (!device_connected) {
-            // TODO - move to a blocking check, rather than polling for device availability
-            // retry every 5 seconds until the device becomes available
-            device->device_cleanup_func();
-            sleep(5);
-            device_connected = device->device_connect_func(handle_imu_event);
+            // retry every second until a device becomes available
+            sleep(1);
         }
 
         glasses_ready=true;
