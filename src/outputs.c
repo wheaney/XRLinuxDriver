@@ -194,7 +194,7 @@ void init_outputs(device_properties_type *device, driver_config_type *config) {
         absinfo.fuzz = 0;
 
         evdev_check("libevdev_enable_property", libevdev_enable_property(evdev, INPUT_PROP_BUTTONPAD));
-        libevdev_set_name(evdev, "XREAL Air virtual joystick");
+        libevdev_set_name(evdev, "XR virtual joystick");
         evdev_check("libevdev_enable_event_type", libevdev_enable_event_type(evdev, EV_ABS));
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_ABS, ABS_X, &absinfo));
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_ABS, ABS_Y, &absinfo));
@@ -210,7 +210,7 @@ void init_outputs(device_properties_type *device, driver_config_type *config) {
 
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
     } else if (is_mouse_mode(config)) {
-        libevdev_set_name(evdev, "XREAL Air virtual mouse");
+        libevdev_set_name(evdev, "XR virtual mouse");
 
         evdev_check("libevdev_enable_event_type", libevdev_enable_event_type(evdev, EV_REL));
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_REL, REL_X, NULL));
