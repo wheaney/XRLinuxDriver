@@ -141,7 +141,7 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
 // the diff is 2 (-179 is equivalent to 181). This function takes the diff and then adjusts it if it detects
 // that we've crossed the +/-180 threshold.
 float degree_delta(float prev, float next) {
-    float delta = fmod(prev - next, 360);
+    float delta = fmod(next - prev, 360);
     if (isnan(delta)) {
         printf("nan value");
         exit(1);
@@ -159,9 +159,9 @@ float degree_delta(float prev, float next) {
 imu_vector_type get_euler_deltas(imu_vector_type euler) {
     static imu_vector_type prev_euler;
     imu_vector_type deltas = {
-        .x=degree_delta(prev_euler.z, euler.z),
+        .x=degree_delta(prev_euler.x, euler.x),
         .y=degree_delta(prev_euler.y, euler.y),
-        .z=degree_delta(prev_euler.x, euler.x)
+        .z=degree_delta(prev_euler.z, euler.z)
     };
     prev_euler = euler;
 
@@ -309,14 +309,21 @@ void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_qua
         }
     }
 
-    int next_joystick_x = joystick_value(euler_deltas.x, joystick_max_degrees);
+    // euler x/y/z values are roll/pitch/yaw, respectively, which for tracking head movements against 2d joystick/mouse
+    // (x,y) coordinates means that yaw/euler.z maps to horizontal movements (x) and pitch/euler.y maps to vertical (y)
+    // movements. Because the euler values use a NWU coordinate system, positive yaw/pitch values move left/down,
+    // respectively, and the mouse/joystick coordinate systems are right-down, so a positive yaw should result in a
+    // negative x, and a positive pitch should result in a positive y.
+    int next_joystick_x = joystick_value(-euler_deltas.z, joystick_max_degrees);
     int next_joystick_y = joystick_value(euler_deltas.y, joystick_max_degrees);
 
     if (uinput) {
         if (is_joystick_mode(config)) {
+            int next_joystick_z = joystick_value(-euler_deltas.x, joystick_max_degrees);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
-            libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(euler_deltas.z, joystick_max_degrees));
+            if (config->use_roll_axis)
+                libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, next_joystick_z);
         } else if (is_mouse_mode(config)) {
             // keep track of the remainder (the amount that was lost with round()) for smoothing out mouse movements
             static float mouse_x_remainder = 0.0;
@@ -324,7 +331,7 @@ void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_qua
             static float mouse_z_remainder = 0.0;
 
             // smooth out the mouse values using the remainders left over from previous writes
-            float next_x = euler_deltas.x * config->mouse_sensitivity + mouse_x_remainder;
+            float next_x = -euler_deltas.z * config->mouse_sensitivity + mouse_x_remainder;
             int next_x_int = round(next_x);
             mouse_x_remainder = next_x - next_x_int;
 
@@ -332,7 +339,7 @@ void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_qua
             int next_y_int = round(next_y);
             mouse_y_remainder = next_y - next_y_int;
 
-            float next_z = euler_deltas.z * config->mouse_sensitivity + mouse_z_remainder;
+            float next_z = -euler_deltas.x * config->mouse_sensitivity + mouse_z_remainder;
             int next_z_int = round(next_z);
             mouse_z_remainder = next_z - next_z_int;
 

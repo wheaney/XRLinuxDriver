@@ -100,6 +100,7 @@ int detect_multi_tap(imu_vector_type velocities, uint32_t timestamp, bool debug)
                                 mt_state = MT_STATE_IDLE;
                                 tap_count == 0;
                             } else {
+                                if (debug) fprintf(stdout, "\tdebug: rise and fall took %d\n", tap_elapsed_ms);
                                 tap_count++;
                                 pause_start_time = timestamp;
                                 mt_state = MT_STATE_PAUSE;
