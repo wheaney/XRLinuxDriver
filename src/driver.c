@@ -9,24 +9,24 @@
 #include "strings.h"
 #include "xreal.h"
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <sys/wait.h>
-#include <sys/ioctl.h>
-#include <limits.h>
-#include <sys/inotify.h>
-#include <libgen.h>
-#include <sys/stat.h>
-#include <sys/file.h>
-#include <unistd.h>
-#include <string.h>
 #include <dirent.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <libgen.h>
+#include <limits.h>
 #include <math.h>
 #include <pthread.h>
-#include <inttypes.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/file.h>
+#include <sys/inotify.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 #define MT_RECENTER_SCREEN 2
@@ -164,65 +164,8 @@ void setup_ipc() {
     }
 }
 
-void parse_config_file(FILE *fp) {
-    driver_config_type *new_config = default_config();
-
-    char line[1024];
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        char *key = strtok(line, "=");
-        char *value = strtok(NULL, "\n");
-        if (strcmp(key, "disabled") == 0) {
-            new_config->disabled = strcmp(value, "true") == 0;
-        } else if (strcmp(key, "debug") == 0) {
-            char *token = strtok(value, ",");
-            while (token != NULL) {
-                if (strcmp(token, "joystick") == 0) {
-                    new_config->debug_joystick = true;
-                }
-                if (strcmp(token, "taps") == 0) {
-                    new_config->debug_multi_tap = true;
-                }
-                if (strcmp(token, "threads") == 0) {
-                    new_config->debug_threads = true;
-                }
-                if (strcmp(token, "ipc") == 0) {
-                    new_config->debug_ipc = true;
-                }
-                token = strtok(NULL, ",");
-            }
-        } else if (strcmp(key, "use_roll_axis") == 0) {
-            new_config->use_roll_axis = true;
-        } else if (strcmp(key, "mouse_sensitivity") == 0) {
-            char *endptr;
-            errno = 0;
-            long num = strtol(value, &endptr, 10);
-            if (errno != ERANGE && endptr != value) {
-                new_config->mouse_sensitivity = (int) num;
-            } else {
-                fprintf(stderr, "Error parsing mouse_sensitivity value: %s\n", value);
-            }
-        } else if (strcmp(key, "look_ahead") == 0) {
-            char *endptr;
-            errno = 0;
-            float num = strtof(value, &endptr);
-            if (errno != ERANGE && endptr != value) {
-                new_config->look_ahead_override = num;
-            } else {
-                fprintf(stderr, "Error parsing look_ahead value: %s\n", value);
-            }
-        } else if (strcmp(key, "external_zoom") == 0) {
-            char *endptr;
-            errno = 0;
-            float num = strtof(value, &endptr);
-            if (errno != ERANGE && endptr != value) {
-                new_config->external_zoom = num;
-            } else {
-                fprintf(stderr, "Error parsing external_zoom value: %s\n", value);
-            }
-        } else if (strcmp(key, "output_mode") == 0) {
-            copy_string(value, &new_config->output_mode, strlen(value) + 1);
-        }
-    }
+void update_config_from_file(FILE *fp) {
+    driver_config_type* new_config = parse_config_file(fp);
 
     if (!config->disabled && new_config->disabled)
         printf("Driver has been disabled\n");
@@ -290,7 +233,7 @@ void *monitor_config_file_thread_func(void *arg) {
     if (!fp)
         return NULL;
 
-    parse_config_file(fp);
+    update_config_from_file(fp);
 
     int fd = inotify_init();
     if (fd < 0) {
@@ -343,7 +286,7 @@ void *monitor_config_file_thread_func(void *arg) {
                     }
                 } else {
                     fp = freopen(filename, "r", fp);
-                    parse_config_file(fp);
+                    update_config_from_file(fp);
                 }
                 i += EVENT_SIZE + event->len;
             }

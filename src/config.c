@@ -2,13 +2,13 @@
 #include "device.h"
 #include "string.h"
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 
 const char *joystick_output_mode = "joystick";
 const char *mouse_output_mode = "mouse";
 const char *external_only_output_mode = "external_only";
-
 
 driver_config_type *default_config() {
     driver_config_type *config = malloc(sizeof(driver_config_type));
@@ -37,6 +37,69 @@ void update_config(driver_config_type **config, driver_config_type *new_config) 
     free((*config)->output_mode);
     free(*config);
     *config = new_config;
+}
+
+driver_config_type* parse_config_file(FILE *fp) {
+    driver_config_type *config = default_config();
+
+    char line[1024];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        char *key = strtok(line, "=");
+        char *value = strtok(NULL, "\n");
+        if (strcmp(key, "disabled") == 0) {
+            config->disabled = strcmp(value, "true") == 0;
+        } else if (strcmp(key, "debug") == 0) {
+            char *token = strtok(value, ",");
+            while (token != NULL) {
+                if (strcmp(token, "joystick") == 0) {
+                    config->debug_joystick = true;
+                }
+                if (strcmp(token, "taps") == 0) {
+                    config->debug_multi_tap = true;
+                }
+                if (strcmp(token, "threads") == 0) {
+                    config->debug_threads = true;
+                }
+                if (strcmp(token, "ipc") == 0) {
+                    config->debug_ipc = true;
+                }
+                token = strtok(NULL, ",");
+            }
+        } else if (strcmp(key, "use_roll_axis") == 0) {
+            config->use_roll_axis = true;
+        } else if (strcmp(key, "mouse_sensitivity") == 0) {
+            char *endptr;
+            errno = 0;
+            long num = strtol(value, &endptr, 10);
+            if (errno != ERANGE && endptr != value) {
+                config->mouse_sensitivity = (int) num;
+            } else {
+                fprintf(stderr, "Error parsing mouse_sensitivity value: %s\n", value);
+            }
+        } else if (strcmp(key, "look_ahead") == 0) {
+            char *endptr;
+            errno = 0;
+            float num = strtof(value, &endptr);
+            if (errno != ERANGE && endptr != value) {
+                config->look_ahead_override = num;
+            } else {
+                fprintf(stderr, "Error parsing look_ahead value: %s\n", value);
+            }
+        } else if (strcmp(key, "external_zoom") == 0) {
+            char *endptr;
+            errno = 0;
+            float num = strtof(value, &endptr);
+            if (errno != ERANGE && endptr != value) {
+                config->external_zoom = num;
+            } else {
+                fprintf(stderr, "Error parsing external_zoom value: %s\n", value);
+            }
+        } else if (strcmp(key, "output_mode") == 0) {
+            copy_string(value, &config->output_mode, strlen(value) + 1);
+        }
+    }
+
+    return config;
 }
 
 bool is_joystick_mode(driver_config_type *config) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdio.h>
 
 struct driver_config_t {
     bool disabled;
@@ -24,6 +25,7 @@ extern const char *external_only_output_mode;
 
 driver_config_type *default_config();
 void update_config(driver_config_type **config, driver_config_type *new_config);
+driver_config_type* parse_config_file(FILE *fp);
 
 bool is_joystick_mode(driver_config_type *config);
 bool is_mouse_mode(driver_config_type *config);
