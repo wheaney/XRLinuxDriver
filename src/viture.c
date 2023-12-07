@@ -12,8 +12,8 @@
 #include <string.h>
 
 const device_properties_type viture_one_properties = {
-    .hid_vendor_id                      = 0,
-    .hid_product_id                     = 0,
+    .hid_vendor_id                      = 0x35ca,
+    .hid_product_id                     = 0x1011,
     .resolution_w                       = 1920,
     .resolution_h                       = 1080,
     .fov                                = 40.0,
