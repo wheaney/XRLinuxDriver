@@ -13,6 +13,7 @@ buffer_type *create_buffer(int size) {
     buffer->values = malloc(size * sizeof(float));
     if (buffer->values == NULL) {
         free(buffer);
+        buffer = NULL;
         return NULL;
     }
     buffer->index = 0;

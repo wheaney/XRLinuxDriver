@@ -18,6 +18,7 @@ extern const char *lens_distance_ratio_ipc_name;
 extern const char *zoom_ipc_name;
 extern const char *disabled_ipc_name;
 extern const char *date_ipc_name;
+extern const char *sbs_enabled_name;
 
 struct ipc_values_t {
     float *imu_data;
@@ -30,6 +31,7 @@ struct ipc_values_t {
     float *zoom;
     bool *disabled;
     float *date;
+    bool *sbs_enabled;
 };
 
 typedef struct ipc_values_t ipc_values_type;

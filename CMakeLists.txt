@@ -35,6 +35,7 @@ add_executable(xrealAirLinuxDriver
 		src/ipc.c
 		src/multitap.c
 		src/outputs.c
+		src/state.c
 		src/strings.c
 		src/viture.c
 		src/xreal.c
