@@ -12,8 +12,10 @@
 #include <string.h>
 
 const device_properties_type viture_one_properties = {
+    .name                               = "VITURE One",
     .hid_vendor_id                      = 0x35ca,
     .hid_product_id                     = 0x1011,
+    .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
     .resolution_w                       = 1920,
     .resolution_h                       = 1080,
     .fov                                = 40.0,
@@ -22,7 +24,8 @@ const device_properties_type viture_one_properties = {
     .imu_cycles_per_s                   = 60,
     .imu_buffer_size                    = 1,
     .look_ahead_constant                = 10.0,
-    .look_ahead_frametime_multiplier    = 0.3
+    .look_ahead_frametime_multiplier    = 0.3,
+    .sbs_mode_supported                 = true
 };
 
 static float float_from_imu_data(uint8_t *data)
@@ -64,43 +67,33 @@ imu_quat_type zxy_euler_to_quaternion(imu_vector_type euler) {
     return normalize_quaternion(q);
 }
 
-imu_event_handler viture_event_handler;
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
-    if (!viture_event_handler) {
-        fprintf(stderr, "viture_event_handler not initialized, device_connect should be called first\n");
-    } else {
-        float euler_roll = float_from_imu_data(data);
-        float euler_pitch = float_from_imu_data(data + 4);
-        float euler_yaw = float_from_imu_data(data + 8);
+    float euler_roll = float_from_imu_data(data);
+    float euler_pitch = float_from_imu_data(data + 4);
+    float euler_yaw = float_from_imu_data(data + 8);
 
-        imu_vector_type euler = {
-            .x = euler_roll,
-            .y = euler_pitch,
-            .z = euler_yaw
-        };
+    imu_vector_type euler = {
+        .x = euler_roll,
+        .y = euler_pitch,
+        .z = euler_yaw
+    };
 
-        imu_quat_type quat = zxy_euler_to_quaternion(euler);
+    imu_quat_type quat = zxy_euler_to_quaternion(euler);
 
-        viture_event_handler(timestamp, quat, euler);
-    }
+    driver_handle_imu_event(timestamp, quat, euler);
 }
 
 void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t ts) {
     // TODO
 }
 
-device_properties_type* viture_device_connect(imu_event_handler handler) {
+device_properties_type* viture_device_connect() {
     bool success = init(handle_viture_event, viture_mcu_callback);
     if (success) {
-        viture_event_handler = handler;
         set_imu(true);
 
         device_properties_type* device = malloc(sizeof(device_properties_type));
         *device = viture_one_properties;
-
-        // TODO - set these to the real values
-        device->hid_product_id = 0;
-        device->hid_vendor_id = 0;
 
         return device;
     }
@@ -113,9 +106,9 @@ void viture_device_cleanup() {
     deinit();
 };
 
-void viture_block_on_device(should_disconnect_callback should_disconnect_func) {
+void viture_block_on_device() {
     int imu_state = get_imu_state();
-    while (!should_disconnect_func() && (imu_state == STATE_OPEN || imu_state == ERR_TIMEOUT)) {
+    while (!driver_device_should_disconnect() && (imu_state == STATE_OPEN || imu_state == ERR_TIMEOUT)) {
         sleep(1);
         imu_state = get_imu_state();
     }
@@ -139,6 +132,5 @@ const device_driver_type viture_driver = {
     .device_connect_func                = viture_device_connect,
     .block_on_device_func               = viture_block_on_device,
     .device_is_sbs_mode_func            = viture_device_is_sbs_mode,
-    .device_set_sbs_mode_func           = viture_device_set_sbs_mode,
-    .device_cleanup_func                = viture_device_cleanup
+    .device_set_sbs_mode_func           = viture_device_set_sbs_mode
 };

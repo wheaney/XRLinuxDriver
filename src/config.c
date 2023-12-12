@@ -28,7 +28,7 @@ driver_config_type *default_config() {
     config->debug_multi_tap = false;
     config->debug_ipc = false;
 
-    copy_string(mouse_output_mode, &config->output_mode, strlen(mouse_output_mode) + 1);
+    copy_string(mouse_output_mode, &config->output_mode);
 
     return config;
 }
@@ -95,7 +95,7 @@ driver_config_type* parse_config_file(FILE *fp) {
                 fprintf(stderr, "Error parsing external_zoom value: %s\n", value);
             }
         } else if (strcmp(key, "output_mode") == 0) {
-            copy_string(value, &config->output_mode, strlen(value) + 1);
+            copy_string(value, &config->output_mode);
         }
     }
 

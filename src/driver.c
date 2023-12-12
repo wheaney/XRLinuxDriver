@@ -6,6 +6,7 @@
 #include "ipc.h"
 #include "multitap.h"
 #include "outputs.h"
+#include "state.h"
 #include "strings.h"
 #include "viture.h"
 #include "xreal.h"
@@ -49,6 +50,8 @@ bool glasses_ready=false;
 bool glasses_calibrated=false;
 long int glasses_calibration_started_sec=0;
 bool force_reset_threads=false;
+driver_state_type *state;
+control_flags_type *control_flags;
 
 bool captured_screen_center=false;
 imu_quat_type screen_center;
@@ -57,49 +60,63 @@ void reset_calibration(bool reset_device) {
     glasses_calibration_started_sec=0;
     glasses_calibrated=false;
     captured_screen_center=false;
+    control_flags->recalibrate=false;
+    state->calibration_state = CALIBRATING;
+
     if (reset_device) {
-        device_driver->device_cleanup_func();
+        // trigger all threads to exit, this will cause the device thread to close the device and eventually re-open it
         glasses_ready=false;
     }
 
     if (glasses_ready && ipc_enabled) printf("Waiting on device calibration\n");
 }
 
-void handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vector_type euler) {
-    imu_vector_type euler_deltas = get_euler_deltas(euler);
-    imu_vector_type euler_velocities = get_euler_velocities(device, euler_deltas);
+void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vector_type euler) {
+    if (device) {
+        imu_vector_type euler_deltas = get_euler_deltas(euler);
+        imu_vector_type euler_velocities = get_euler_velocities(device, euler_deltas);
 
-    int multi_tap = detect_multi_tap(euler_velocities,
-                                     timestamp_ms,
-                                     config->debug_multi_tap);
-    if (multi_tap == MT_RESET_CALIBRATION) reset_calibration(true);
-    if (ipc_enabled) {
-        if (glasses_calibrated) {
-            if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN) {
-                if (captured_screen_center) printf("Double-tap detected, centering screen\n");
-
-                screen_center = quat;
-                captured_screen_center=true;
+        int multi_tap = detect_multi_tap(euler_velocities,
+                                         timestamp_ms,
+                                         config->debug_multi_tap);
+        if (ipc_enabled) {
+            if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
+                if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
+                printf("Kicking off calibration\n");
+                reset_calibration(true);
             }
-        } else {
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
+            if (glasses_calibrated) {
+                if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
+                    if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
+                    printf("Centering screen\n");
 
-            if (glasses_calibration_started_sec == 0) {
-                glasses_calibration_started_sec=tv.tv_sec;
-                reset_imu_data(ipc_values);
+                    screen_center = quat;
+                    captured_screen_center=true;
+                    control_flags->recenter_screen=false;
+                }
             } else {
-                glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
-                if (glasses_calibrated) printf("Device calibration complete\n");
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+
+                if (glasses_calibration_started_sec == 0) {
+                    glasses_calibration_started_sec=tv.tv_sec;
+                    reset_imu_data(ipc_values);
+                } else {
+                    glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
+                    if (glasses_calibrated) {
+                        state->calibration_state = CALIBRATED;
+                        printf("Device calibration complete\n");
+                    }
+                }
             }
         }
-    }
 
-    handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
+        handle_imu_update(quat, euler_deltas, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
+    }
 }
 
-bool should_disconnect_device() {
-    return config->disabled || force_reset_threads;
+bool driver_device_should_disconnect() {
+    return !glasses_ready || config->disabled || force_reset_threads;
 }
 
 // pthread function to create outputs and block on the device
@@ -108,14 +125,16 @@ void *block_on_device_thread_func(void *arg) {
 
     init_outputs(device, config);
 
-    device_driver->block_on_device_func(should_disconnect_device);
+    device_driver->block_on_device_func();
 
     glasses_ready=false;
+
     if (ipc_enabled) *ipc_values->disabled = true;
     deinit_outputs(config);
 
     if (config->debug_threads)
-        printf("\tdebug: Exiting block_on_device thread\n");
+        printf("\tdebug: Exiting block_on_device thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
+            glasses_ready, config->disabled, force_reset_threads);
 }
 
 void setup_ipc() {
@@ -235,21 +254,16 @@ void update_config_from_file(FILE *fp) {
 }
 
 // pthread function to monitor the config file for changes
+char config_filename[1024];
+FILE *config_fp;
 void *monitor_config_file_thread_func(void *arg) {
-    char filename[1024];
-    FILE *fp = get_or_create_home_file(".xreal_driver_config", "r", &filename[0], NULL);
-    if (!fp)
-        return NULL;
-
-    update_config_from_file(fp);
-
     int fd = inotify_init();
     if (fd < 0) {
         perror("Error initializing inotify");
         return NULL;
     }
 
-    int wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+    int wd = inotify_add_watch(fd, config_filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
     if (wd < 0) {
         perror("Error adding watch");
         return NULL;
@@ -287,14 +301,14 @@ void *monitor_config_file_thread_func(void *arg) {
                 struct inotify_event *event = (struct inotify_event *) &buffer[i];
                 if (event->mask & IN_DELETE_SELF) {
                     // The file has been deleted, so we need to re-add the watch
-                    wd = inotify_add_watch(fd, filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+                    wd = inotify_add_watch(fd, config_filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
                     if (wd < 0) {
                         perror("Error re-adding watch");
                         return NULL;
                     }
                 } else {
-                    fp = freopen(filename, "r", fp);
-                    update_config_from_file(fp);
+                    config_fp = freopen(config_filename, "r", config_fp);
+                    update_config_from_file(config_fp);
                 }
                 i += EVENT_SIZE + event->len;
             }
@@ -302,23 +316,55 @@ void *monitor_config_file_thread_func(void *arg) {
     }
 
     if (config->debug_threads)
-        printf("\tdebug: Exiting monitor_config_file thread\n");
+        printf("\tdebug: Exiting monitor_config_file thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
+            glasses_ready, config->disabled, force_reset_threads);
 
-    fclose(fp);
     inotify_rm_watch(fd, wd);
     close(fd);
+}
+
+// pthread function to update the state and read control flags
+void *manage_state_thread_func(void *arg) {
+    struct timeval tv;
+    while (glasses_ready && !force_reset_threads) {
+        // sleep first so that any state changes that occur while we're sleeping will still get saved, even if an exit
+        // condition is met
+        sleep(1);
+
+        gettimeofday(&tv, NULL);
+        state->heartbeat = tv.tv_sec;
+        state->sbs_mode_enabled = device_driver->device_is_sbs_mode_func();
+        update_state(state);
+        read_control_flags(control_flags);
+        if (control_flags->sbs_mode != SBS_CONTROL_UNSET) {
+            bool enable = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
+            if (ipc_enabled) {
+                // this should reflect the real-world state, not the state requested by the control flag
+                *ipc_values->sbs_enabled = state->sbs_mode_enabled;
+            }
+            device_driver->device_set_sbs_mode_func(enable);
+        }
+    }
+
+    if (config->debug_threads)
+        printf("\tdebug: Exiting write_state thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
+                                                               glasses_ready, config->disabled, force_reset_threads);
 }
 
 bool search_for_device() {
     for (int i = 0; i < NUM_SUPPORTED_DEVICE_DRIVERS; i++) {
         device_driver = device_drivers[i];
-        device = device_driver->device_connect_func(handle_imu_event);
+        device = device_driver->device_connect_func();
         if (device) {
             init_multi_tap(device->imu_cycles_per_s);
+            copy_string(device->name, &state->connected_device_name);
+            state->calibration_setup = device->calibration_setup;
+            state->calibration_state = NOT_CALIBRATED;
+            state->sbs_mode_supported = device->sbs_mode_supported;
+            state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
 
             return true;
         } else {
-            device_driver->device_cleanup_func();
             device_driver = NULL;
         }
     }
@@ -328,6 +374,12 @@ bool search_for_device() {
 
 int main(int argc, const char** argv) {
     config = default_config();
+    config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
+    update_config_from_file(config_fp);
+
+    state = malloc(sizeof(state));
+    control_flags = malloc(sizeof(control_flags_type));
+    read_control_flags(control_flags);
 
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];
@@ -354,6 +406,9 @@ int main(int argc, const char** argv) {
     while (1) {
         bool first_device_search_attempt = true;
         while (!search_for_device()) {
+            // don't clear this on device disconnect in case we're just doing a device reset
+            free_and_clear(&state->connected_device_name);
+
             if (first_device_search_attempt) {
                 printf("Waiting for glasses\n");
                 first_device_search_attempt = false;
@@ -368,18 +423,29 @@ int main(int argc, const char** argv) {
         reset_calibration(false);
         if (ipc_enabled) *ipc_values->disabled = false;
 
+        if (config->debug_threads)
+            printf("\tdebug: Kicking off all threads\n");
+
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
+        force_reset_threads = false;
         pthread_t device_thread;
         pthread_t monitor_config_file_thread;
+        pthread_t manage_state_thread;
         pthread_create(&device_thread, NULL, block_on_device_thread_func, NULL);
         pthread_create(&monitor_config_file_thread, NULL, monitor_config_file_thread_func, NULL);
+        pthread_create(&manage_state_thread, NULL, manage_state_thread_func, NULL);
         pthread_join(device_thread, NULL);
+        pthread_join(manage_state_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
+
+        if (device) {
+            free(device->name);
+            free(device);
+            device = NULL;
+        }
 
         if (config->debug_threads)
             printf("\tdebug: All threads have exited, starting over\n");
-
-        force_reset_threads = false;
     }
 
     return 0;

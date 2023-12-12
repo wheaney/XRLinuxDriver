@@ -1,12 +1,15 @@
 #include <string.h>
+#include <stdio.h>
 
-void copy_string(const char *source, char **destination, size_t size) {
+void copy_string(const char *source, char **destination) {
     if (*destination != NULL) free_and_clear(destination);
-    *destination = malloc(size);
+    *destination = malloc(strlen(source) + 1);
     strcpy(*destination, source);
 }
 
 void free_and_clear(char **str_ptr) {
-    free(*str_ptr);
-    *str_ptr = NULL;
+    if (*str_ptr) {
+        free(*str_ptr);
+        *str_ptr = NULL;
+    }
 }
