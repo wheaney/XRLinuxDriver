@@ -339,17 +339,17 @@ void *manage_state_thread_func(void *arg) {
     while (glasses_ready && !force_reset_threads) {
         gettimeofday(&tv, NULL);
         state->heartbeat = tv.tv_sec;
-        state->sbs_mode_enabled = device_driver->device_is_sbs_mode_func();
+        state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
         update_state(state);
 
+        if (ipc_enabled) {
+            // this should reflect the real-world state, not the state requested by the control flag
+            *ipc_values->sbs_enabled = state->sbs_mode_enabled;
+        }
+
         read_control_flags(control_flags);
-        if (control_flags->sbs_mode != SBS_CONTROL_UNSET) {
-            bool enable = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
-            if (ipc_enabled) {
-                // this should reflect the real-world state, not the state requested by the control flag
-                *ipc_values->sbs_enabled = state->sbs_mode_enabled;
-            }
-            device_driver->device_set_sbs_mode_func(enable);
+        if (device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
+            device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE);
         }
 
         sleep(1);

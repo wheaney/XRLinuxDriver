@@ -18,7 +18,7 @@ int mt_buffer_size;
 int imu_cycles_per_s;
 buffer_type *mt_buffer = NULL;
 int mt_state = MT_STATE_IDLE;
-const float mt_detect_threshold = 1000.0;
+const float mt_detect_threshold = 2000.0;
 const float mt_pause_threshold = 100.0;
 uint64_t tap_start_time = 0;
 uint64_t pause_start_time = 0;

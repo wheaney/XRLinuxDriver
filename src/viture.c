@@ -92,12 +92,14 @@ void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t t
 device_properties_type* viture_device_connect() {
     bool success = init(handle_viture_event, viture_mcu_callback);
     if (success) {
-        set_imu(true);
+        success = set_imu(true) == ERR_SUCCESS;
 
-        device_properties_type* device = malloc(sizeof(device_properties_type));
-        *device = viture_one_properties;
+        if (success) {
+            device_properties_type* device = malloc(sizeof(device_properties_type));
+            *device = viture_one_properties;
 
-        return device;
+            return device;
+        }
     }
 
     return NULL;
@@ -110,7 +112,7 @@ void viture_device_cleanup() {
 
 void viture_block_on_device() {
     int imu_state = get_imu_state();
-    while (!driver_device_should_disconnect() && (imu_state == STATE_OPEN || imu_state == ERR_TIMEOUT)) {
+    while (!driver_device_should_disconnect() && imu_state != ERR_WRITE_FAIL) {
         sleep(1);
         imu_state = get_imu_state();
     }
