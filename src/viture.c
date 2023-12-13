@@ -68,6 +68,8 @@ imu_quat_type zxy_euler_to_quaternion(imu_vector_type euler) {
 }
 
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
+    if (driver_disabled()) return;
+
     float euler_roll = float_from_imu_data(data);
     float euler_pitch = float_from_imu_data(data + 4);
     float euler_yaw = float_from_imu_data(data + 8);

@@ -65,10 +65,8 @@ void reset_calibration(bool reset_device) {
 
     if (reset_device) {
         // trigger all threads to exit, this will cause the device thread to close the device and eventually re-open it
-        glasses_ready=false;
-    }
-
-    if (glasses_ready && ipc_enabled) printf("Waiting on device calibration\n");
+        force_reset_threads=true;
+    } else if (ipc_enabled) printf("Waiting on device calibration\n");
 }
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vector_type euler) {
@@ -116,18 +114,25 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vect
 }
 
 bool driver_device_should_disconnect() {
-    return !glasses_ready || config->disabled || force_reset_threads;
+    return force_reset_threads;
+}
+
+bool driver_disabled() {
+    return config->disabled;
 }
 
 // pthread function to create outputs and block on the device
 void *block_on_device_thread_func(void *arg) {
-    fprintf(stdout, "Device connected, redirecting input to %s...\n", config->output_mode);
-
-    init_outputs(device, config);
+    if (!config->disabled) {
+        fprintf(stdout, "Device connected, redirecting input to %s...\n", config->output_mode);
+        init_outputs(device, config);
+    }
 
     device_driver->block_on_device_func();
 
-    glasses_ready=false;
+    // glasses are probably still connected if the driver initiated the disconnect
+    glasses_ready=driver_device_should_disconnect();
+    if (!glasses_ready) free_and_clear(&state->connected_device_name);
 
     if (ipc_enabled) *ipc_values->disabled = true;
     deinit_outputs(config);
@@ -194,9 +199,11 @@ void setup_ipc() {
 void update_config_from_file(FILE *fp) {
     driver_config_type* new_config = parse_config_file(fp);
 
-    if (!config->disabled && new_config->disabled)
+    bool driver_disabled = !config->disabled && new_config->disabled;
+    if (driver_disabled)
         printf("Driver has been disabled\n");
-    if (config->disabled && !new_config->disabled)
+    bool driver_reenabled = config->disabled && !new_config->disabled;
+    if (driver_reenabled)
         printf("Driver has been re-enabled\n");
 
     if (!config->use_roll_axis && new_config->use_roll_axis)
@@ -235,8 +242,8 @@ void update_config_from_file(FILE *fp) {
 
     update_config(&config, new_config);
 
-    if (output_mode_changed)
-        // do this to trigger another call to setup_ipc() before the next time the threads restart
+    if (output_mode_changed || driver_reenabled || driver_disabled)
+        // do this to teardown and re-initialize all outputs
         force_reset_threads = true;
 
     if (ipc_enabled) {
@@ -257,6 +264,9 @@ void update_config_from_file(FILE *fp) {
 char config_filename[1024];
 FILE *config_fp;
 void *monitor_config_file_thread_func(void *arg) {
+    config_fp = freopen(config_filename, "r", config_fp);
+    update_config_from_file(config_fp);
+
     int fd = inotify_init();
     if (fd < 0) {
         perror("Error initializing inotify");
@@ -274,7 +284,7 @@ void *monitor_config_file_thread_func(void *arg) {
     // hold this pthread open while the glasses are plugged in, but if they become unplugged:
     // 1. hold this thread open as long as driver is disabled, this will block from re-initializing the glasses-polling thread until the driver becomes re-enabled
     // 2. exit this thread if the driver is enabled, then we'll wait for the glasses to get plugged back in to re-initialize these threads
-    while ((glasses_ready || config->disabled) && !force_reset_threads) {
+    while (glasses_ready && !force_reset_threads) {
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(fd, &readfds);
@@ -327,14 +337,11 @@ void *monitor_config_file_thread_func(void *arg) {
 void *manage_state_thread_func(void *arg) {
     struct timeval tv;
     while (glasses_ready && !force_reset_threads) {
-        // sleep first so that any state changes that occur while we're sleeping will still get saved, even if an exit
-        // condition is met
-        sleep(1);
-
         gettimeofday(&tv, NULL);
         state->heartbeat = tv.tv_sec;
         state->sbs_mode_enabled = device_driver->device_is_sbs_mode_func();
         update_state(state);
+
         read_control_flags(control_flags);
         if (control_flags->sbs_mode != SBS_CONTROL_UNSET) {
             bool enable = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
@@ -344,7 +351,12 @@ void *manage_state_thread_func(void *arg) {
             }
             device_driver->device_set_sbs_mode_func(enable);
         }
+
+        sleep(1);
     }
+
+    // in case any state changed during the last sleep()
+    update_state(state);
 
     if (config->debug_threads)
         printf("\tdebug: Exiting write_state thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
@@ -406,9 +418,6 @@ int main(int argc, const char** argv) {
     while (1) {
         bool first_device_search_attempt = true;
         while (!search_for_device()) {
-            // don't clear this on device disconnect in case we're just doing a device reset
-            free_and_clear(&state->connected_device_name);
-
             if (first_device_search_attempt) {
                 printf("Waiting for glasses\n");
                 first_device_search_attempt = false;

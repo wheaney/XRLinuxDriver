@@ -12,9 +12,9 @@ const char *calibration_setup_strings[2] = {
 };
 const char *calibration_state_strings[4] = {
     "NOT_CALIBRATED",
-	"CALIBRATED",
-	"CALIBRATING",
-	"WAITING_ON_USER"
+    "CALIBRATED",
+    "CALIBRATING",
+    "WAITING_ON_USER"
 };
 
 const char* shared_memory_directory = "/dev/shm";

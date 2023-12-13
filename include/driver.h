@@ -7,3 +7,4 @@
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vector_type euler);
 bool driver_device_should_disconnect();
+bool driver_disabled();

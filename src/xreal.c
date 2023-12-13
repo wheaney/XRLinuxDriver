@@ -48,6 +48,8 @@ uint32_t last_utilized_event_ts = 0;
 void handle_xreal_event(uint64_t timestamp,
 		   device3_event_type event,
 		   const device3_ahrs_type* ahrs) {
+    if (driver_disabled()) return;
+
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
     uint32_t elapsed_from_last_utilized = ts - last_utilized_event_ts;
     if (event == DEVICE3_EVENT_UPDATE && elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
