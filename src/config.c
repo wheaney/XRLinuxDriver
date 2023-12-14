@@ -24,6 +24,9 @@ driver_config_type *default_config() {
     config->look_ahead_override = 0.0;
     config->display_zoom = 1.0;
     config->display_distance = 1.0;
+    config->sbs_content = false;
+    config->sbs_mode_stretched = false;
+
     config->debug_threads = false;
     config->debug_joystick = false;
     config->debug_multi_tap = false;
@@ -95,17 +98,21 @@ driver_config_type* parse_config_file(FILE *fp) {
              } else {
                  fprintf(stderr, "Error parsing %s value: %s\n", key, value);
              }
-         } else if (strcmp(key, "display_distance") == 0) {
-              char *endptr;
-              errno = 0;
-              float num = strtof(value, &endptr);
-              if (errno != ERANGE && endptr != value) {
-                  config->display_distance = num;
-              } else {
-                  fprintf(stderr, "Error parsing display_distance value: %s\n", value);
-              }
-          } else if (strcmp(key, "output_mode") == 0) {
-            copy_string(value, &config->output_mode);
+        } else if (strcmp(key, "display_distance") == 0) {
+             char *endptr;
+             errno = 0;
+             float num = strtof(value, &endptr);
+             if (errno != ERANGE && endptr != value) {
+                 config->display_distance = num;
+             } else {
+                 fprintf(stderr, "Error parsing display_distance value: %s\n", value);
+             }
+        } else if (strcmp(key, "output_mode") == 0) {
+             copy_string(value, &config->output_mode);
+        } else if (strcmp(key, "sbs_content") == 0) {
+            config->sbs_content = strcmp(value, "true") == 0;
+        } else  if (strcmp(key, "sbs_mode_stretched") == 0) {
+            config->sbs_mode_stretched = strcmp(value, "true") == 0;
         }
     }
 

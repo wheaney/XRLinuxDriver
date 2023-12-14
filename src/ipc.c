@@ -24,6 +24,8 @@ const char *display_north_offset_ipc_name = "display_north_offset";
 const char *disabled_ipc_name = "disabled";
 const char *date_ipc_name = "keepalive_date";
 const char *sbs_enabled_name = "sbs_enabled";
+const char *sbs_content_name = "sbs_content";
+const char *sbs_mode_stretched_name = "sbs_mode_stretched";
 
 bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
     setup_ipc_value(imu_data_ipc_name, (void**) &ipc_values->imu_data, sizeof(float) * 16, debug);
@@ -37,6 +39,8 @@ bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
     setup_ipc_value(disabled_ipc_name, (void**) &ipc_values->disabled, sizeof(bool), debug);
     setup_ipc_value(date_ipc_name, (void**) &ipc_values->date, sizeof(float) * 4, debug);
     setup_ipc_value(sbs_enabled_name, (void**) &ipc_values->sbs_enabled, sizeof(bool), debug);
+    setup_ipc_value(sbs_content_name, (void**) &ipc_values->sbs_content, sizeof(bool), debug);
+    setup_ipc_value(sbs_mode_stretched_name, (void**) &ipc_values->sbs_mode_stretched, sizeof(bool), debug);
 
     // attempt to destroy the mutex if it already existed from a previous run
     setup_ipc_value(imu_data_mutex_ipc_name, (void**) &ipc_values->imu_data_mutex, sizeof(pthread_mutex_t), debug);

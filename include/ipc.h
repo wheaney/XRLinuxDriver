@@ -20,6 +20,8 @@ extern const char *display_north_offset_ipc_name;
 extern const char *disabled_ipc_name;
 extern const char *date_ipc_name;
 extern const char *sbs_enabled_name;
+extern const char *sbs_content_name;
+extern const char *sbs_mode_stretched_name;
 
 struct ipc_values_t {
     float *imu_data;
@@ -34,6 +36,8 @@ struct ipc_values_t {
     bool *disabled;
     float *date;
     bool *sbs_enabled;
+    bool *sbs_content;
+    bool *sbs_mode_stretched;
 };
 
 typedef struct ipc_values_t ipc_values_type;

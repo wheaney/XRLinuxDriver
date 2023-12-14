@@ -76,34 +76,32 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
         int multi_tap = detect_multi_tap(euler_velocities,
                                          timestamp_ms,
                                          config->debug_multi_tap);
-        if (ipc_enabled) {
-            if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
-                if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
-                printf("Kicking off calibration\n");
-                reset_calibration(true);
+        if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
+            if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
+            printf("Kicking off calibration\n");
+            reset_calibration(true);
+        }
+        if (glasses_calibrated) {
+            if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
+                if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
+                printf("Centering screen\n");
+
+                screen_center = quat;
+                captured_screen_center=true;
+                control_flags->recenter_screen=false;
             }
-            if (glasses_calibrated) {
-                if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
-                    if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
-                    printf("Centering screen\n");
+        } else {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
 
-                    screen_center = quat;
-                    captured_screen_center=true;
-                    control_flags->recenter_screen=false;
-                }
+            if (glasses_calibration_started_sec == 0) {
+                glasses_calibration_started_sec=tv.tv_sec;
+                if (ipc_enabled) reset_imu_data(ipc_values);
             } else {
-                struct timeval tv;
-                gettimeofday(&tv, NULL);
-
-                if (glasses_calibration_started_sec == 0) {
-                    glasses_calibration_started_sec=tv.tv_sec;
-                    reset_imu_data(ipc_values);
-                } else {
-                    glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
-                    if (glasses_calibrated) {
-                        state->calibration_state = CALIBRATED;
-                        printf("Device calibration complete\n");
-                    }
+                glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
+                if (glasses_calibrated) {
+                    state->calibration_state = CALIBRATED;
+                    printf("Device calibration complete\n");
                 }
             }
         }
@@ -244,6 +242,14 @@ void update_config_from_file(FILE *fp) {
     if (config->debug_ipc != new_config->debug_ipc)
         fprintf(stdout, "IPC debugging has been %s\n", new_config->debug_ipc ? "enabled" : "disabled");
 
+    bool sbs_content_changed = config->sbs_content != new_config->sbs_content;
+    if (sbs_content_changed)
+        fprintf(stdout, "SBS content has been changed to %s\n", new_config->sbs_content ? "enabled" : "disabled");
+
+    bool sbs_mode_changed = config->sbs_mode_stretched != new_config->sbs_mode_stretched;
+    if (sbs_mode_changed)
+        fprintf(stdout, "SBS mode has been changed to %s\n", new_config->sbs_mode_stretched ? "stretched" : "centered");
+
     update_config(&config, new_config);
 
     if (output_mode_changed || driver_reenabled || driver_disabled)
@@ -254,6 +260,8 @@ void update_config_from_file(FILE *fp) {
         *ipc_values->disabled = config->disabled;
         if (display_zoom_changed) *ipc_values->display_zoom = config->display_zoom;
         if (display_distance_changed) *ipc_values->display_north_offset = config->display_distance;
+        if (sbs_content_changed) *ipc_values->sbs_content = config->sbs_content;
+        if (sbs_mode_changed) *ipc_values->sbs_mode_stretched = config->sbs_mode_stretched;
         if (look_ahead_changed) {
             ipc_values->look_ahead_cfg[0] = config->look_ahead_override == 0 ?
                                                 device->look_ahead_constant : config->look_ahead_override;

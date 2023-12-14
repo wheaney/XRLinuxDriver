@@ -12,6 +12,9 @@ struct driver_config_t {
     float display_zoom;
     float display_distance;
 
+    bool sbs_content;
+    bool sbs_mode_stretched;
+
     bool debug_threads;
     bool debug_joystick;
     bool debug_multi_tap;

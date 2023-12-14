@@ -17,14 +17,14 @@
 #define FORCED_CYCLE_TIME_MS 1000.0 / FORCED_CYCLES_PER_S * CYCLE_TIME_CHECK_ERROR_FACTOR
 #define BUFFER_SIZE_TARGET_MS 10
 
-const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
-
 const uint16_t device_pid_air_1 = 0x0424;
 const uint16_t device_pid_air_2 = 0x0428;
 const uint16_t device_pid_air_2_pro = 0x0432;
 const char* device_name_air_1 = "XREAL Air";
 const char* device_name_air_2 = "XREAL Air 2";
 const char* device_name_air_2_pro = "XREAL Air 2 Pro";
+
+const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
 const device_properties_type xreal_air_properties = {
     .name                               = NULL,
@@ -126,7 +126,7 @@ device3_error_type xreal_device_read() {
 void xreal_block_on_device() {
     device3_clear(glasses_imu);
     device3_calibrate(glasses_imu, 1000, true, true, false);
-    while (!driver_device_should_disconnect() && device3_read(glasses_imu, 1) == DEVICE3_ERROR_NO_ERROR);
+    while (!driver_device_should_disconnect() && xreal_device_read == DEVICE3_ERROR_NO_ERROR);
 
     xreal_device_cleanup();
 };

@@ -33,7 +33,6 @@ const int mid_input = 0;
 const int min_input = -max_input;
 
 float joystick_max_degrees_per_s;
-float mouse_sensitivity_seconds;
 
 #define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
 
@@ -174,7 +173,6 @@ void init_outputs(device_properties_type *device, driver_config_type *config) {
     joystick_debug_imu_cycles = ceil(100.0 * device->imu_cycles_per_s / 1000.0); // update joystick debug file roughly every 100 ms
     joystick_max_degrees_per_s = 360.0 / 4;
     float joystick_max_radians_per_s = joystick_max_degrees_per_s * M_PI / 180.0;
-    mouse_sensitivity_seconds = config->mouse_sensitivity / 1000.0;
 
     evdev = libevdev_new();
     if (is_joystick_mode(config)) {
@@ -307,12 +305,12 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_t
     // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
     // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
     // positive y.
-    int next_joystick_x = joystick_value(velocities.yaw, joystick_max_degrees_per_s);
+    int next_joystick_x = joystick_value(-velocities.yaw, joystick_max_degrees_per_s);
     int next_joystick_y = joystick_value(velocities.pitch, joystick_max_degrees_per_s);
 
     if (uinput) {
         if (is_joystick_mode(config)) {
-            int next_joystick_z = joystick_value(velocities.roll, joystick_max_degrees_per_s);
+            int next_joystick_z = joystick_value(-velocities.roll, joystick_max_degrees_per_s);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
             if (config->use_roll_axis)
@@ -324,11 +322,12 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_t
             static float mouse_z_remainder = 0.0;
 
             // smooth out the mouse values using the remainders left over from previous writes
+            float mouse_sensitivity_seconds = (float) config->mouse_sensitivity / device->imu_cycles_per_s;
             float next_x = -velocities.yaw * mouse_sensitivity_seconds + mouse_x_remainder;
             int next_x_int = round(next_x);
             mouse_x_remainder = next_x - next_x_int;
 
-            float next_y = -velocities.pitch * mouse_sensitivity_seconds + mouse_y_remainder;
+            float next_y = velocities.pitch * mouse_sensitivity_seconds + mouse_y_remainder;
             int next_y_int = round(next_y);
             mouse_y_remainder = next_y - next_y_int;
 

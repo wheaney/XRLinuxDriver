@@ -1,7 +1,6 @@
 #pragma once
 
 #include "driver.h"
-#include "imu.h"
 
 #include <stdbool.h>
 
