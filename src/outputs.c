@@ -32,7 +32,7 @@ const int max_input = 1 << 16;
 const int mid_input = 0;
 const int min_input = -max_input;
 
-float joystick_max_degrees;
+float joystick_max_degrees_per_s;
 
 #define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
 
@@ -46,9 +46,9 @@ static int evdev_check(char * function, int i) {
 }
 
 // returns an integer between -max_input and max_input, the magnitude of which is just the ratio of
-// input_deg to max_input_deg
-int joystick_value(float input_degrees, float max_input_degrees) {
-  int value = round(input_degrees * max_input / max_input_degrees);
+// input_velocity to max_input_velocity (where velocity is degrees/sec)
+int joystick_value(float input_velocity, float max_input_velocity) {
+  int value = round(input_velocity * max_input / max_input_velocity);
   if (value < min_input) {
     return min_input;
   } else if (value > max_input) {
@@ -156,39 +156,30 @@ float degree_delta(float prev, float next) {
     return delta;
 }
 
-imu_vector_type get_euler_deltas(imu_vector_type euler) {
-    static imu_vector_type prev_euler;
-    imu_vector_type deltas = {
-        .x=degree_delta(prev_euler.x, euler.x),
-        .y=degree_delta(prev_euler.y, euler.y),
-        .z=degree_delta(prev_euler.z, euler.z)
+imu_euler_type get_euler_velocities(device_properties_type *device, imu_euler_type euler) {
+    static imu_euler_type prev_euler;
+    imu_euler_type velocities = {
+        .roll=degree_delta(prev_euler.roll, euler.roll) * device->imu_cycles_per_s,
+        .pitch=degree_delta(prev_euler.pitch, euler.pitch) * device->imu_cycles_per_s,
+        .yaw=degree_delta(prev_euler.yaw, euler.yaw) * device->imu_cycles_per_s
     };
+
     prev_euler = euler;
-
-    return deltas;
-}
-
-imu_vector_type get_euler_velocities(device_properties_type *device, imu_vector_type euler_deltas) {
-    imu_vector_type velocities = {
-        .x=euler_deltas.x * device->imu_cycles_per_s,
-        .y=euler_deltas.y * device->imu_cycles_per_s,
-        .z=euler_deltas.z * device->imu_cycles_per_s
-    };
 
     return velocities;
 }
 
 void init_outputs(device_properties_type *device, driver_config_type *config) {
     joystick_debug_imu_cycles = ceil(100.0 * device->imu_cycles_per_s / 1000.0); // update joystick debug file roughly every 100 ms
-    joystick_max_degrees = 360.0 / device->imu_cycles_per_s / 4;
-    float joystick_max_radians = joystick_max_degrees * M_PI / 180.0;
+    joystick_max_degrees_per_s = 360.0 / 4;
+    float joystick_max_radians_per_s = joystick_max_degrees_per_s * M_PI / 180.0;
 
     evdev = libevdev_new();
     if (is_joystick_mode(config)) {
         struct input_absinfo absinfo;
         absinfo.minimum = min_input;
         absinfo.maximum = max_input;
-        absinfo.resolution = max_input / joystick_max_radians;
+        absinfo.resolution = max_input / joystick_max_radians_per_s;
         absinfo.value = mid_input;
         absinfo.flat = 2;
         absinfo.fuzz = 0;
@@ -237,9 +228,9 @@ void deinit_outputs(driver_config_type *config) {
     }
 }
 
-void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_quat_type screen_center,
-                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values, device_properties_type *device,
-                       driver_config_type *config) {
+void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_type screen_center,
+                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values,
+                       device_properties_type *device, driver_config_type *config) {
     if (ipc_enabled) {
         // send keepalive every counter period
         if (imu_counter == 0) {
@@ -309,17 +300,17 @@ void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_qua
         }
     }
 
-    // euler x/y/z values are roll/pitch/yaw, respectively, which for tracking head movements against 2d joystick/mouse
-    // (x,y) coordinates means that yaw/euler.z maps to horizontal movements (x) and pitch/euler.y maps to vertical (y)
-    // movements. Because the euler values use a NWU coordinate system, positive yaw/pitch values move left/down,
-    // respectively, and the mouse/joystick coordinate systems are right-down, so a positive yaw should result in a
-    // negative x, and a positive pitch should result in a positive y.
-    int next_joystick_x = joystick_value(-euler_deltas.z, joystick_max_degrees);
-    int next_joystick_y = joystick_value(euler_deltas.y, joystick_max_degrees);
+    // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
+    // maps to horizontal movements (x) and pitch maps to vertical (y) movements. Because the euler values use a NWU
+    // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
+    // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
+    // positive y.
+    int next_joystick_x = joystick_value(-velocities.yaw, joystick_max_degrees_per_s);
+    int next_joystick_y = joystick_value(velocities.pitch, joystick_max_degrees_per_s);
 
     if (uinput) {
         if (is_joystick_mode(config)) {
-            int next_joystick_z = joystick_value(-euler_deltas.x, joystick_max_degrees);
+            int next_joystick_z = joystick_value(-velocities.roll, joystick_max_degrees_per_s);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
             if (config->use_roll_axis)
@@ -331,15 +322,16 @@ void handle_imu_update(imu_quat_type quat, imu_vector_type euler_deltas, imu_qua
             static float mouse_z_remainder = 0.0;
 
             // smooth out the mouse values using the remainders left over from previous writes
-            float next_x = -euler_deltas.z * config->mouse_sensitivity + mouse_x_remainder;
+            float mouse_sensitivity_seconds = (float) config->mouse_sensitivity / device->imu_cycles_per_s;
+            float next_x = -velocities.yaw * mouse_sensitivity_seconds + mouse_x_remainder;
             int next_x_int = round(next_x);
             mouse_x_remainder = next_x - next_x_int;
 
-            float next_y = euler_deltas.y * config->mouse_sensitivity + mouse_y_remainder;
+            float next_y = velocities.pitch * mouse_sensitivity_seconds + mouse_y_remainder;
             int next_y_int = round(next_y);
             mouse_y_remainder = next_y - next_y_int;
 
-            float next_z = -euler_deltas.x * config->mouse_sensitivity + mouse_z_remainder;
+            float next_z = -velocities.roll * mouse_sensitivity_seconds + mouse_z_remainder;
             int next_z_int = round(next_z);
             mouse_z_remainder = next_z - next_z_int;
 

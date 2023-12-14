@@ -9,7 +9,11 @@ struct driver_config_t {
     int mouse_sensitivity;
     char *output_mode;
     float look_ahead_override;
-    float external_zoom;
+    float display_zoom;
+    float display_distance;
+
+    bool sbs_content;
+    bool sbs_mode_stretched;
 
     bool debug_threads;
     bool debug_joystick;

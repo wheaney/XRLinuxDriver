@@ -15,10 +15,13 @@ extern const char *look_ahead_cfg_ipc_name;
 extern const char *display_res_ipc_name;
 extern const char *display_fov_ipc_name;
 extern const char *lens_distance_ratio_ipc_name;
-extern const char *zoom_ipc_name;
+extern const char *display_zoom_ipc_name;
+extern const char *display_north_offset_ipc_name;
 extern const char *disabled_ipc_name;
 extern const char *date_ipc_name;
 extern const char *sbs_enabled_name;
+extern const char *sbs_content_name;
+extern const char *sbs_mode_stretched_name;
 
 struct ipc_values_t {
     float *imu_data;
@@ -28,10 +31,13 @@ struct ipc_values_t {
     unsigned int *display_res;
     float *display_fov;
     float *lens_distance_ratio;
-    float *zoom;
+    float *display_zoom;
+    float *display_north_offset;
     bool *disabled;
     float *date;
     bool *sbs_enabled;
+    bool *sbs_content;
+    bool *sbs_mode_stretched;
 };
 
 typedef struct ipc_values_t ipc_values_type;
