@@ -183,7 +183,8 @@ void setup_ipc() {
         *ipc_values->disabled             = true;
 
         // set defaults for everything else
-        *ipc_values->zoom                 = config->external_zoom;
+        *ipc_values->display_zoom         = config->display_zoom;
+        *ipc_values->display_north_offset = config->display_distance;
         ipc_values->look_ahead_cfg[0]     = config->look_ahead_override == 0 ?
                                                 device->look_ahead_constant : config->look_ahead_override;
         ipc_values->look_ahead_cfg[1]     = config->look_ahead_override == 0 ?
@@ -217,9 +218,13 @@ void update_config_from_file(FILE *fp) {
     if (look_ahead_changed)
         fprintf(stdout, "Look ahead override has changed to %f\n", new_config->look_ahead_override);
 
-    bool external_zoom_changed = config->external_zoom != new_config->external_zoom;
-    if (external_zoom_changed)
-        fprintf(stdout, "External zoom has changed to %f\n", new_config->external_zoom);
+    bool display_zoom_changed = config->display_zoom != new_config->display_zoom;
+    if (display_zoom_changed)
+        fprintf(stdout, "Display size has changed to %f\n", new_config->display_zoom);
+
+    bool display_distance_changed = config->display_distance != new_config->display_distance;
+    if (display_distance_changed)
+        fprintf(stdout, "Display distance has changed to %f\n", new_config->display_distance);
 
     bool output_mode_changed = strcmp(config->output_mode, new_config->output_mode) != 0;
     if (output_mode_changed)
@@ -247,7 +252,8 @@ void update_config_from_file(FILE *fp) {
 
     if (ipc_enabled) {
         *ipc_values->disabled = config->disabled;
-        if (external_zoom_changed) *ipc_values->zoom = config->external_zoom;
+        if (display_zoom_changed) *ipc_values->display_zoom = config->display_zoom;
+        if (display_distance_changed) *ipc_values->display_north_offset = config->display_distance;
         if (look_ahead_changed) {
             ipc_values->look_ahead_cfg[0] = config->look_ahead_override == 0 ?
                                                 device->look_ahead_constant : config->look_ahead_override;

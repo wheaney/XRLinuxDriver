@@ -312,11 +312,11 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_t
 
     if (uinput) {
         if (is_joystick_mode(config)) {
-            int next_joystick_z = joystick_value(-euler_deltas.x, joystick_max_degrees);
+            int next_joystick_z = joystick_value(velocities.roll, joystick_max_degrees_per_s);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
             if (config->use_roll_axis)
-                libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, joystick_value(velocities.roll, joystick_max_degrees_per_s));
+                libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, next_joystick_z);
         } else if (is_mouse_mode(config)) {
             // keep track of the remainder (the amount that was lost with round()) for smoothing out mouse movements
             static float mouse_x_remainder = 0.0;
