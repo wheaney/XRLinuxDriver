@@ -21,12 +21,25 @@
 #define FORCED_CYCLE_TIME_MS 1000.0 / FORCED_CYCLES_PER_S * CYCLE_TIME_CHECK_ERROR_FACTOR
 #define BUFFER_SIZE_TARGET_MS 10
 
-#define NUM_SBS_DISPLAY_MODES 4
-const int sbs_display_modes[NUM_SBS_DISPLAY_MODES] = {
+#define NUM_MAPPED_DISPLAY_MODES 5
+
+// These two arrays are not only used as sets to determine what type a display mode is, but they're also used to
+// map back and forth to one another (the index of a display mode in one array is used to find the corresponding
+// display mode in the other array). That's way they're ordered the way they are, and some modes are duplicated.
+const int sbs_display_modes[NUM_MAPPED_DISPLAY_MODES] = {
     DEVICE4_DISPLAY_MODE_3840x1080_60_SBS,
     DEVICE4_DISPLAY_MODE_3840x1080_72_SBS,
-    DEVICE4_DISPLAY_MODE_1920x1080_60_SBS,
-    DEVICE4_DISPLAY_MODE_3840x1080_90_SBS
+    DEVICE4_DISPLAY_MODE_3840x1080_90_SBS,
+    DEVICE4_DISPLAY_MODE_3840x1080_90_SBS, // no 120Hz SBS mode, map from 120Hz to 90Hz
+    DEVICE4_DISPLAY_MODE_1920x1080_60_SBS  // put this last so no non-SBS mode will map to it
+};
+
+const int non_sbs_display_modes[NUM_MAPPED_DISPLAY_MODES] = {
+    DEVICE4_DISPLAY_MODE_1920x1080_60,
+    DEVICE4_DISPLAY_MODE_1920x1080_72,
+    DEVICE4_DISPLAY_MODE_1920x1080_90,
+    DEVICE4_DISPLAY_MODE_1920x1080_120, // no SBS mode will be able to map to this
+    DEVICE4_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
 const uint16_t device_pid_air_1 = 0x0424;
@@ -178,22 +191,47 @@ void xreal_block_on_device() {
     pthread_join(controller_thread, NULL);
 };
 
+int get_display_mode_index(int display_mode, const int* display_modes) {
+    for (int i = 0; i < NUM_MAPPED_DISPLAY_MODES; i++) {
+        if (display_mode == display_modes[i]) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 bool xreal_device_is_sbs_mode() {
     if (glasses_controller) {
-        for (int i = 0; i < NUM_SBS_DISPLAY_MODES; i++) {
-            if (glasses_controller->disp_mode == sbs_display_modes[i]) {
-                return true;
-            }
+        if (get_display_mode_index(glasses_controller->disp_mode, sbs_display_modes) != -1) {
+            return true;
         }
     }
 
     return false;
 };
 
-bool xreal_device_set_sbs_mode(bool enabled) {
+bool xreal_device_set_sbs_mode(bool enable) {
     if (!glasses_controller) return false;
 
-    glasses_controller->disp_mode = enabled ? DEVICE4_DISPLAY_MODE_3840x1080_60_SBS : DEVICE4_DISPLAY_MODE_1920x1080_60;
+    // check what the current mode is
+    int sbs_mode_index = get_display_mode_index(glasses_controller->disp_mode, sbs_display_modes);
+    bool is_sbs_mode = sbs_mode_index != -1;
+
+    // if the current mode matches the requested mode, do nothing, return success
+    if (enable == is_sbs_mode) return true;
+
+    if (enable) {
+        // requesting SBS mode, currently non-SBS, find the corresponding SBS mode and set it
+        int non_sbs_mode_index = get_display_mode_index(glasses_controller->disp_mode, non_sbs_display_modes);
+        if (non_sbs_mode_index == -1) return false;
+
+        glasses_controller->disp_mode = sbs_display_modes[non_sbs_mode_index];
+    } else {
+        // requesting non-SBS mode, currently SBS, find the corresponding non-SBS mode and set it
+        glasses_controller->disp_mode = non_sbs_display_modes[sbs_mode_index];
+    }
+
     sbs_mode_change_requested = true;
 
     return true;

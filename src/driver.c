@@ -362,7 +362,9 @@ void *manage_state_thread_func(void *arg) {
 
         read_control_flags(control_flags);
         if (device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
-            device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE);
+            if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
+                fprintf(stderr, "Error setting requested SBS mode\n");
+            }
         }
 
         sleep(1);
