@@ -126,7 +126,7 @@ device3_error_type xreal_device_read() {
 void xreal_block_on_device() {
     device3_clear(glasses_imu);
     device3_calibrate(glasses_imu, 1000, true, true, false);
-    while (!driver_device_should_disconnect() && xreal_device_read == DEVICE3_ERROR_NO_ERROR);
+    while (!driver_device_should_disconnect() && xreal_device_read() == DEVICE3_ERROR_NO_ERROR);
 
     xreal_device_cleanup();
 };
