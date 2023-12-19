@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #define TS_TO_MS_FACTOR 1000000
@@ -99,7 +100,6 @@ void handle_xreal_controller_event(
 device3_type* glasses_imu;
 device4_type* glasses_controller;
 device_properties_type* xreal_device_connect() {
-
     glasses_imu = malloc(sizeof(device3_type));
     bool success = device3_open(glasses_imu, handle_xreal_event) == DEVICE3_ERROR_NO_ERROR;
     if (success) {
@@ -119,11 +119,11 @@ device_properties_type* xreal_device_connect() {
         device->hid_vendor_id = glasses_imu->vendor_id;
 
         if (device->hid_product_id == device_pid_air_1) {
-            copy_string(device_name_air_1, &device->name);
+            device->name = strdup(device_name_air_1);
         } else if (device->hid_product_id == device_pid_air_2) {
-            copy_string(device_name_air_2, &device->name);
+            device->name = strdup(device_name_air_2);
         } else if (device->hid_product_id == device_pid_air_2_pro) {
-            copy_string(device_name_air_2_pro, &device->name);
+            device->name = strdup(device_name_air_2_pro);
         }
 
         return device;

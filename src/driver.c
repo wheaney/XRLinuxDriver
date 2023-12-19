@@ -393,7 +393,7 @@ bool search_for_device() {
         device = device_driver->device_connect_func();
         if (device) {
             init_multi_tap(device->imu_cycles_per_s);
-            copy_string(device->name, &state->connected_device_name);
+            state->connected_device_name = strdup(device->name);
             state->calibration_setup = device->calibration_setup;
             state->calibration_state = NOT_CALIBRATED;
             state->sbs_mode_supported = device->sbs_mode_supported;
