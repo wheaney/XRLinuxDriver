@@ -389,7 +389,7 @@ int main(int argc, const char** argv) {
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);
 
-    state = malloc(sizeof(state));
+    state = malloc(sizeof(driver_state_type));
     control_flags = malloc(sizeof(control_flags_type));
     read_control_flags(control_flags);
 
