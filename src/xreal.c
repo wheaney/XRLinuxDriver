@@ -7,7 +7,6 @@
 
 #include <math.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -97,16 +96,10 @@ void handle_xreal_controller_event(
     // do nothing
 }
 
-pthread_mutex_t* glasses_mutex;
 device3_type* glasses_imu;
 device4_type* glasses_controller;
 device_properties_type* xreal_device_connect() {
-    if (glasses_mutex == NULL) {
-        glasses_mutex = malloc(sizeof(pthread_mutex_t));
-        pthread_mutex_init(glasses_mutex, NULL);
-    }
 
-    pthread_mutex_lock(glasses_mutex);
     glasses_imu = malloc(sizeof(device3_type));
     bool success = device3_open(glasses_imu, handle_xreal_event) == DEVICE3_ERROR_NO_ERROR;
     if (success) {
@@ -117,7 +110,6 @@ device_properties_type* xreal_device_connect() {
         success = device4_open(glasses_controller, handle_xreal_controller_event) == DEVICE4_ERROR_NO_ERROR;
         device4_clear(glasses_controller);
     }
-    pthread_mutex_unlock(glasses_mutex);
 
     if (success) {
         device_properties_type* device = malloc(sizeof(device_properties_type));
@@ -140,41 +132,17 @@ device_properties_type* xreal_device_connect() {
     return NULL;
 };
 
-bool xreal_imu_read() {
-    pthread_mutex_lock(glasses_mutex);
-    device3_error_type imu_error_type = device3_read(glasses_imu, 1);
-    pthread_mutex_unlock(glasses_mutex);
-
-    return imu_error_type == DEVICE3_ERROR_NO_ERROR; // && controller_error_type == DEVICE4_ERROR_NO_ERROR;
-};
-
 void *poll_imu_func(void *arg) {
-    while (!driver_device_should_disconnect() && xreal_imu_read() && glasses_controller);
+    while (glasses_controller && !driver_device_should_disconnect() && device3_read(glasses_imu, 1) == DEVICE3_ERROR_NO_ERROR);
 
     device3_close(glasses_imu);
     if (glasses_imu) free(glasses_imu);
     glasses_imu = NULL;
 };
 
-void *poll_controller_func(void *arg) {
-    while (!driver_device_should_disconnect() && device4_read(glasses_controller, 1) == DEVICE4_ERROR_NO_ERROR && glasses_imu) {
-        sleep(1);
-    }
-
-    device4_close(glasses_controller);
-    if (glasses_controller) free(glasses_controller);
-    glasses_controller = NULL;
-};
-
 bool sbs_mode_change_requested = false;
-void xreal_block_on_device() {
-    pthread_t imu_thread;
-    pthread_create(&imu_thread, NULL, poll_imu_func, NULL);
-
-    pthread_t controller_thread;
-    pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
-
-    while (!driver_device_should_disconnect() && glasses_controller && glasses_imu) {
+void *poll_controller_func(void *arg) {
+    while (glasses_imu && !driver_device_should_disconnect() && device4_read(glasses_controller, 100) == DEVICE4_ERROR_NO_ERROR) {
         if (sbs_mode_change_requested) {
             device4_error_type error = device4_update_display_mode(glasses_controller);
             if (error == DEVICE4_ERROR_NO_ERROR) {
@@ -186,6 +154,20 @@ void xreal_block_on_device() {
 
         sleep(1);
     }
+
+    device4_close(glasses_controller);
+    if (glasses_controller) free(glasses_controller);
+    glasses_controller = NULL;
+};
+
+void xreal_block_on_device() {
+    pthread_t imu_thread;
+    pthread_create(&imu_thread, NULL, poll_imu_func, NULL);
+
+    pthread_t controller_thread;
+    pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
+
+    while (!driver_device_should_disconnect() && glasses_controller && glasses_imu);
 
     pthread_join(imu_thread, NULL);
     pthread_join(controller_thread, NULL);
