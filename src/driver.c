@@ -350,10 +350,19 @@ void *monitor_config_file_thread_func(void *arg) {
 void *manage_state_thread_func(void *arg) {
     struct timeval tv;
     while (glasses_ready && !force_reset_threads) {
+        bool was_sbs_mode_enabled = state->sbs_mode_enabled;
         gettimeofday(&tv, NULL);
         state->heartbeat = tv.tv_sec;
         state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
         update_state(state);
+
+        if (was_sbs_mode_enabled != state->sbs_mode_enabled) {
+            if (state->sbs_mode_enabled) {
+                printf("SBS mode has been enabled\n");
+            } else {
+                printf("SBS mode has been disabled\n");
+            }
+        }
 
         if (ipc_enabled) {
             // this should reflect the real-world state, not the state requested by the control flag
@@ -362,7 +371,9 @@ void *manage_state_thread_func(void *arg) {
 
         read_control_flags(control_flags);
         if (device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
-            device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE);
+            if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
+                fprintf(stderr, "Error setting requested SBS mode\n");
+            }
         }
 
         sleep(1);
@@ -382,7 +393,7 @@ bool search_for_device() {
         device = device_driver->device_connect_func();
         if (device) {
             init_multi_tap(device->imu_cycles_per_s);
-            copy_string(device->name, &state->connected_device_name);
+            state->connected_device_name = strdup(device->name);
             state->calibration_setup = device->calibration_setup;
             state->calibration_state = NOT_CALIBRATED;
             state->sbs_mode_supported = device->sbs_mode_supported;
@@ -428,6 +439,7 @@ int main(int argc, const char** argv) {
         exit(1);
     }
 
+    printf("Starting up XR driver\n");
     while (1) {
         bool first_device_search_attempt = true;
         while (!search_for_device()) {
