@@ -45,14 +45,15 @@ const int non_sbs_display_modes[NUM_MAPPED_DISPLAY_MODES] = {
 const uint16_t device_pid_air_1 = 0x0424;
 const uint16_t device_pid_air_2 = 0x0428;
 const uint16_t device_pid_air_2_pro = 0x0432;
-const char* device_name_air_1 = "XREAL Air";
-const char* device_name_air_2 = "XREAL Air 2";
-const char* device_name_air_2_pro = "XREAL Air 2 Pro";
+const char* device_model_air_1 = "Air";
+const char* device_model_air_2 = "Air 2";
+const char* device_model_air_2_pro = "Air 2 Pro";
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
 const device_properties_type xreal_air_properties = {
-    .name                               = NULL,
+    .brand                              = "XREAL",
+    .model                              = NULL,
     .hid_vendor_id                      = 0,
     .hid_product_id                     = 0,
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
@@ -99,6 +100,7 @@ void handle_xreal_controller_event(
 
 device3_type* glasses_imu;
 device4_type* glasses_controller;
+device_properties_type* connected_device;
 device_properties_type* xreal_device_connect() {
     glasses_imu = malloc(sizeof(device3_type));
     bool success = device3_open(glasses_imu, handle_xreal_event) == DEVICE3_ERROR_NO_ERROR;
@@ -112,21 +114,22 @@ device_properties_type* xreal_device_connect() {
     }
 
     if (success) {
-        device_properties_type* device = malloc(sizeof(device_properties_type));
-        *device = xreal_air_properties;
+        if (connected_device) free(connected_device);
+        connected_device = malloc(sizeof(device_properties_type));
+        *connected_device = xreal_air_properties;
 
-        device->hid_product_id = glasses_imu->product_id;
-        device->hid_vendor_id = glasses_imu->vendor_id;
+        connected_device->hid_product_id = glasses_imu->product_id;
+        connected_device->hid_vendor_id = glasses_imu->vendor_id;
 
-        if (device->hid_product_id == device_pid_air_1) {
-            device->name = strdup(device_name_air_1);
-        } else if (device->hid_product_id == device_pid_air_2) {
-            device->name = strdup(device_name_air_2);
-        } else if (device->hid_product_id == device_pid_air_2_pro) {
-            device->name = strdup(device_name_air_2_pro);
+        if (connected_device->hid_product_id == device_pid_air_1) {
+            connected_device->model = strdup(device_model_air_1);
+        } else if (connected_device->hid_product_id == device_pid_air_2) {
+            connected_device->model = strdup(device_model_air_2);
+        } else if (connected_device->hid_product_id == device_pid_air_2_pro) {
+            connected_device->model = strdup(device_model_air_2_pro);
         }
 
-        return device;
+        return connected_device;
     }
 
     return NULL;
@@ -171,6 +174,10 @@ void xreal_block_on_device() {
 
     pthread_join(imu_thread, NULL);
     pthread_join(controller_thread, NULL);
+
+    free(connected_device->model);
+    free(connected_device);
+    connected_device = NULL;
 };
 
 int get_display_mode_index(int display_mode, const int* display_modes) {

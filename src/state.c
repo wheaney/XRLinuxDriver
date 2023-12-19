@@ -31,8 +31,9 @@ void update_state(driver_state_type *state) {
     FILE* fp = get_state_file(state_filename, "w", &file_path[0]);
 
     fprintf(fp, "heartbeat=%d\n", state->heartbeat);
-    if (state->connected_device_name) {
-        fprintf(fp, "connected_device_name=%s\n", state->connected_device_name);
+    if (state->connected_device_model && state->connected_device_brand) {
+        fprintf(fp, "connected_device_brand=%s\n", state->connected_device_brand);
+        fprintf(fp, "connected_device_model=%s\n", state->connected_device_model);
         fprintf(fp, "calibration_setup=%s\n", calibration_setup_strings[state->calibration_setup]);
         fprintf(fp, "calibration_state=%s\n", calibration_state_strings[state->calibration_state]);
         fprintf(fp, "sbs_mode_supported=%s\n", state->sbs_mode_supported ? "true" : "false");

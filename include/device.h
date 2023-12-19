@@ -11,7 +11,8 @@ enum calibration_setup_t {
 typedef enum calibration_setup_t calibration_setup_type;
 
 struct device_properties_t {
-    char* name;
+    char* brand;
+    char* model;
     int hid_vendor_id;
     int hid_product_id;
     calibration_setup_type calibration_setup;

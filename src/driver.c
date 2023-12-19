@@ -127,9 +127,13 @@ void *block_on_device_thread_func(void *arg) {
 
     device_driver->block_on_device_func();
 
-    // glasses are probably still connected if the driver initiated the disconnect
+    // if the driver initiated the disconnect, glasses are probably still connected, keep the state alive
     glasses_ready=driver_device_should_disconnect();
-    if (!glasses_ready) free_and_clear(&state->connected_device_name);
+    if (!glasses_ready) {
+        free_and_clear(&state->connected_device_brand);
+        free_and_clear(&state->connected_device_model);
+    }
+    device = NULL;
 
     if (ipc_enabled) *ipc_values->disabled = true;
     deinit_outputs(config);
@@ -349,7 +353,7 @@ void *monitor_config_file_thread_func(void *arg) {
 // pthread function to update the state and read control flags
 void *manage_state_thread_func(void *arg) {
     struct timeval tv;
-    while (glasses_ready && !force_reset_threads) {
+    while (glasses_ready && device && !force_reset_threads) {
         bool was_sbs_mode_enabled = state->sbs_mode_enabled;
         gettimeofday(&tv, NULL);
         state->heartbeat = tv.tv_sec;
@@ -393,7 +397,8 @@ bool search_for_device() {
         device = device_driver->device_connect_func();
         if (device) {
             init_multi_tap(device->imu_cycles_per_s);
-            state->connected_device_name = strdup(device->name);
+            state->connected_device_brand = strdup(device->brand);
+            state->connected_device_model = strdup(device->model);
             state->calibration_setup = device->calibration_setup;
             state->calibration_state = NOT_CALIBRATED;
             state->sbs_mode_supported = device->sbs_mode_supported;
@@ -471,12 +476,6 @@ int main(int argc, const char** argv) {
         pthread_join(device_thread, NULL);
         pthread_join(manage_state_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
-
-        if (device) {
-            free(device->name);
-            free(device);
-            device = NULL;
-        }
 
         if (config->debug_threads)
             printf("\tdebug: All threads have exited, starting over\n");

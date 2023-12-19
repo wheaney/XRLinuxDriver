@@ -14,7 +14,8 @@ typedef enum calibration_state_t calibration_state_type;
 
 struct driver_state_t {
     uint32_t heartbeat;
-    char* connected_device_name;
+    char* connected_device_brand;
+    char* connected_device_model;
     calibration_setup_type calibration_setup;
     calibration_state_type calibration_state;
     bool sbs_mode_supported;

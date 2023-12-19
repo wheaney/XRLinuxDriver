@@ -12,7 +12,8 @@
 #include <string.h>
 
 const device_properties_type viture_one_properties = {
-    .name                               = "VITURE One",
+    .brand                              = "VITURE",
+    .model                              = "One",
     .hid_vendor_id                      = 0x35ca,
     .hid_product_id                     = 0x1011,
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
