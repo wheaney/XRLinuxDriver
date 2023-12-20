@@ -414,7 +414,6 @@ bool search_for_device() {
 }
 
 int main(int argc, const char** argv) {
-    printf("main\n");
     config = default_config();
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);
