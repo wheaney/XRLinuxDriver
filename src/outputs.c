@@ -5,6 +5,7 @@
 #include "files.h"
 #include "ipc.h"
 #include "outputs.h"
+#include "plugins.h"
 #include "strings.h"
 
 #include <libevdev/libevdev.h>
@@ -354,6 +355,8 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_t
     prev_joystick_x = next_joystick_x;
     prev_joystick_y = next_joystick_y;
 
+    plugins.handle_imu_data(quat, velocities, screen_center, ipc_enabled, imu_calibrated, ipc_values, device, config);
+
     // reset the counter every second
     if ((++imu_counter % device->imu_cycles_per_s) == 0) {
         imu_counter = 0;
@@ -368,4 +371,6 @@ void reset_imu_data(ipc_values_type *ipc_values) {
          ipc_values->imu_data[i + 2] = 0;
          ipc_values->imu_data[i + 3] = 1;
      }
+
+     plugins.reset_imu_data();
  }

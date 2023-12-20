@@ -6,6 +6,7 @@
 #include "ipc.h"
 #include "multitap.h"
 #include "outputs.h"
+#include "plugins.h"
 #include "state.h"
 #include "strings.h"
 #include "viture.h"
@@ -30,8 +31,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define NUM_SUPPORTED_DEVICE_DRIVERS 2
-const device_driver_type* device_drivers[NUM_SUPPORTED_DEVICE_DRIVERS] = {
+#define DEVICE_DRIVER_COUNT 2
+const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
     &xreal_driver,
     &viture_driver
 };
@@ -161,6 +162,7 @@ void setup_ipc() {
             fprintf(stderr, "Error setting up IPC values\n");
             exit(1);
         }
+        plugins.setup_ipc(config, device, config->debug_ipc);
     } else {
         if (not_external_only) {
             if (config->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config->output_mode);
@@ -262,16 +264,14 @@ void update_config_from_file(FILE *fp) {
 
     if (ipc_enabled) {
         *ipc_values->disabled = config->disabled;
-        if (display_zoom_changed) *ipc_values->display_zoom = config->display_zoom;
-        if (display_distance_changed) *ipc_values->display_north_offset = config->display_distance;
-        if (sbs_content_changed) *ipc_values->sbs_content = config->sbs_content;
-        if (sbs_mode_changed) *ipc_values->sbs_mode_stretched = config->sbs_mode_stretched;
-        if (look_ahead_changed) {
-            ipc_values->look_ahead_cfg[0] = config->look_ahead_override == 0 ?
-                                                device->look_ahead_constant : config->look_ahead_override;
-            ipc_values->look_ahead_cfg[1] = config->look_ahead_override == 0 ?
-                                                device->look_ahead_frametime_multiplier : 0.0;
-        }
+        *ipc_values->display_zoom = config->display_zoom;
+        *ipc_values->display_north_offset = config->display_distance;
+        *ipc_values->sbs_content = config->sbs_content;
+        *ipc_values->sbs_mode_stretched = config->sbs_mode_stretched;
+        ipc_values->look_ahead_cfg[0] = config->look_ahead_override == 0 ?
+                                            device->look_ahead_constant : config->look_ahead_override;
+        ipc_values->look_ahead_cfg[1] = config->look_ahead_override == 0 ?
+                                            device->look_ahead_frametime_multiplier : 0.0;
     } else if (!force_reset_threads && is_external_mode(config)) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage\n");
     }
@@ -392,7 +392,7 @@ void *manage_state_thread_func(void *arg) {
 }
 
 bool search_for_device() {
-    for (int i = 0; i < NUM_SUPPORTED_DEVICE_DRIVERS; i++) {
+    for (int i = 0; i < DEVICE_DRIVER_COUNT; i++) {
         device_driver = device_drivers[i];
         device = device_driver->device_connect_func();
         if (device) {
@@ -414,6 +414,7 @@ bool search_for_device() {
 }
 
 int main(int argc, const char** argv) {
+    printf("main\n");
     config = default_config();
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);

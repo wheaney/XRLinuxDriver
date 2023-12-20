@@ -1,5 +1,6 @@
 #include "config.h"
 #include "device.h"
+#include "plugins.h"
 #include "string.h"
 
 #include <errno.h>
@@ -41,79 +42,89 @@ void update_config(driver_config_type **config, driver_config_type *new_config) 
     *config = new_config;
 }
 
+bool equal(char *key, const char *desired_key) {
+    return strcmp(key, desired_key) == 0;
+}
+
+void boolean_config(char* key, char *value, bool *config_value) {
+    *config_value = equal(value, "true");
+}
+
+void float_config(char* key, char *value, float *config_value) {
+    char *endptr;
+    errno = 0;
+    float num = strtof(value, &endptr);
+    if (errno != ERANGE && endptr != value) {
+        *config_value = num;
+    } else {
+        fprintf(stderr, "Error parsing %s value: %s\n", key, value);
+    }
+}
+
+void int_config(char* key, char *value, int *config_value) {
+    char *endptr;
+    errno = 0;
+    long num = strtol(value, &endptr, 10);
+    if (errno != ERANGE && endptr != value) {
+        *config_value = (int) num;
+    } else {
+        fprintf(stderr, "Error parsing %s value: %s\n", key, value);
+    }
+}
+
+void string_config(char* key, char *value, char **config_value) {
+    free_and_clear(config_value);
+    *config_value = strdup(value);
+}
+
 driver_config_type* parse_config_file(FILE *fp) {
     driver_config_type *config = default_config();
+    void *plugin_configs = plugins.default_config();
 
     char line[1024];
     while (fgets(line, sizeof(line), fp) != NULL) {
         char *key = strtok(line, "=");
         char *value = strtok(NULL, "\n");
-        if (strcmp(key, "disabled") == 0) {
-            config->disabled = strcmp(value, "true") == 0;
-        } else if (strcmp(key, "debug") == 0) {
+        if (equal(key, "disabled")) {
+            boolean_config(key, value, &config->disabled);
+        } else if (equal(key, "debug")) {
             char *token = strtok(value, ",");
             while (token != NULL) {
-                if (strcmp(token, "joystick") == 0) {
+                if (equal(token, "joystick")) {
                     config->debug_joystick = true;
                 }
-                if (strcmp(token, "taps") == 0) {
+                if (equal(token, "taps")) {
                     config->debug_multi_tap = true;
                 }
-                if (strcmp(token, "threads") == 0) {
+                if (equal(token, "threads")) {
                     config->debug_threads = true;
                 }
-                if (strcmp(token, "ipc") == 0) {
+                if (equal(token, "ipc")) {
                     config->debug_ipc = true;
                 }
                 token = strtok(NULL, ",");
             }
-        } else if (strcmp(key, "use_roll_axis") == 0) {
+        } else if (equal(key, "use_roll_axis")) {
             config->use_roll_axis = true;
-        } else if (strcmp(key, "mouse_sensitivity") == 0) {
-            char *endptr;
-            errno = 0;
-            long num = strtol(value, &endptr, 10);
-            if (errno != ERANGE && endptr != value) {
-                config->mouse_sensitivity = (int) num;
-            } else {
-                fprintf(stderr, "Error parsing mouse_sensitivity value: %s\n", value);
-            }
-        } else if (strcmp(key, "look_ahead") == 0) {
-            char *endptr;
-            errno = 0;
-            float num = strtof(value, &endptr);
-            if (errno != ERANGE && endptr != value) {
-                config->look_ahead_override = num;
-            } else {
-                fprintf(stderr, "Error parsing look_ahead value: %s\n", value);
-            }
-        } else if (strcmp(key, "external_zoom") == 0 || strcmp(key, "display_zoom") == 0) {
-            char *endptr;
-            errno = 0;
-            float num = strtof(value, &endptr);
-            if (errno != ERANGE && endptr != value) {
-                config->display_zoom = num;
-            } else {
-                fprintf(stderr, "Error parsing %s value: %s\n", key, value);
-            }
-        } else if (strcmp(key, "display_distance") == 0) {
-            char *endptr;
-            errno = 0;
-            float num = strtof(value, &endptr);
-            if (errno != ERANGE && endptr != value) {
-                config->display_distance = num;
-            } else {
-                fprintf(stderr, "Error parsing display_distance value: %s\n", value);
-            }
-        } else if (strcmp(key, "output_mode") == 0) {
-            free_and_clear(&config->output_mode);
-            config->output_mode = strdup(value);
-        } else if (strcmp(key, "sbs_content") == 0) {
-            config->sbs_content = strcmp(value, "true") == 0;
-        } else  if (strcmp(key, "sbs_mode_stretched") == 0) {
-            config->sbs_mode_stretched = strcmp(value, "true") == 0;
+        } else if (equal(key, "mouse_sensitivity")) {
+            int_config(key, value, &config->mouse_sensitivity);
+        } else if (equal(key, "look_ahead")) {
+            float_config(key, value, &config->look_ahead_override);
+        } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
+            float_config(key, value, &config->display_zoom);
+        } else if (equal(key, "display_distance")) {
+            float_config(key, value, &config->display_distance);
+        } else if (equal(key, "output_mode")) {
+            string_config(key, value, &config->output_mode);
+        } else if (equal(key, "sbs_content")) {
+            boolean_config(key, value, &config->sbs_content);
+        } else  if (equal(key, "sbs_mode_stretched")) {
+            boolean_config(key, value, &config->sbs_mode_stretched);
         }
+
+        plugins.handle_config_line(plugin_configs, key, value);
     }
+    plugins.set_config(config, plugin_configs);
 
     return config;
 }

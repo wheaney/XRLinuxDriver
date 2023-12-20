@@ -21,12 +21,12 @@
 #define FORCED_CYCLE_TIME_MS 1000.0 / FORCED_CYCLES_PER_S * CYCLE_TIME_CHECK_ERROR_FACTOR
 #define BUFFER_SIZE_TARGET_MS 10
 
-#define NUM_MAPPED_DISPLAY_MODES 5
+#define MAPPED_DISPLAY_MODE_COUNT 5
 
 // These two arrays are not only used as sets to determine what type a display mode is, but they're also used to
 // map back and forth to one another (the index of a display mode in one array is used to find the corresponding
 // display mode in the other array). That's way they're ordered the way they are, and some modes are duplicated.
-const int sbs_display_modes[NUM_MAPPED_DISPLAY_MODES] = {
+const int sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE4_DISPLAY_MODE_3840x1080_60_SBS,
     DEVICE4_DISPLAY_MODE_3840x1080_72_SBS,
     DEVICE4_DISPLAY_MODE_3840x1080_90_SBS,
@@ -34,7 +34,7 @@ const int sbs_display_modes[NUM_MAPPED_DISPLAY_MODES] = {
     DEVICE4_DISPLAY_MODE_1920x1080_60_SBS  // put this last so no non-SBS mode will map to it
 };
 
-const int non_sbs_display_modes[NUM_MAPPED_DISPLAY_MODES] = {
+const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE4_DISPLAY_MODE_1920x1080_60,
     DEVICE4_DISPLAY_MODE_1920x1080_72,
     DEVICE4_DISPLAY_MODE_1920x1080_90,
@@ -183,7 +183,7 @@ void xreal_block_on_device() {
 };
 
 int get_display_mode_index(int display_mode, const int* display_modes) {
-    for (int i = 0; i < NUM_MAPPED_DISPLAY_MODES; i++) {
+    for (int i = 0; i < MAPPED_DISPLAY_MODE_COUNT; i++) {
         if (display_mode == display_modes[i]) {
             return i;
         }
