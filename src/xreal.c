@@ -170,7 +170,9 @@ void xreal_block_on_device() {
     pthread_t controller_thread;
     pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
 
-    while (!driver_device_should_disconnect() && glasses_controller && glasses_imu);
+    while (!driver_device_should_disconnect() && glasses_controller && glasses_imu) {
+        sleep(1);
+    }
 
     pthread_join(imu_thread, NULL);
     pthread_join(controller_thread, NULL);
