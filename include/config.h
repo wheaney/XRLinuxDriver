@@ -1,5 +1,7 @@
 #pragma once
 
+#include "device.h"
+
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -8,12 +10,6 @@ struct driver_config_t {
     bool use_roll_axis;
     int mouse_sensitivity;
     char *output_mode;
-    float look_ahead_override;
-    float display_zoom;
-    float display_distance;
-
-    bool sbs_content;
-    bool sbs_mode_stretched;
 
     bool debug_threads;
     bool debug_joystick;
@@ -29,7 +25,7 @@ extern const char *external_only_output_mode;
 
 driver_config_type *default_config();
 void update_config(driver_config_type **config, driver_config_type *new_config);
-driver_config_type* parse_config_file(FILE *fp);
+driver_config_type* parse_config_file(FILE *fp, device_properties_type *device);
 
 bool equal(char *key, const char *desired_key);
 void boolean_config(char* key, char *value, bool *config_value);

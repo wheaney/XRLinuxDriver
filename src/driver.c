@@ -97,7 +97,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
 
             if (glasses_calibration_started_sec == 0) {
                 glasses_calibration_started_sec=tv.tv_sec;
-                if (ipc_enabled) reset_imu_data(ipc_values);
+                if (ipc_enabled) plugins.reset_imu_data();
             } else {
                 glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
                 if (glasses_calibrated) {
@@ -149,7 +149,7 @@ void setup_ipc() {
     if (!ipc_enabled) {
         if (config->debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
         if (!ipc_values) ipc_values = malloc(sizeof(*ipc_values));
-        if (setup_ipc_values(ipc_values, config->debug_ipc)) {
+        if (setup_ipc_values(ipc_values, config->debug_ipc) && plugins.setup_ipc(config, device)) {
             ipc_enabled = true;
 
             if (not_external_only) {
@@ -162,7 +162,6 @@ void setup_ipc() {
             fprintf(stderr, "Error setting up IPC values\n");
             exit(1);
         }
-        plugins.setup_ipc(config, device, config->debug_ipc);
     } else {
         if (not_external_only) {
             if (config->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config->output_mode);
@@ -174,25 +173,18 @@ void setup_ipc() {
     }
 
     if (ipc_enabled) {
-        reset_imu_data(ipc_values);
+        plugins.reset_imu_data();
 
         // set IPC values that won't change after a device is set
         ipc_values->display_res[0]        = device->resolution_w;
         ipc_values->display_res[1]        = device->resolution_h;
         *ipc_values->display_fov          = device->fov;
         *ipc_values->lens_distance_ratio  = device->lens_distance_ratio;
-        *ipc_values->imu_data_period      = 1000.0 * (float)device->imu_buffer_size / device->imu_cycles_per_s;
 
         // always start out disabled, let it be explicitly enabled later
         *ipc_values->disabled             = true;
 
         // set defaults for everything else
-        *ipc_values->display_zoom         = config->display_zoom;
-        *ipc_values->display_north_offset = config->display_distance;
-        ipc_values->look_ahead_cfg[0]     = config->look_ahead_override == 0 ?
-                                                device->look_ahead_constant : config->look_ahead_override;
-        ipc_values->look_ahead_cfg[1]     = config->look_ahead_override == 0 ?
-                                                device->look_ahead_frametime_multiplier : 0.0;
         ipc_values->date[0]               = 0.0;
         ipc_values->date[1]               = 0.0;
         ipc_values->date[2]               = 0.0;
@@ -201,7 +193,7 @@ void setup_ipc() {
 }
 
 void update_config_from_file(FILE *fp) {
-    driver_config_type* new_config = parse_config_file(fp);
+    driver_config_type* new_config = parse_config_file(fp, device);
 
     bool driver_disabled = !config->disabled && new_config->disabled;
     if (driver_disabled)
@@ -217,18 +209,6 @@ void update_config_from_file(FILE *fp) {
 
     if (config->mouse_sensitivity != new_config->mouse_sensitivity)
         fprintf(stdout, "Mouse sensitivity has changed to %d\n", new_config->mouse_sensitivity);
-
-    bool look_ahead_changed = config->look_ahead_override != new_config->look_ahead_override;
-    if (look_ahead_changed)
-        fprintf(stdout, "Look ahead override has changed to %f\n", new_config->look_ahead_override);
-
-    bool display_zoom_changed = config->display_zoom != new_config->display_zoom;
-    if (display_zoom_changed)
-        fprintf(stdout, "Display size has changed to %f\n", new_config->display_zoom);
-
-    bool display_distance_changed = config->display_distance != new_config->display_distance;
-    if (display_distance_changed)
-        fprintf(stdout, "Display distance has changed to %f\n", new_config->display_distance);
 
     bool output_mode_changed = strcmp(config->output_mode, new_config->output_mode) != 0;
     if (output_mode_changed)
@@ -248,14 +228,6 @@ void update_config_from_file(FILE *fp) {
     if (config->debug_ipc != new_config->debug_ipc)
         fprintf(stdout, "IPC debugging has been %s\n", new_config->debug_ipc ? "enabled" : "disabled");
 
-    bool sbs_content_changed = config->sbs_content != new_config->sbs_content;
-    if (sbs_content_changed)
-        fprintf(stdout, "SBS content has been changed to %s\n", new_config->sbs_content ? "enabled" : "disabled");
-
-    bool sbs_mode_changed = config->sbs_mode_stretched != new_config->sbs_mode_stretched;
-    if (sbs_mode_changed)
-        fprintf(stdout, "SBS mode has been changed to %s\n", new_config->sbs_mode_stretched ? "stretched" : "centered");
-
     update_config(&config, new_config);
 
     if (output_mode_changed || driver_reenabled || driver_disabled)
@@ -264,14 +236,6 @@ void update_config_from_file(FILE *fp) {
 
     if (ipc_enabled) {
         *ipc_values->disabled = config->disabled;
-        *ipc_values->display_zoom = config->display_zoom;
-        *ipc_values->display_north_offset = config->display_distance;
-        *ipc_values->sbs_content = config->sbs_content;
-        *ipc_values->sbs_mode_stretched = config->sbs_mode_stretched;
-        ipc_values->look_ahead_cfg[0] = config->look_ahead_override == 0 ?
-                                            device->look_ahead_constant : config->look_ahead_override;
-        ipc_values->look_ahead_cfg[1] = config->look_ahead_override == 0 ?
-                                            device->look_ahead_frametime_multiplier : 0.0;
     } else if (!force_reset_threads && is_external_mode(config)) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage\n");
     }
@@ -359,6 +323,7 @@ void *manage_state_thread_func(void *arg) {
         state->heartbeat = tv.tv_sec;
         state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
         update_state(state);
+        plugins.handle_state(state);
 
         if (was_sbs_mode_enabled != state->sbs_mode_enabled) {
             if (state->sbs_mode_enabled) {
@@ -366,11 +331,6 @@ void *manage_state_thread_func(void *arg) {
             } else {
                 printf("SBS mode has been disabled\n");
             }
-        }
-
-        if (ipc_enabled) {
-            // this should reflect the real-world state, not the state requested by the control flag
-            *ipc_values->sbs_enabled = state->sbs_mode_enabled;
         }
 
         read_control_flags(control_flags);

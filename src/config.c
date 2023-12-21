@@ -18,15 +18,10 @@ driver_config_type *default_config() {
         exit(1);
     }
 
-    config->disabled = false;
+    config->disabled = true;
     config->use_roll_axis = false;
     config->mouse_sensitivity = 30;
     config->output_mode = strdup(mouse_output_mode);
-    config->look_ahead_override = 0.0;
-    config->display_zoom = 1.0;
-    config->display_distance = 1.0;
-    config->sbs_content = false;
-    config->sbs_mode_stretched = false;
 
     config->debug_threads = false;
     config->debug_joystick = false;
@@ -77,7 +72,7 @@ void string_config(char* key, char *value, char **config_value) {
     *config_value = strdup(value);
 }
 
-driver_config_type* parse_config_file(FILE *fp) {
+driver_config_type* parse_config_file(FILE *fp, device_properties_type *device) {
     driver_config_type *config = default_config();
     void *plugin_configs = plugins.default_config();
 
@@ -108,23 +103,13 @@ driver_config_type* parse_config_file(FILE *fp) {
             config->use_roll_axis = true;
         } else if (equal(key, "mouse_sensitivity")) {
             int_config(key, value, &config->mouse_sensitivity);
-        } else if (equal(key, "look_ahead")) {
-            float_config(key, value, &config->look_ahead_override);
-        } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
-            float_config(key, value, &config->display_zoom);
-        } else if (equal(key, "display_distance")) {
-            float_config(key, value, &config->display_distance);
         } else if (equal(key, "output_mode")) {
             string_config(key, value, &config->output_mode);
-        } else if (equal(key, "sbs_content")) {
-            boolean_config(key, value, &config->sbs_content);
-        } else  if (equal(key, "sbs_mode_stretched")) {
-            boolean_config(key, value, &config->sbs_mode_stretched);
         }
 
         plugins.handle_config_line(plugin_configs, key, value);
     }
-    plugins.set_config(config, plugin_configs);
+    plugins.set_config(config, device, plugin_configs);
 
     return config;
 }

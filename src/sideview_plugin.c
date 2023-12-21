@@ -4,6 +4,7 @@
 #include "plugins.h"
 #include "sideview_plugin.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 
 const char *sideview_position_names[SIDEVIEW_POSITION_COUNT] = {
@@ -24,8 +25,8 @@ void *sideview_default_config_func() {
 
 void sideview_handle_config_line_func(void* config, char* key, char* value) {
     sideview_config* temp_config = (sideview_config*) config;
-    if (equal(key, "sideview_enabled")) {
-        boolean_config(key, value, &temp_config->enabled);
+    if (equal(key, "external_mode")) {
+        temp_config->enabled = equal(value, "sideview");
     } else if (equal(key, "sideview_position")) {
         for (int i = 0; i < SIDEVIEW_POSITION_COUNT; i++) {
             if (equal(value, sideview_position_names[i])) {
@@ -41,7 +42,7 @@ void sideview_handle_config_line_func(void* config, char* key, char* value) {
 sideview_config *sv_config;
 sideview_ipc_values_type *sideview_ipc_values;
 void set_sideview_ipc_values_from_config(driver_config_type* driver_config) {
-    if (!sideview_ipc_values || !sideview_ipc_values) return;
+    if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
     *sideview_ipc_values->enabled = sv_config->enabled;
@@ -49,20 +50,19 @@ void set_sideview_ipc_values_from_config(driver_config_type* driver_config) {
     *sideview_ipc_values->display_size = sv_config->display_size;
 }
 
-void sideview_set_config_func(driver_config_type* driver_config, void* config) {
+void sideview_set_config_func(driver_config_type* driver_config, device_properties_type* device, void* config) {
     if (!driver_config || !config) return;
     sideview_config* temp_config = (sideview_config*) config;
 
     if (sv_config) {
-        if (sv_config->enabled != temp_config->enabled) {
+        if (sv_config->enabled != temp_config->enabled)
             printf("Sideview has been %s\n", temp_config->enabled ? "enabled" : "disabled");
-        }
-        if (sv_config->position != temp_config->position) {
+
+        if (sv_config->position != temp_config->position)
             printf("Sideview position has been changed to %s\n", sideview_position_names[temp_config->position]);
-        }
-        if (sv_config->display_size != temp_config->display_size) {
+
+        if (sv_config->display_size != temp_config->display_size)
             printf("Sideview display size has been changed to %f\n", temp_config->display_size);
-        }
 
         free(sv_config);
     }
@@ -75,7 +75,8 @@ const char *sideview_enabled_name = "sideview_enabled";
 const char *sideview_position_name = "sideview_position";
 const char *sideview_display_size_name = "sideview_display_size";
 
-bool sideview_setup_ipc_func(driver_config_type* driver_config, device_properties_type* device, bool debug) {
+bool sideview_setup_ipc_func(driver_config_type* driver_config, device_properties_type* device) {
+    bool debug = driver_config->debug_ipc;
     if (!sideview_ipc_values) sideview_ipc_values = malloc(sizeof(sideview_ipc_values_type));
     setup_ipc_value(sideview_enabled_name, (void**) &sideview_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(int), debug);
@@ -94,4 +95,5 @@ const plugin_type sideview_plugin = {
     .setup_ipc = sideview_setup_ipc_func,
     .handle_imu_data = NULL,
     .reset_imu_data = NULL,
+    .handle_state = NULL
 };

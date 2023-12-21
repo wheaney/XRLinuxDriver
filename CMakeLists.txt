@@ -39,6 +39,7 @@ add_executable(xrealAirLinuxDriver
 		src/sideview_plugin.c
 		src/state.c
 		src/strings.c
+		src/virtual_display_plugin.c
 		src/viture.c
 		src/xreal.c
 )
