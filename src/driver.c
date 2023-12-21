@@ -7,6 +7,7 @@
 #include "multitap.h"
 #include "outputs.h"
 #include "plugins.h"
+#include "runtime_context.h"
 #include "state.h"
 #include "strings.h"
 #include "viture.h"
@@ -41,9 +42,16 @@ const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
 #define MT_RECENTER_SCREEN 2
 #define MT_RESET_CALIBRATION 3
 
-driver_config_type *config;
+driver_config_type *config() {
+    return context.config;
+}
+device_properties_type *device() {
+    return context.device;
+}
+driver_state_type *state() {
+    return context.state;
+}
 device_driver_type *device_driver;
-device_properties_type *device;
 ipc_values_type *ipc_values;
 
 bool ipc_enabled = false;
@@ -51,7 +59,6 @@ bool glasses_ready=false;
 bool glasses_calibrated=false;
 long int glasses_calibration_started_sec=0;
 bool force_reset_threads=false;
-driver_state_type *state;
 control_flags_type *control_flags;
 
 bool captured_screen_center=false;
@@ -62,7 +69,7 @@ void reset_calibration(bool reset_device) {
     glasses_calibrated=false;
     captured_screen_center=false;
     control_flags->recalibrate=false;
-    state->calibration_state = CALIBRATING;
+    state()->calibration_state = CALIBRATING;
 
     if (reset_device) {
         // trigger all threads to exit, this will cause the device thread to close the device and eventually re-open it
@@ -71,12 +78,12 @@ void reset_calibration(bool reset_device) {
 }
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler) {
-    if (device) {
-        imu_euler_type euler_velocities = get_euler_velocities(device, euler);
+    if (device()) {
+        imu_euler_type euler_velocities = get_euler_velocities(euler);
 
         int multi_tap = detect_multi_tap(euler_velocities,
                                          timestamp_ms,
-                                         config->debug_multi_tap);
+                                         config()->debug_multi_tap);
         if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
             if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
             printf("Kicking off calibration\n");
@@ -99,15 +106,15 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
                 glasses_calibration_started_sec=tv.tv_sec;
                 if (ipc_enabled) plugins.reset_imu_data();
             } else {
-                glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
+                glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device()->calibration_wait_s;
                 if (glasses_calibrated) {
-                    state->calibration_state = CALIBRATED;
+                    state()->calibration_state = CALIBRATED;
                     printf("Device calibration complete\n");
                 }
             }
         }
 
-        handle_imu_update(quat, euler_velocities, screen_center, ipc_enabled, glasses_calibrated, ipc_values, device, config);
+        handle_imu_update(quat, euler_velocities, screen_center, ipc_enabled, glasses_calibrated, ipc_values);
     }
 }
 
@@ -116,14 +123,14 @@ bool driver_device_should_disconnect() {
 }
 
 bool driver_disabled() {
-    return config->disabled;
+    return config()->disabled;
 }
 
 // pthread function to create outputs and block on the device
 void *block_on_device_thread_func(void *arg) {
-    if (!config->disabled) {
-        fprintf(stdout, "Device connected, redirecting input to %s...\n", config->output_mode);
-        init_outputs(device, config);
+    if (!config()->disabled) {
+        fprintf(stdout, "Device connected, redirecting input to %s...\n", config()->output_mode);
+        init_outputs();
     }
 
     device_driver->block_on_device_func();
@@ -131,29 +138,29 @@ void *block_on_device_thread_func(void *arg) {
     // if the driver initiated the disconnect, glasses are probably still connected, keep the state alive
     glasses_ready=driver_device_should_disconnect();
     if (!glasses_ready) {
-        free_and_clear(&state->connected_device_brand);
-        free_and_clear(&state->connected_device_model);
+        free_and_clear(&state()->connected_device_brand);
+        free_and_clear(&state()->connected_device_model);
     }
-    device = NULL;
+    context.device = NULL;
 
     if (ipc_enabled) *ipc_values->disabled = true;
-    deinit_outputs(config);
+    deinit_outputs();
 
-    if (config->debug_threads)
+    if (config()->debug_threads)
         printf("\tdebug: Exiting block_on_device thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
-            glasses_ready, config->disabled, force_reset_threads);
+            glasses_ready, config()->disabled, force_reset_threads);
 }
 
 void setup_ipc() {
-    bool not_external_only = config->output_mode && !is_external_mode(config);
+    bool not_external_only = config()->output_mode && !is_external_mode(config());
     if (!ipc_enabled) {
-        if (config->debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
+        if (config()->debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
         if (!ipc_values) ipc_values = malloc(sizeof(*ipc_values));
-        if (setup_ipc_values(ipc_values, config->debug_ipc) && plugins.setup_ipc(config, device)) {
+        if (setup_ipc_values(ipc_values, config()->debug_ipc) && plugins.setup_ipc()) {
             ipc_enabled = true;
 
             if (not_external_only) {
-                if (config->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config->output_mode);
+                if (config()->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config()->output_mode);
                 ipc_enabled = false;
             } else {
                 printf("IPC enabled\n");
@@ -164,11 +171,11 @@ void setup_ipc() {
         }
     } else {
         if (not_external_only) {
-            if (config->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config->output_mode);
+            if (config()->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config()->output_mode);
             *ipc_values->disabled = true;
             ipc_enabled = false;
         } else {
-            if (config->debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
+            if (config()->debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
         }
     }
 
@@ -176,10 +183,10 @@ void setup_ipc() {
         plugins.reset_imu_data();
 
         // set IPC values that won't change after a device is set
-        ipc_values->display_res[0]        = device->resolution_w;
-        ipc_values->display_res[1]        = device->resolution_h;
-        *ipc_values->display_fov          = device->fov;
-        *ipc_values->lens_distance_ratio  = device->lens_distance_ratio;
+        ipc_values->display_res[0]        = device()->resolution_w;
+        ipc_values->display_res[1]        = device()->resolution_h;
+        *ipc_values->display_fov          = device()->fov;
+        *ipc_values->lens_distance_ratio  = device()->lens_distance_ratio;
 
         // always start out disabled, let it be explicitly enabled later
         *ipc_values->disabled             = true;
@@ -193,50 +200,50 @@ void setup_ipc() {
 }
 
 void update_config_from_file(FILE *fp) {
-    driver_config_type* new_config = parse_config_file(fp, device);
+    driver_config_type* new_config = parse_config_file(fp);
 
-    bool driver_disabled = !config->disabled && new_config->disabled;
+    bool driver_disabled = !config()->disabled && new_config->disabled;
     if (driver_disabled)
         printf("Driver has been disabled\n");
-    bool driver_reenabled = config->disabled && !new_config->disabled;
+    bool driver_reenabled = config()->disabled && !new_config->disabled;
     if (driver_reenabled)
         printf("Driver has been re-enabled\n");
 
-    if (!config->use_roll_axis && new_config->use_roll_axis)
+    if (!config()->use_roll_axis && new_config->use_roll_axis)
         printf("Roll axis has been enabled\n");
-    if (config->use_roll_axis && !new_config->use_roll_axis)
+    if (config()->use_roll_axis && !new_config->use_roll_axis)
         printf("Roll axis has been disabled\n");
 
-    if (config->mouse_sensitivity != new_config->mouse_sensitivity)
+    if (config()->mouse_sensitivity != new_config->mouse_sensitivity)
         fprintf(stdout, "Mouse sensitivity has changed to %d\n", new_config->mouse_sensitivity);
 
-    bool output_mode_changed = strcmp(config->output_mode, new_config->output_mode) != 0;
+    bool output_mode_changed = strcmp(config()->output_mode, new_config->output_mode) != 0;
     if (output_mode_changed)
         printf("Output mode has been changed to '%s'\n", new_config->output_mode);
 
-    if (!config->debug_joystick && new_config->debug_joystick)
+    if (!config()->debug_joystick && new_config->debug_joystick)
         printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat ~/.xreal_joystick_debug' in bash\n");
-    if (config->debug_joystick && !new_config->debug_joystick)
+    if (config()->debug_joystick && !new_config->debug_joystick)
         printf("Joystick debugging has been disabled\n");
 
-    if (config->debug_threads != new_config->debug_threads)
+    if (config()->debug_threads != new_config->debug_threads)
         fprintf(stdout, "Threads debugging has been %s\n", new_config->debug_threads ? "enabled" : "disabled");
 
-    if (config->debug_multi_tap != new_config->debug_multi_tap)
+    if (config()->debug_multi_tap != new_config->debug_multi_tap)
         fprintf(stdout, "Multi-tap debugging has been %s\n", new_config->debug_multi_tap ? "enabled" : "disabled");
 
-    if (config->debug_ipc != new_config->debug_ipc)
+    if (config()->debug_ipc != new_config->debug_ipc)
         fprintf(stdout, "IPC debugging has been %s\n", new_config->debug_ipc ? "enabled" : "disabled");
 
-    update_config(&config, new_config);
+    update_config(&context.config, new_config);
 
     if (output_mode_changed || driver_reenabled || driver_disabled)
         // do this to teardown and re-initialize all outputs
         force_reset_threads = true;
 
     if (ipc_enabled) {
-        *ipc_values->disabled = config->disabled;
-    } else if (!force_reset_threads && is_external_mode(config)) {
+        *ipc_values->disabled = config()->disabled;
+    } else if (!force_reset_threads && is_external_mode(config())) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage\n");
     }
 }
@@ -275,7 +282,7 @@ void *monitor_config_file_thread_func(void *arg) {
         tv.tv_usec = 0;
 
         // wait for data to be available for reading, do this with select() so we can specify a timeout and make
-        // sure we shouldn't exit due to config->disabled
+        // sure we shouldn't exit due to config()->disabled
         int retval = select(fd + 1, &readfds, NULL, NULL, &tv);
         if (retval == -1) {
             perror("select()");
@@ -306,9 +313,9 @@ void *monitor_config_file_thread_func(void *arg) {
         }
     }
 
-    if (config->debug_threads)
+    if (config()->debug_threads)
         printf("\tdebug: Exiting monitor_config_file thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
-            glasses_ready, config->disabled, force_reset_threads);
+            glasses_ready, config()->disabled, force_reset_threads);
 
     inotify_rm_watch(fd, wd);
     close(fd);
@@ -317,16 +324,16 @@ void *monitor_config_file_thread_func(void *arg) {
 // pthread function to update the state and read control flags
 void *manage_state_thread_func(void *arg) {
     struct timeval tv;
-    while (glasses_ready && device && !force_reset_threads) {
-        bool was_sbs_mode_enabled = state->sbs_mode_enabled;
+    while (glasses_ready && device() && !force_reset_threads) {
+        bool was_sbs_mode_enabled = state()->sbs_mode_enabled;
         gettimeofday(&tv, NULL);
-        state->heartbeat = tv.tv_sec;
-        state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
-        update_state(state);
-        plugins.handle_state(state);
+        state()->heartbeat = tv.tv_sec;
+        state()->sbs_mode_enabled = device()->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
+        write_state(context.state);
+        plugins.handle_state();
 
-        if (was_sbs_mode_enabled != state->sbs_mode_enabled) {
-            if (state->sbs_mode_enabled) {
+        if (was_sbs_mode_enabled != state()->sbs_mode_enabled) {
+            if (state()->sbs_mode_enabled) {
                 printf("SBS mode has been enabled\n");
             } else {
                 printf("SBS mode has been disabled\n");
@@ -334,7 +341,7 @@ void *manage_state_thread_func(void *arg) {
         }
 
         read_control_flags(control_flags);
-        if (device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
+        if (device()->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
             if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
                 fprintf(stderr, "Error setting requested SBS mode\n");
             }
@@ -344,25 +351,25 @@ void *manage_state_thread_func(void *arg) {
     }
 
     // in case any state changed during the last sleep()
-    update_state(state);
+    write_state(context.state);
 
-    if (config->debug_threads)
+    if (config()->debug_threads)
         printf("\tdebug: Exiting write_state thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
-                                                               glasses_ready, config->disabled, force_reset_threads);
+                                                               glasses_ready, config()->disabled, force_reset_threads);
 }
 
 bool search_for_device() {
     for (int i = 0; i < DEVICE_DRIVER_COUNT; i++) {
         device_driver = device_drivers[i];
-        device = device_driver->device_connect_func();
-        if (device) {
-            init_multi_tap(device->imu_cycles_per_s);
-            state->connected_device_brand = strdup(device->brand);
-            state->connected_device_model = strdup(device->model);
-            state->calibration_setup = device->calibration_setup;
-            state->calibration_state = NOT_CALIBRATED;
-            state->sbs_mode_supported = device->sbs_mode_supported;
-            state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
+        context.device = device_driver->device_connect_func();
+        if (device()) {
+            init_multi_tap(device()->imu_cycles_per_s);
+            state()->connected_device_brand = strdup(device()->brand);
+            state()->connected_device_model = strdup(device()->model);
+            state()->calibration_setup = device()->calibration_setup;
+            state()->calibration_state = NOT_CALIBRATED;
+            state()->sbs_mode_supported = device()->sbs_mode_supported;
+            state()->sbs_mode_enabled = device()->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
 
             return true;
         } else {
@@ -374,11 +381,11 @@ bool search_for_device() {
 }
 
 int main(int argc, const char** argv) {
-    config = default_config();
+    context.config = default_config();
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);
 
-    state = malloc(sizeof(driver_state_type));
+    context.state = malloc(sizeof(driver_state_type));
     control_flags = malloc(sizeof(control_flags_type));
     read_control_flags(control_flags);
 
@@ -422,7 +429,7 @@ int main(int argc, const char** argv) {
         reset_calibration(false);
         if (ipc_enabled) *ipc_values->disabled = false;
 
-        if (config->debug_threads)
+        if (config()->debug_threads)
             printf("\tdebug: Kicking off all threads\n");
 
         // kick off threads to monitor glasses and config file, wait for both to finish (glasses disconnected)
@@ -437,7 +444,7 @@ int main(int argc, const char** argv) {
         pthread_join(manage_state_thread, NULL);
         pthread_join(monitor_config_file_thread, NULL);
 
-        if (config->debug_threads)
+        if (config()->debug_threads)
             printf("\tdebug: All threads have exited, starting over\n");
     }
 

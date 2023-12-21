@@ -6,6 +6,7 @@
 #include "ipc.h"
 #include "outputs.h"
 #include "plugins.h"
+#include "runtime_context.h"
 #include "strings.h"
 
 #include <libevdev/libevdev.h>
@@ -153,12 +154,12 @@ float degree_delta(float prev, float next) {
     return delta;
 }
 
-imu_euler_type get_euler_velocities(device_properties_type *device, imu_euler_type euler) {
+imu_euler_type get_euler_velocities(imu_euler_type euler) {
     static imu_euler_type prev_euler;
     imu_euler_type velocities = {
-        .roll=degree_delta(prev_euler.roll, euler.roll) * device->imu_cycles_per_s,
-        .pitch=degree_delta(prev_euler.pitch, euler.pitch) * device->imu_cycles_per_s,
-        .yaw=degree_delta(prev_euler.yaw, euler.yaw) * device->imu_cycles_per_s
+        .roll=degree_delta(prev_euler.roll, euler.roll) * context.device->imu_cycles_per_s,
+        .pitch=degree_delta(prev_euler.pitch, euler.pitch) * context.device->imu_cycles_per_s,
+        .yaw=degree_delta(prev_euler.yaw, euler.yaw) * context.device->imu_cycles_per_s
     };
 
     prev_euler = euler;
@@ -166,13 +167,13 @@ imu_euler_type get_euler_velocities(device_properties_type *device, imu_euler_ty
     return velocities;
 }
 
-void init_outputs(device_properties_type *device, driver_config_type *config) {
-    joystick_debug_imu_cycles = ceil(100.0 * device->imu_cycles_per_s / 1000.0); // update joystick debug file roughly every 100 ms
+void init_outputs() {
+    joystick_debug_imu_cycles = ceil(100.0 * context.device->imu_cycles_per_s / 1000.0); // update joystick debug file roughly every 100 ms
     joystick_max_degrees_per_s = 360.0 / 4;
     float joystick_max_radians_per_s = joystick_max_degrees_per_s * M_PI / 180.0;
 
     evdev = libevdev_new();
-    if (is_joystick_mode(config)) {
+    if (is_joystick_mode(context.config)) {
         struct input_absinfo absinfo;
         absinfo.minimum = min_input;
         absinfo.maximum = max_input;
@@ -197,7 +198,7 @@ void init_outputs(device_properties_type *device, driver_config_type *config) {
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
 
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
-    } else if (is_mouse_mode(config)) {
+    } else if (is_mouse_mode(context.config)) {
         libevdev_set_name(evdev, "XR virtual mouse");
 
         evdev_check("libevdev_enable_event_type", libevdev_enable_event_type(evdev, EV_REL));
@@ -210,11 +211,11 @@ void init_outputs(device_properties_type *device, driver_config_type *config) {
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_MIDDLE, NULL));
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_RIGHT, NULL));
     }
-    if (is_evdev_output_mode(config))
+    if (is_evdev_output_mode(context.config))
         evdev_check("libevdev_uinput_create_from_device", libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 }
 
-void deinit_outputs(driver_config_type *config) {
+void deinit_outputs() {
     if (uinput) {
         libevdev_uinput_destroy(uinput);
         uinput = NULL;
@@ -226,8 +227,7 @@ void deinit_outputs(driver_config_type *config) {
 }
 
 void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_type screen_center,
-                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values,
-                       device_properties_type *device, driver_config_type *config) {
+                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (ipc_enabled) {
         // send keepalive every counter period
         if (imu_counter == 0) {
@@ -251,20 +251,20 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_t
     int next_joystick_y = joystick_value(velocities.pitch, joystick_max_degrees_per_s);
 
     if (uinput) {
-        if (is_joystick_mode(config)) {
+        if (is_joystick_mode(context.config)) {
             int next_joystick_z = joystick_value(-velocities.roll, joystick_max_degrees_per_s);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
             libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
-            if (config->use_roll_axis)
+            if (context.config->use_roll_axis)
                 libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, next_joystick_z);
-        } else if (is_mouse_mode(config)) {
+        } else if (is_mouse_mode(context.config)) {
             // keep track of the remainder (the amount that was lost with round()) for smoothing out mouse movements
             static float mouse_x_remainder = 0.0;
             static float mouse_y_remainder = 0.0;
             static float mouse_z_remainder = 0.0;
 
             // smooth out the mouse values using the remainders left over from previous writes
-            float mouse_sensitivity_seconds = (float) config->mouse_sensitivity / device->imu_cycles_per_s;
+            float mouse_sensitivity_seconds = (float) context.config->mouse_sensitivity / context.device->imu_cycles_per_s;
             float next_x = -velocities.yaw * mouse_sensitivity_seconds + mouse_x_remainder;
             int next_x_int = round(next_x);
             mouse_x_remainder = next_x - next_x_int;
@@ -279,27 +279,27 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, imu_quat_t
 
             libevdev_uinput_write_event(uinput, EV_REL, REL_X, next_x_int);
             libevdev_uinput_write_event(uinput, EV_REL, REL_Y, next_y_int);
-            if (config->use_roll_axis)
+            if (context.config->use_roll_axis)
                 libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
-        } else if (!is_external_mode(config)) {
-            fprintf(stderr, "Unsupported output mode: %s\n", config->output_mode);
+        } else if (!is_external_mode(context.config)) {
+            fprintf(stderr, "Unsupported output mode: %s\n", context.config->output_mode);
         }
 
-        if (is_evdev_output_mode(config))
+        if (is_evdev_output_mode(context.config))
             libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
     }
 
     // always use joystick debugging as it adds a helpful visual
-    if (config->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0) {
+    if (context.config->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0) {
         joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
     }
     prev_joystick_x = next_joystick_x;
     prev_joystick_y = next_joystick_y;
 
-    plugins.handle_imu_data(quat, velocities, screen_center, ipc_enabled, imu_calibrated, ipc_values, device, config);
+    plugins.handle_imu_data(quat, velocities, screen_center, ipc_enabled, imu_calibrated, ipc_values);
 
     // reset the counter every second
-    if ((++imu_counter % device->imu_cycles_per_s) == 0) {
+    if ((++imu_counter % context.device->imu_cycles_per_s) == 0) {
         imu_counter = 0;
     }
 }

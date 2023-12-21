@@ -1,5 +1,7 @@
 #pragma once
 
+#include "device.h" // for calibration_setup_type
+
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -37,5 +39,5 @@ struct control_flags_t {
 typedef struct control_flags_t control_flags_type;
 
 FILE* get_or_create_state_file(char *filename, char *mode, char *full_path);
-void update_state(driver_state_type *state);
+void write_state(driver_state_type *state);
 void read_control_flags(control_flags_type *flags);

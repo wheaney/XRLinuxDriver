@@ -2,6 +2,7 @@
 #include "device.h"
 #include "ipc.h"
 #include "plugins.h"
+#include "runtime_context.h"
 #include "sideview_plugin.h"
 
 #include <stdbool.h>
@@ -41,7 +42,7 @@ void sideview_handle_config_line_func(void* config, char* key, char* value) {
 
 sideview_config *sv_config;
 sideview_ipc_values_type *sideview_ipc_values;
-void set_sideview_ipc_values_from_config(driver_config_type* driver_config) {
+void set_sideview_ipc_values_from_config() {
     if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
@@ -50,8 +51,8 @@ void set_sideview_ipc_values_from_config(driver_config_type* driver_config) {
     *sideview_ipc_values->display_size = sv_config->display_size;
 }
 
-void sideview_set_config_func(driver_config_type* driver_config, device_properties_type* device, void* config) {
-    if (!driver_config || !config) return;
+void sideview_set_config_func(void* config) {
+    if (!context.config || !config) return;
     sideview_config* temp_config = (sideview_config*) config;
 
     if (sv_config) {
@@ -68,21 +69,21 @@ void sideview_set_config_func(driver_config_type* driver_config, device_properti
     }
     sv_config = temp_config;
 
-    set_sideview_ipc_values_from_config(driver_config);
+    set_sideview_ipc_values_from_config();
 };
 
 const char *sideview_enabled_name = "sideview_enabled";
 const char *sideview_position_name = "sideview_position";
 const char *sideview_display_size_name = "sideview_display_size";
 
-bool sideview_setup_ipc_func(driver_config_type* driver_config, device_properties_type* device) {
-    bool debug = driver_config->debug_ipc;
+bool sideview_setup_ipc_func() {
+    bool debug = context.config->debug_ipc;
     if (!sideview_ipc_values) sideview_ipc_values = malloc(sizeof(sideview_ipc_values_type));
     setup_ipc_value(sideview_enabled_name, (void**) &sideview_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(int), debug);
     setup_ipc_value(sideview_display_size_name, (void**) &sideview_ipc_values->display_size, sizeof(float), debug);
 
-    set_sideview_ipc_values_from_config(driver_config);
+    set_sideview_ipc_values_from_config();
 
     return true;
 }

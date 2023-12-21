@@ -31,6 +31,7 @@ struct virtual_display_config_t {
     float look_ahead_override;
     float display_zoom;
     float display_distance;
+    float sbs_display_size;
     bool sbs_content;
     bool sbs_mode_stretched;
 };

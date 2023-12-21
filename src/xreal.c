@@ -3,6 +3,7 @@
 #include "device4.h"
 #include "driver.h"
 #include "imu.h"
+#include "runtime_context.h"
 #include "strings.h"
 
 #include <math.h>
@@ -100,7 +101,6 @@ void handle_xreal_controller_event(
 
 device3_type* glasses_imu;
 device4_type* glasses_controller;
-device_properties_type* connected_device;
 device_properties_type* xreal_device_connect() {
     glasses_imu = malloc(sizeof(device3_type));
     bool success = device3_open(glasses_imu, handle_xreal_event) == DEVICE3_ERROR_NO_ERROR;
@@ -114,8 +114,7 @@ device_properties_type* xreal_device_connect() {
     }
 
     if (success) {
-        if (connected_device) free(connected_device);
-        connected_device = malloc(sizeof(device_properties_type));
+        device_properties_type *connected_device = malloc(sizeof(device_properties_type));
         *connected_device = xreal_air_properties;
 
         connected_device->hid_product_id = glasses_imu->product_id;
@@ -177,9 +176,8 @@ void xreal_block_on_device() {
     pthread_join(imu_thread, NULL);
     pthread_join(controller_thread, NULL);
 
-    free(connected_device->model);
-    free(connected_device);
-    connected_device = NULL;
+    free(context.device->model);
+    free(context.device);
 };
 
 int get_display_mode_index(int display_mode, const int* display_modes) {

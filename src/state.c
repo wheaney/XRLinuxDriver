@@ -26,7 +26,7 @@ FILE* get_state_file(const char *filename, char *mode, char *full_path) {
     return fopen(full_path, mode ? mode : "r");
 }
 
-void update_state(driver_state_type *state) {
+void write_state(driver_state_type *state) {
     char file_path[1024];
     FILE* fp = get_state_file(state_filename, "w", &file_path[0]);
 

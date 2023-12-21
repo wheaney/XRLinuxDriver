@@ -1,5 +1,4 @@
 #include "config.h"
-#include "device.h"
 #include "plugins.h"
 #include "string.h"
 
@@ -72,7 +71,7 @@ void string_config(char* key, char *value, char **config_value) {
     *config_value = strdup(value);
 }
 
-driver_config_type* parse_config_file(FILE *fp, device_properties_type *device) {
+driver_config_type* parse_config_file(FILE *fp) {
     driver_config_type *config = default_config();
     void *plugin_configs = plugins.default_config();
 
@@ -109,7 +108,7 @@ driver_config_type* parse_config_file(FILE *fp, device_properties_type *device) 
 
         plugins.handle_config_line(plugin_configs, key, value);
     }
-    plugins.set_config(config, device, plugin_configs);
+    plugins.set_config(plugin_configs);
 
     return config;
 }
