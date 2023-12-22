@@ -19,7 +19,7 @@ void *virtual_display_default_config_func() {
     config->enabled = false;
     config->look_ahead_override = 0.0;
     config->display_zoom = 1.0;
-    config->display_distance = 1.0;
+    config->sbs_display_distance = 1.0;
     config->sbs_content = false;
     config->sbs_mode_stretched = false;
 
@@ -35,8 +35,8 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
         float_config(key, value, &temp_config->look_ahead_override);
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
         float_config(key, value, &temp_config->display_zoom);
-    } else if (equal(key, "display_distance")) {
-        float_config(key, value, &temp_config->display_distance);
+    } else if (equal(key, "sbs_display_distance")) {
+        float_config(key, value, &temp_config->sbs_display_distance);
     } else if (equal(key, "sbs_display_size")) {
         float_config(key, value, &temp_config->sbs_display_size);
     } else if (equal(key, "sbs_content")) {
@@ -57,7 +57,7 @@ void set_virtual_display_ipc_values_from_config() {
                                                             context.device->imu_cycles_per_s;
     *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
                                                             vd_config->display_zoom;
-    *virtual_display_ipc_values->display_north_offset  = vd_config->display_distance;
+    *virtual_display_ipc_values->display_north_offset  = vd_config->sbs_display_distance;
     virtual_display_ipc_values->look_ahead_cfg[0]      = vd_config->look_ahead_override == 0 ?
                                                             context.device->look_ahead_constant :
                                                             vd_config->look_ahead_override;
@@ -84,8 +84,8 @@ void virtual_display_set_config_func(void* config) {
         if (vd_config->sbs_display_size != temp_config->sbs_display_size)
             fprintf(stdout, "SBS display size has changed to %f\n", temp_config->sbs_display_size);
 
-        if (vd_config->display_distance != temp_config->display_distance)
-            fprintf(stdout, "Display distance has changed to %f\n", temp_config->display_distance);
+        if (vd_config->sbs_display_distance != temp_config->sbs_display_distance)
+            fprintf(stdout, "SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
 
         if (vd_config->sbs_content != temp_config->sbs_content)
             fprintf(stdout, "SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
@@ -157,7 +157,7 @@ bool virtual_display_setup_ipc_func() {
 
 void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type velocities, imu_quat_type screen_center,
                                    bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (ipc_enabled && virtual_display_ipc_values) {
+    if (vd_config && vd_config.enabled && ipc_enabled && virtual_display_ipc_values) {
         if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
                 quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
