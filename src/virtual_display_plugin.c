@@ -55,10 +55,12 @@ void set_virtual_display_ipc_values_from_config() {
     *virtual_display_ipc_values->enabled               = vd_config->enabled;
     *virtual_display_ipc_values->imu_data_period       = 1000.0 * (float)context.device->imu_buffer_size /
                                                             context.device->imu_cycles_per_s;
-    *virtual_display_ipc_values->display_zoom          = vd_config->display_zoom;
+    *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
+                                                            vd_config->display_zoom;
     *virtual_display_ipc_values->display_north_offset  = vd_config->display_distance;
     virtual_display_ipc_values->look_ahead_cfg[0]      = vd_config->look_ahead_override == 0 ?
-                                                            context.device->look_ahead_constant : vd_config->look_ahead_override;
+                                                            context.device->look_ahead_constant :
+                                                            vd_config->look_ahead_override;
     virtual_display_ipc_values->look_ahead_cfg[1]      = vd_config->look_ahead_override == 0 ?
                                                             context.device->look_ahead_frametime_multiplier : 0.0;
     *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
@@ -78,6 +80,9 @@ void virtual_display_set_config_func(void* config) {
 
         if (vd_config->display_zoom != temp_config->display_zoom)
             fprintf(stdout, "Display size has changed to %f\n", temp_config->display_zoom);
+
+        if (vd_config->sbs_display_size != temp_config->sbs_display_size)
+            fprintf(stdout, "SBS display size has changed to %f\n", temp_config->sbs_display_size);
 
         if (vd_config->display_distance != temp_config->display_distance)
             fprintf(stdout, "Display distance has changed to %f\n", temp_config->display_distance);

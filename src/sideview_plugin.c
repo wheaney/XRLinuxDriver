@@ -19,7 +19,7 @@ void *sideview_default_config_func() {
     sideview_config *config = malloc(sizeof(sideview_config));
     config->enabled = false;
     config->position = 0;
-    config->display_size = 1.0;
+    config->display_size = 0.5;
 
     return config;
 };
