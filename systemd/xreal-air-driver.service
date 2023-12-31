@@ -4,7 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'HOME={user_home} {user_home}/bin/xrealAirLinuxDriver'
+Environment=HOME={user_home}
+ExecStart={user_home}/bin/xrealAirLinuxDriver
 Restart=on-failure
 
 [Install]
