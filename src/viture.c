@@ -11,6 +11,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+// VITURE rotations seem to be about 5 degrees (about y axis) off of actual,
+// which results in slight twisting about the x axis when looking left/right.
+// Use this quaternion to adjust the rotation to balance out the error.
+const imu_quat_type adjustment_quat = {
+    .w = 0.99875,
+    .x = 0,
+    .y = 0.049979,
+    .z = 0
+};
+
 const device_properties_type viture_one_properties = {
     .brand                              = "VITURE",
     .model                              = "One",
@@ -24,9 +34,16 @@ const device_properties_type viture_one_properties = {
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
     .imu_buffer_size                    = 1,
-    .look_ahead_constant                = 10.0,
-    .look_ahead_frametime_multiplier    = 0.3,
+    .look_ahead_constant                = 5.0,
+    .look_ahead_frametime_multiplier    = 0.15,
     .sbs_mode_supported                 = true
+};
+
+const int frequency_enum_to_value[] = {
+    [IMU_FREQUENCE_60] = 60,
+    [IMU_FREQUENCE_90] = 90,
+    [IMU_FREQUENCE_120] = 120,
+    [IMU_FREQUENCE_240] = 240
 };
 
 static float float_from_imu_data(uint8_t *data)
@@ -68,6 +85,7 @@ imu_quat_type zxy_euler_to_quaternion(imu_euler_type euler) {
     return normalize_quaternion(q);
 }
 
+bool old_firmware_version = true;
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     if (driver_disabled()) return;
 
@@ -81,13 +99,26 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
         .yaw = euler_yaw
     };
 
-    imu_quat_type quat = zxy_euler_to_quaternion(euler);
+    imu_quat_type quat;
+    if (len >= 36 && !old_firmware_version) {
+        quat.w = float_from_imu_data(data + 20);
+        quat.x = float_from_imu_data(data + 24);
+        quat.y = float_from_imu_data(data + 28);
+        quat.z = float_from_imu_data(data + 32);
+    } else {
+        quat = zxy_euler_to_quaternion(euler);
+    }
+
+    quat = multiply_quaternions(quat, adjustment_quat);
 
     driver_handle_imu_event(timestamp, quat, euler);
 }
 
+bool sbs_mode_enabled = false;
 void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t ts) {
-    // TODO
+    if (msgid == MCU_SBS_ADJUSTMENT_MSG) {
+        sbs_mode_enabled = data[0] == MCU_SBS_ADJUSTMENT_ENABLED;
+    }
 }
 
 device_properties_type* viture_device_connect() {
@@ -96,8 +127,19 @@ device_properties_type* viture_device_connect() {
         success = set_imu(true) == ERR_SUCCESS;
 
         if (success) {
+            // device may not support this frequency, re-query it below
+            set_imu_fq(IMU_FREQUENCE_240);
+
             device_properties_type* device = malloc(sizeof(device_properties_type));
             *device = viture_one_properties;
+
+            // use the current value in case the frequency we requested isn't supported
+            device->imu_cycles_per_s = frequency_enum_to_value[get_imu_fq()];
+
+            // not a great way to check the firmware version but it's all we have
+            old_firmware_version = device->imu_cycles_per_s == 60;
+
+            device->sbs_mode_supported = !old_firmware_version;
 
             return device;
         }
@@ -126,11 +168,12 @@ void viture_block_on_device() {
 };
 
 bool viture_device_is_sbs_mode() {
-    return get_3d_state() == 1;
+    return sbs_mode_enabled;
 };
 
 bool viture_device_set_sbs_mode(bool enabled) {
-    return set_3d(enabled);
+    sbs_mode_enabled = enabled;
+    return set_3d(enabled) == ERR_SUCCESS;
 };
 
 const device_driver_type viture_driver = {
