@@ -34,10 +34,10 @@ const device_properties_type viture_one_properties = {
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
     .imu_buffer_size                    = 1,
-    .look_ahead_constant                = 8.0,
-    .look_ahead_frametime_multiplier    = 0.3,
+    .look_ahead_constant                = 20.0,
+    .look_ahead_frametime_multiplier    = 0.6,
     .look_ahead_scanline_adjust         = 5.0,
-    .look_ahead_ms_cap                  = 25.0,
+    .look_ahead_ms_cap                  = 30.0,
     .sbs_mode_supported                 = true
 };
 
@@ -130,7 +130,7 @@ device_properties_type* viture_device_connect() {
 
         if (success) {
             // device may not support this frequency, re-query it below
-            set_imu_fq(IMU_FREQUENCE_240);
+            set_imu_fq(IMU_FREQUENCE_120);
 
             device_properties_type* device = malloc(sizeof(device_properties_type));
             *device = viture_one_properties;
