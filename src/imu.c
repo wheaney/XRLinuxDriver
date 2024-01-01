@@ -16,6 +16,17 @@ imu_quat_type normalize_quaternion(imu_quat_type q) {
     return q;
 }
 
+imu_quat_type conjugate(imu_quat_type q) {
+    imu_quat_type q_conj = {
+        .w = q.w,
+        .x = -q.x,
+        .y = -q.y,
+        .z = -q.z
+    };
+
+    return q_conj;
+}
+
 imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2) {
     imu_quat_type q = {
         .w = q1.w*q2.w - q1.x*q2.x - q1.y*q2.y - q1.z*q2.z,

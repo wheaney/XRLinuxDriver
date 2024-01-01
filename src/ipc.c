@@ -45,6 +45,17 @@ void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debu
     free(path);
 
     int shmid = shmget(key, size, 0666|IPC_CREAT);
+    if (shmid == -1) {
+        // it may have been allocated using a different size, attempt to find and delete it
+        shmid = shmget(key, 0, 0);
+        if (shmid != -1) {
+            if (debug) printf("\tdebug: ipc_key, deleting shared memory segment with key %d\n", key);
+            shmctl(shmid, IPC_RMID, NULL);
+        } else {
+            if (debug) printf("\tdebug: ipc_key, couldn't delete, no shmid for key %d\n", key);
+        }
+    }
+
     if (shmid != -1) {
         *shmemValue = shmat(shmid,(void*)0,0);
         if (*shmemValue == (void *) -1) {

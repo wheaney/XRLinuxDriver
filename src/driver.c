@@ -94,9 +94,12 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
                 if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
                 printf("Centering screen\n");
 
-                screen_center = quat;
+                screen_center = conjugate(quat);
                 captured_screen_center=true;
                 control_flags->recenter_screen=false;
+            } else {
+                // adjust the current rotation by the conjugate of the screen placement quat
+                quat = multiply_quaternions(screen_center, quat);
             }
         } else {
             struct timeval tv;
@@ -114,7 +117,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
             }
         }
 
-        handle_imu_update(quat, euler_velocities, screen_center, ipc_enabled, glasses_calibrated, ipc_values);
+        handle_imu_update(quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
     }
 }
 

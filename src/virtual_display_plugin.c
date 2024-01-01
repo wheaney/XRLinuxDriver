@@ -52,7 +52,7 @@ void set_virtual_display_ipc_values_from_config() {
     if (!virtual_display_ipc_values) return;
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
-    *virtual_display_ipc_values->enabled               = vd_config->enabled;
+    *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled;
     *virtual_display_ipc_values->imu_data_period       = 1000.0 * (float)context.device->imu_buffer_size /
                                                             context.device->imu_cycles_per_s;
     *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
@@ -63,6 +63,8 @@ void set_virtual_display_ipc_values_from_config() {
                                                             vd_config->look_ahead_override;
     virtual_display_ipc_values->look_ahead_cfg[1]      = vd_config->look_ahead_override == 0 ?
                                                             context.device->look_ahead_frametime_multiplier : 0.0;
+    virtual_display_ipc_values->look_ahead_cfg[2]      = context.device->look_ahead_scanline_adjust;
+    virtual_display_ipc_values->look_ahead_cfg[3]      = context.device->look_ahead_ms_cap;
     *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
     *virtual_display_ipc_values->sbs_mode_stretched    = vd_config->sbs_mode_stretched;
 }
@@ -117,7 +119,7 @@ bool virtual_display_setup_ipc_func() {
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_imu_data_ipc_name, (void**) &virtual_display_ipc_values->imu_data, sizeof(float) * 16, debug);
     setup_ipc_value(virtual_display_imu_data_period_name, (void**) &virtual_display_ipc_values->imu_data_period, sizeof(float), debug);
-    setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 2, debug);
+    setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
     setup_ipc_value(virtual_display_display_zoom_ipc_name, (void**) &virtual_display_ipc_values->display_zoom, sizeof(float), debug);
     setup_ipc_value(virtual_display_display_north_offset_ipc_name, (void**) &virtual_display_ipc_values->display_north_offset, sizeof(float), debug);
     setup_ipc_value(virtual_display_sbs_enabled_name, (void**) &virtual_display_ipc_values->sbs_enabled, sizeof(bool), debug);
@@ -155,8 +157,8 @@ bool virtual_display_setup_ipc_func() {
     return true;
 }
 
-void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type velocities, imu_quat_type screen_center,
-                                   bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
+void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
+                                          bool imu_calibrated, ipc_values_type *ipc_values) {
     if (vd_config && vd_config->enabled && ipc_enabled && virtual_display_ipc_values) {
         if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
@@ -203,10 +205,6 @@ void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type vel
                     virtual_display_ipc_values->imu_data[9] = stage_2_quat_y;
                     virtual_display_ipc_values->imu_data[10] = stage_2_quat_z;
                     virtual_display_ipc_values->imu_data[11] = stage_2_quat_w;
-                    virtual_display_ipc_values->imu_data[12] = screen_center.x;
-                    virtual_display_ipc_values->imu_data[13] = screen_center.y;
-                    virtual_display_ipc_values->imu_data[14] = screen_center.z;
-                    virtual_display_ipc_values->imu_data[15] = screen_center.w;
 
                     pthread_mutex_unlock(virtual_display_ipc_values->imu_data_mutex);
                 }

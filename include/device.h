@@ -39,6 +39,12 @@ struct device_properties_t {
     float look_ahead_constant;
     float look_ahead_frametime_multiplier;
 
+    // if top and bottom rows of the display require different look-ahead
+    float look_ahead_scanline_adjust;
+
+    // maximum look-ahead for best experience, the shader may also provide an upper bound
+    float look_ahead_ms_cap;
+
     bool sbs_mode_supported;
 };
 

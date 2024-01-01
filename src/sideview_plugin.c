@@ -46,7 +46,7 @@ void set_sideview_ipc_values_from_config() {
     if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
-    *sideview_ipc_values->enabled = sv_config->enabled;
+    *sideview_ipc_values->enabled = sv_config->enabled && !context.config->disabled;
     *sideview_ipc_values->position = sv_config->position;
     *sideview_ipc_values->display_size = sv_config->display_size;
 }

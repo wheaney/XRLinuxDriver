@@ -12,8 +12,8 @@ typedef void (*set_config_func)(void* config);
 
 // hook functions
 typedef bool (*setup_ipc_func)();
-typedef void (*handle_imu_data_func)(imu_quat_type quat, imu_euler_type velocities, imu_quat_type screen_center,
-                                     bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values);
+typedef void (*handle_imu_data_func)(imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
+                                     bool imu_calibrated, ipc_values_type *ipc_values);
 typedef void (*reset_imu_data_func)();
 typedef void (*handle_state_func)();
 
