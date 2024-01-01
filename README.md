@@ -1,4 +1,4 @@
-# XR Linux Gaming Driver
+# XR Linux Driver
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U8OVC0L)
 
