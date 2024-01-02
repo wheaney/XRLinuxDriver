@@ -15,9 +15,9 @@
 // which results in slight twisting about the x axis when looking left/right.
 // Use this quaternion to adjust the rotation to balance out the error.
 const imu_quat_type adjustment_quat = {
-    .w = 0.998,
+    .w = 0.999,
     .x = 0,
-    .y = 0.061,
+    .y = 0.044,
     .z = 0
 };
 
@@ -29,7 +29,7 @@ const device_properties_type viture_one_properties = {
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
     .resolution_w                       = 1920,
     .resolution_h                       = 1080,
-    .fov                                = 40.0,
+    .fov                                = 43.0,
     .lens_distance_ratio                = 0.0275,
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
