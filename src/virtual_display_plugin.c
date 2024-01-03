@@ -48,7 +48,7 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
 
 virtual_display_config *vd_config;
 virtual_display_ipc_values_type *virtual_display_ipc_values;
-void set_virtual_display_ipc_values_from_config() {
+void set_virtual_display_ipc_values() {
     if (!virtual_display_ipc_values) return;
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
@@ -99,7 +99,7 @@ void virtual_display_set_config_func(void* config) {
     }
     vd_config = temp_config;
 
-    set_virtual_display_ipc_values_from_config();
+    set_virtual_display_ipc_values();
 };
 
 const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
@@ -152,7 +152,7 @@ bool virtual_display_setup_ipc_func() {
         return false;
     }
 
-    set_virtual_display_ipc_values_from_config();
+    set_virtual_display_ipc_values();
 
     return true;
 }
@@ -216,6 +216,8 @@ void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type vel
 void virtual_display_handle_state_func() {
     if (!virtual_display_ipc_values) return;
     *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled;
+
+    set_virtual_display_ipc_values();
 }
 
 void virtual_display_reset_imu_data_func() {

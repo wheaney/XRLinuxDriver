@@ -36,9 +36,10 @@ const device_properties_type viture_one_properties = {
     .imu_buffer_size                    = 1,
     .look_ahead_constant                = 20.0,
     .look_ahead_frametime_multiplier    = 0.6,
-    .look_ahead_scanline_adjust         = 5.0,
+    .look_ahead_scanline_adjust         = 10.0,
     .look_ahead_ms_cap                  = 30.0,
-    .sbs_mode_supported                 = true
+    .sbs_mode_supported                 = true,
+    .firmware_update_recommended        = false
 };
 
 const int frequency_enum_to_value[] = {
@@ -124,35 +125,34 @@ void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t t
 }
 
 device_properties_type* viture_device_connect() {
-    bool success = init(handle_viture_event, viture_mcu_callback);
+    bool alreadyConnected = get_imu_state() == ERR_SUCCESS;
+
+    bool success = alreadyConnected || init(handle_viture_event, viture_mcu_callback);
     if (success) {
-        success = set_imu(true) == ERR_SUCCESS;
+        success = alreadyConnected || set_imu(true) == ERR_SUCCESS;
 
         if (success) {
             // device may not support this frequency, re-query it below
-            set_imu_fq(IMU_FREQUENCE_120);
+            set_imu_fq(IMU_FREQUENCE_240);
 
             device_properties_type* device = malloc(sizeof(device_properties_type));
             *device = viture_one_properties;
 
             // use the current value in case the frequency we requested isn't supported
             device->imu_cycles_per_s = frequency_enum_to_value[get_imu_fq()];
+            device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
 
             // not a great way to check the firmware version but it's all we have
             old_firmware_version = device->imu_cycles_per_s == 60;
 
             device->sbs_mode_supported = !old_firmware_version;
+            device->firmware_update_recommended = old_firmware_version;
 
             return device;
         }
     }
 
     return NULL;
-};
-
-void viture_device_cleanup() {
-    set_imu(false);
-    deinit();
 };
 
 void viture_block_on_device() {
@@ -166,7 +166,11 @@ void viture_block_on_device() {
         fprintf(stderr, "VITURE glasses error %d\n", imu_state);
     }
 
-    viture_device_cleanup();
+    // only do this if the device was disconnected
+    if (imu_state == ERR_WRITE_FAIL) {
+        set_imu(false);
+        deinit();
+    }
 };
 
 bool viture_device_is_sbs_mode() {

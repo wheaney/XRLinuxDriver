@@ -46,6 +46,7 @@ struct device_properties_t {
     float look_ahead_ms_cap;
 
     bool sbs_mode_supported;
+    bool firmware_update_recommended;
 };
 
 typedef struct device_properties_t device_properties_type;

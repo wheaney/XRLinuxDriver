@@ -373,6 +373,7 @@ bool search_for_device() {
             state()->calibration_state = NOT_CALIBRATED;
             state()->sbs_mode_supported = device()->sbs_mode_supported;
             state()->sbs_mode_enabled = device()->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
+            state()->firmware_update_recommended = device()->firmware_update_recommended;
 
             return true;
         } else {

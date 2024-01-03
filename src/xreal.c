@@ -69,7 +69,8 @@ const device_properties_type xreal_air_properties = {
     .look_ahead_frametime_multiplier    = 0.3,
     .look_ahead_scanline_adjust         = 5.0,  // the bottom row of pixels take 5 ms longer to display a frame
     .look_ahead_ms_cap                  = 30.0,
-    .sbs_mode_supported                 = true
+    .sbs_mode_supported                 = true,
+    .firmware_update_recommended        = false
 };
 
 uint32_t last_utilized_event_ts = 0;
