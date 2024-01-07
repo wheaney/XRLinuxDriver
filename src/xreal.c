@@ -179,7 +179,6 @@ void xreal_block_on_device() {
     pthread_join(controller_thread, NULL);
 
     free(context.device->model);
-    free(context.device);
 };
 
 int get_display_mode_index(int display_mode, const int* display_modes) {

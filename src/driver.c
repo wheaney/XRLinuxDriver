@@ -15,12 +15,14 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <execinfo.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <libgen.h>
 #include <limits.h>
 #include <math.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -144,6 +146,7 @@ void *block_on_device_thread_func(void *arg) {
         free_and_clear(&state()->connected_device_brand);
         free_and_clear(&state()->connected_device_model);
     }
+    free(context.device);
     context.device = NULL;
 
     if (ipc_enabled) *ipc_values->disabled = true;
@@ -384,7 +387,29 @@ bool search_for_device() {
     return false;
 }
 
+void segfault_handler(int signal, siginfo_t *si, void *arg)
+{
+    void *error_addr = si->si_addr;
+
+    // Write the error address to stderr
+    fprintf(stderr, "Segmentation fault occurred at address: %p\n", error_addr);
+
+    // Write the backtrace to stderr
+    void *buffer[10];
+    int nptrs = backtrace(buffer, 10);
+    backtrace_symbols_fd(buffer, nptrs, 2);
+
+    // End the process
+    exit(EXIT_FAILURE);
+}
+
 int main(int argc, const char** argv) {
+    struct sigaction sa;
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = segfault_handler;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGSEGV, &sa, NULL);
+
     context.config = default_config();
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);

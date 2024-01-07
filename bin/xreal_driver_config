@@ -56,7 +56,6 @@ then
     elif [ "$1" == "--sbs-mode-stretched" ] || [ "$1" == "-sbsms" ]; then
         config_type="string"
         config_key="sbs_mode_stretched"
-        # use $2 if present, otherwise default to "true"
         config_value="${2:-true}"
     elif [ "$1" == "--sbs-content-3d" ] || [ "$1" == "-sbs3d" ]; then
         config_type="string"

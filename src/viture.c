@@ -125,7 +125,7 @@ void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t t
 }
 
 device_properties_type* viture_device_connect() {
-    bool alreadyConnected = get_imu_state() == ERR_SUCCESS;
+    bool alreadyConnected = get_imu_state() == STATE_ON;
 
     bool success = alreadyConnected || init(handle_viture_event, viture_mcu_callback);
     if (success) {
@@ -135,20 +135,22 @@ device_properties_type* viture_device_connect() {
             // device may not support this frequency, re-query it below
             set_imu_fq(IMU_FREQUENCE_240);
 
-            device_properties_type* device = malloc(sizeof(device_properties_type));
-            *device = viture_one_properties;
+            if (get_imu_fq() >= IMU_FREQUENCE_60 && get_imu_fq() <= IMU_FREQUENCE_240) {
+                device_properties_type* device = malloc(sizeof(device_properties_type));
+                *device = viture_one_properties;
 
-            // use the current value in case the frequency we requested isn't supported
-            device->imu_cycles_per_s = frequency_enum_to_value[get_imu_fq()];
-            device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
+                // use the current value in case the frequency we requested isn't supported
+                device->imu_cycles_per_s = frequency_enum_to_value[get_imu_fq()];
+                device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
 
-            // not a great way to check the firmware version but it's all we have
-            old_firmware_version = device->imu_cycles_per_s == 60;
+                // not a great way to check the firmware version but it's all we have
+                old_firmware_version = device->imu_cycles_per_s == 60;
 
-            device->sbs_mode_supported = !old_firmware_version;
-            device->firmware_update_recommended = old_firmware_version;
+                device->sbs_mode_supported = !old_firmware_version;
+                device->firmware_update_recommended = old_firmware_version;
 
-            return device;
+                return device;
+            }
         }
     }
 
