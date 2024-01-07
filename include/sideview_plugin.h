@@ -2,7 +2,7 @@
 
 #include "plugins.h"
 
-#define SIDEVIEW_POSITION_COUNT 4
+#define SIDEVIEW_POSITION_COUNT 5
 extern const char *sideview_position_names[SIDEVIEW_POSITION_COUNT];
 
 struct sideview_ipc_values_t {

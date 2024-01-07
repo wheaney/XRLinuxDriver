@@ -13,6 +13,7 @@ const char *sideview_position_names[SIDEVIEW_POSITION_COUNT] = {
     "top_right",
     "bottom_left",
     "bottom_right",
+    "center"
 };
 
 void *sideview_default_config_func() {
