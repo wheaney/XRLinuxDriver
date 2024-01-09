@@ -10,13 +10,6 @@ This driver allows your Linux device (including Steam Deck) to automatically rec
 
 If you're looking for a 3dof virtual display, this driver by itself does not provide that functionality; instead, see [Breezy](https://github.com/wheaney/breezy-desktop) or [use the Steam Deck plugin](#steam-deck-via-decky-loader) which installs Breezy under the hood.
 
-## Before use
-
-The driver is provided as-is and it's free to use. However the contributors can neither guarantee that 
-it will work or that it won't damage your device since all of it is based on reverse-engineering 
-instead of public documentation. The contributors are not responsible for proper or even official 
-support. So use it at your own risk!
-
 ## Usage
 
 ### Steam Deck via Decky Loader
