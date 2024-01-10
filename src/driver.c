@@ -149,6 +149,7 @@ void *block_on_device_thread_func(void *arg) {
     free(context.device);
     context.device = NULL;
 
+    plugins.handle_device_disconnect();
     if (ipc_enabled) *ipc_values->disabled = true;
     deinit_outputs();
 

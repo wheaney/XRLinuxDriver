@@ -16,6 +16,7 @@ typedef void (*handle_imu_data_func)(imu_quat_type quat, imu_euler_type velociti
                                      bool imu_calibrated, ipc_values_type *ipc_values);
 typedef void (*reset_imu_data_func)();
 typedef void (*handle_state_func)();
+typedef void (*handle_device_disconnect_func)();
 
 struct plugin_t {
     char* id;
@@ -28,6 +29,7 @@ struct plugin_t {
     handle_imu_data_func handle_imu_data;
     reset_imu_data_func reset_imu_data;
     handle_state_func handle_state;
+    handle_device_disconnect_func handle_device_disconnect;
 };
 typedef struct plugin_t plugin_type;
 

@@ -64,6 +64,12 @@ void all_plugins_handle_state_func() {
         all_plugins[i]->handle_state();
     }
 }
+void all_plugins_handle_device_disconnect_func() {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->handle_device_disconnect == NULL) continue;
+        all_plugins[i]->handle_device_disconnect();
+    }
+}
 
 const plugin_type plugins = {
     .id = "all_plugins",
@@ -73,5 +79,6 @@ const plugin_type plugins = {
     .setup_ipc = all_plugins_setup_ipc_func,
     .handle_imu_data = all_plugins_handle_imu_data_func,
     .reset_imu_data = all_plugins_reset_imu_data_func,
-    .handle_state = all_plugins_handle_state_func
+    .handle_state = all_plugins_handle_state_func,
+    .handle_device_disconnect = all_plugins_handle_device_disconnect_func
 };

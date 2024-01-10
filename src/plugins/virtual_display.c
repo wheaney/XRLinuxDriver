@@ -11,8 +11,10 @@
 
 #define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
 
-buffer_type **quat_stage_1_buffer = NULL;
-buffer_type **quat_stage_2_buffer = NULL;
+buffer_type **quat_stage_1_buffer;
+buffer_type **quat_stage_2_buffer;
+virtual_display_config *vd_config;
+virtual_display_ipc_values_type *virtual_display_ipc_values;
 
 void *virtual_display_default_config_func() {
     virtual_display_config *config = malloc(sizeof(virtual_display_config));
@@ -46,27 +48,34 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
     }
 };
 
-virtual_display_config *vd_config;
-virtual_display_ipc_values_type *virtual_display_ipc_values;
+void virtual_display_handle_device_disconnect_func() {
+    if (!virtual_display_ipc_values) return;
+    *virtual_display_ipc_values->enabled = false;
+};
+
 void set_virtual_display_ipc_values() {
     if (!virtual_display_ipc_values) return;
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
-    *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled && context.device;
-    *virtual_display_ipc_values->imu_data_period       = 1000.0 * (float)context.device->imu_buffer_size /
-                                                            context.device->imu_cycles_per_s;
-    *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
-                                                            vd_config->display_zoom;
-    *virtual_display_ipc_values->display_north_offset  = vd_config->sbs_display_distance;
-    virtual_display_ipc_values->look_ahead_cfg[0]      = vd_config->look_ahead_override == 0 ?
-                                                            context.device->look_ahead_constant :
-                                                            vd_config->look_ahead_override;
-    virtual_display_ipc_values->look_ahead_cfg[1]      = vd_config->look_ahead_override == 0 ?
-                                                            context.device->look_ahead_frametime_multiplier : 0.0;
-    virtual_display_ipc_values->look_ahead_cfg[2]      = context.device->look_ahead_scanline_adjust;
-    virtual_display_ipc_values->look_ahead_cfg[3]      = context.device->look_ahead_ms_cap;
-    *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
-    *virtual_display_ipc_values->sbs_mode_stretched    = vd_config->sbs_mode_stretched;
+    if (context.device) {
+        *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled;
+        *virtual_display_ipc_values->imu_data_period       = 1000.0 * (float)context.device->imu_buffer_size /
+                                                                context.device->imu_cycles_per_s;
+        *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
+                                                                vd_config->display_zoom;
+        *virtual_display_ipc_values->display_north_offset  = vd_config->sbs_display_distance;
+        virtual_display_ipc_values->look_ahead_cfg[0]      = vd_config->look_ahead_override == 0 ?
+                                                                context.device->look_ahead_constant :
+                                                                vd_config->look_ahead_override;
+        virtual_display_ipc_values->look_ahead_cfg[1]      = vd_config->look_ahead_override == 0 ?
+                                                                context.device->look_ahead_frametime_multiplier : 0.0;
+        virtual_display_ipc_values->look_ahead_cfg[2]      = context.device->look_ahead_scanline_adjust;
+        virtual_display_ipc_values->look_ahead_cfg[3]      = context.device->look_ahead_ms_cap;
+        *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
+        *virtual_display_ipc_values->sbs_mode_stretched    = vd_config->sbs_mode_stretched;
+    } else {
+        virtual_display_handle_device_disconnect_func();
+    }
 }
 
 void virtual_display_set_config_func(void* config) {
@@ -240,5 +249,6 @@ const plugin_type virtual_display_plugin = {
     .setup_ipc = virtual_display_setup_ipc_func,
     .handle_imu_data = virtual_display_handle_imu_data_func,
     .reset_imu_data = virtual_display_reset_imu_data_func,
-    .handle_state = virtual_display_handle_state_func
+    .handle_state = virtual_display_handle_state_func,
+    .handle_device_disconnect = virtual_display_handle_device_disconnect_func
 };

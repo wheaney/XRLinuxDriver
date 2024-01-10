@@ -16,6 +16,9 @@ const char *sideview_position_names[SIDEVIEW_POSITION_COUNT] = {
     "center"
 };
 
+sideview_config *sv_config;
+sideview_ipc_values_type *sideview_ipc_values;
+
 void *sideview_default_config_func() {
     sideview_config *config = malloc(sizeof(sideview_config));
     config->enabled = false;
@@ -41,15 +44,21 @@ void sideview_handle_config_line_func(void* config, char* key, char* value) {
     }
 };
 
-sideview_config *sv_config;
-sideview_ipc_values_type *sideview_ipc_values;
+void sideview_handle_device_disconnect_func() {
+    if (sideview_ipc_values) *sideview_ipc_values->enabled = false;
+};
+
 void set_sideview_ipc_values_from_config() {
     if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
-    *sideview_ipc_values->enabled = sv_config->enabled && !context.config->disabled && context.device;
-    *sideview_ipc_values->position = sv_config->position;
-    *sideview_ipc_values->display_size = sv_config->display_size;
+    if (context.device) {
+        *sideview_ipc_values->enabled = sv_config->enabled && !context.config->disabled;
+        *sideview_ipc_values->position = sv_config->position;
+        *sideview_ipc_values->display_size = sv_config->display_size;
+    } else {
+        sideview_handle_device_disconnect_func();
+    }
 }
 
 void sideview_set_config_func(void* config) {
@@ -97,5 +106,6 @@ const plugin_type sideview_plugin = {
     .setup_ipc = sideview_setup_ipc_func,
     .handle_imu_data = NULL,
     .reset_imu_data = NULL,
-    .handle_state = NULL
+    .handle_state = NULL,
+    .handle_device_disconnect = sideview_handle_device_disconnect_func
 };

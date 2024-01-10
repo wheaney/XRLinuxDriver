@@ -149,6 +149,8 @@ device_properties_type* viture_device_connect() {
                 device->sbs_mode_supported = !old_firmware_version;
                 device->firmware_update_recommended = old_firmware_version;
 
+                sbs_mode_enabled = get_3d_state() == STATE_ON;
+
                 return device;
             }
         }
