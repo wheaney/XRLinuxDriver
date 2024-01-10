@@ -2,8 +2,8 @@
 #include "device.h"
 #include "ipc.h"
 #include "plugins.h"
+#include "plugins/sideview.h"
 #include "runtime_context.h"
-#include "sideview_plugin.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -47,7 +47,7 @@ void set_sideview_ipc_values_from_config() {
     if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
-    *sideview_ipc_values->enabled = sv_config->enabled && !context.config->disabled;
+    *sideview_ipc_values->enabled = sv_config->enabled && !context.config->disabled && context.device;
     *sideview_ipc_values->position = sv_config->position;
     *sideview_ipc_values->display_size = sv_config->display_size;
 }

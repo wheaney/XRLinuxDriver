@@ -3,8 +3,8 @@
 #include "device.h"
 #include "ipc.h"
 #include "plugins.h"
+#include "plugins/virtual_display.h"
 #include "runtime_context.h"
-#include "virtual_display_plugin.h"
 
 #include <stdlib.h>
 #include <errno.h>
@@ -52,7 +52,7 @@ void set_virtual_display_ipc_values() {
     if (!virtual_display_ipc_values) return;
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
-    *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled;
+    *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled && context.device;
     *virtual_display_ipc_values->imu_data_period       = 1000.0 * (float)context.device->imu_buffer_size /
                                                             context.device->imu_cycles_per_s;
     *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :

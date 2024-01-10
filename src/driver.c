@@ -10,8 +10,8 @@
 #include "runtime_context.h"
 #include "state.h"
 #include "strings.h"
-#include "viture.h"
-#include "xreal.h"
+#include "devices/viture.h"
+#include "devices/xreal.h"
 
 #include <dirent.h>
 #include <errno.h>

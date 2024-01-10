@@ -1,7 +1,7 @@
 #include "device.h"
 #include "driver.h"
 #include "imu.h"
-#include "viture_one_sdk.h"
+#include "sdks/viture_one.h"
 
 #include <math.h>
 #include <unistd.h>

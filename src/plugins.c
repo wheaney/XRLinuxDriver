@@ -1,6 +1,6 @@
-#include "virtual_display_plugin.h"
 #include "plugins.h"
-#include "sideview_plugin.h"
+#include "plugins/virtual_display.h"
+#include "plugins/sideview.h"
 #include "state.h"
 
 #include <stdlib.h>

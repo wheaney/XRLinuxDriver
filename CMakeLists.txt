@@ -29,6 +29,8 @@ set_target_properties(
 add_executable(xrealAirLinuxDriver
 		src/buffer.c
 		src/config.c
+		src/devices/viture.c
+		src/devices/xreal.c
 		src/driver.c
 		src/files.c
 		src/imu.c
@@ -36,13 +38,11 @@ add_executable(xrealAirLinuxDriver
 		src/multitap.c
 		src/outputs.c
 		src/plugins.c
+		src/plugins/sideview.c
+		src/plugins/virtual_display.c
 		src/runtime_context.c
-		src/sideview_plugin.c
 		src/state.c
 		src/strings.c
-		src/virtual_display_plugin.c
-		src/viture.c
-		src/xreal.c
 )
 
 target_include_directories(xrealAirLinuxDriver
