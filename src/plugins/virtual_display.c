@@ -250,5 +250,6 @@ const plugin_type virtual_display_plugin = {
     .handle_imu_data = virtual_display_handle_imu_data_func,
     .reset_imu_data = virtual_display_reset_imu_data_func,
     .handle_state = virtual_display_handle_state_func,
+    .handle_device_connect = NULL,
     .handle_device_disconnect = virtual_display_handle_device_disconnect_func
 };

@@ -370,6 +370,7 @@ bool search_for_device() {
         device_driver = device_drivers[i];
         context.device = device_driver->device_connect_func();
         if (device()) {
+            plugins.handle_device_connect();
             init_multi_tap(device()->imu_cycles_per_s);
             state()->connected_device_brand = strdup(device()->brand);
             state()->connected_device_model = strdup(device()->model);

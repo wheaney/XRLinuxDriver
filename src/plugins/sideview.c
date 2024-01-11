@@ -107,5 +107,6 @@ const plugin_type sideview_plugin = {
     .handle_imu_data = NULL,
     .reset_imu_data = NULL,
     .handle_state = NULL,
+    .handle_device_connect = NULL,
     .handle_device_disconnect = sideview_handle_device_disconnect_func
 };
