@@ -24,6 +24,7 @@ if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
 fi
 
 UA_CLIENT_ID="ARLinuxDriver"
+UA_EVENT_VERSION="$1"
 #INJECT_UA_CALL
 
 if [ -e "$USER_HOME/.xreal_driver_config" ]; then

@@ -1,5 +1,10 @@
 MEASUREMENT_ID="G-Z94MXP18T6"
 
+# if UA_EVENT_VERSION is set, copy its value and replace any dots in the value with underscores, then append it to UA_EVENT_NAME
+if [ -n "$UA_EVENT_VERSION" ]; then
+  UA_EVENT_NAME="$(echo $UA_EVENT_NAME)_$(echo $UA_EVENT_VERSION | sed 's/\./_/g')"
+fi
+
 POST_DATA=$(cat <<EOF
 {
   "client_id": "$UA_CLIENT_ID",

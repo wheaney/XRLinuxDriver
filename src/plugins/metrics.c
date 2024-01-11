@@ -106,7 +106,7 @@ char *metrics_output_mode_to_event_name[5] = {
     "output_mode_joystick"
 };
 
-enum metrics_output_mode *current_output_mode = NULL;
+enum metrics_output_mode current_output_mode = OUTPUT_MODE_DISABLED;
 bool config_disabled = true;
 char *config_output_mode = NULL;
 char *config_external_mode = NULL;
@@ -139,10 +139,11 @@ void metrics_set_config_func(void* config) {
         }
     }
 
-    if (!current_output_mode || *current_output_mode != new_output_mode) {
-        log_metric(metrics_output_mode_to_event_name[new_output_mode]);
-        if (!current_output_mode) current_output_mode = malloc(sizeof(enum metrics_output_mode));
-        *current_output_mode = new_output_mode;
+    if (context.device) {
+        if (current_output_mode != new_output_mode && new_output_mode != OUTPUT_MODE_DISABLED) {
+            log_metric(metrics_output_mode_to_event_name[new_output_mode]);
+        }
+        current_output_mode = new_output_mode;
     }
 };
 
