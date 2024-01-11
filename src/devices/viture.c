@@ -124,35 +124,33 @@ void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t t
     }
 }
 
+bool connected = false;
 device_properties_type* viture_device_connect() {
-    bool alreadyConnected = get_imu_state() == STATE_ON;
+    if (!connected || get_imu_state() != STATE_ON) {
+        connected = init(handle_viture_event, viture_mcu_callback) &&
+                    set_imu_fq(IMU_FREQUENCE_240) == ERR_SUCCESS &&
+                    set_imu(true) == ERR_SUCCESS;
+    }
 
-    bool success = alreadyConnected || init(handle_viture_event, viture_mcu_callback);
-    if (success) {
-        success = alreadyConnected || set_imu(true) == ERR_SUCCESS;
+    if (connected) {
+        int imu_freq = get_imu_fq();
+        if (imu_freq >= IMU_FREQUENCE_60 && imu_freq <= IMU_FREQUENCE_240) {
+            device_properties_type* device = malloc(sizeof(device_properties_type));
+            *device = viture_one_properties;
 
-        if (success) {
-            // device may not support this frequency, re-query it below
-            set_imu_fq(IMU_FREQUENCE_240);
+            // use the current value in case the frequency we requested isn't supported
+            device->imu_cycles_per_s = frequency_enum_to_value[imu_freq];
+            device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
 
-            if (get_imu_fq() >= IMU_FREQUENCE_60 && get_imu_fq() <= IMU_FREQUENCE_240) {
-                device_properties_type* device = malloc(sizeof(device_properties_type));
-                *device = viture_one_properties;
+            // not a great way to check the firmware version but it's all we have
+            old_firmware_version = device->imu_cycles_per_s == 60;
 
-                // use the current value in case the frequency we requested isn't supported
-                device->imu_cycles_per_s = frequency_enum_to_value[get_imu_fq()];
-                device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
+            device->sbs_mode_supported = !old_firmware_version;
+            device->firmware_update_recommended = old_firmware_version;
 
-                // not a great way to check the firmware version but it's all we have
-                old_firmware_version = device->imu_cycles_per_s == 60;
+            sbs_mode_enabled = get_3d_state() == STATE_ON;
 
-                device->sbs_mode_supported = !old_firmware_version;
-                device->firmware_update_recommended = old_firmware_version;
-
-                sbs_mode_enabled = get_3d_state() == STATE_ON;
-
-                return device;
-            }
+            return device;
         }
     }
 
@@ -172,6 +170,7 @@ void viture_block_on_device() {
 
     // only do this if the device was disconnected
     if (imu_state == ERR_WRITE_FAIL) {
+        connected = false;
         set_imu(false);
         deinit();
     }
