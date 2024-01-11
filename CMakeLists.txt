@@ -4,11 +4,20 @@ project(xrealAirLinuxDriver C)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_STANDARD 17)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+set(UA_API_SECRET $ENV{UA_API_SECRET})
+
+if(NOT "${UA_API_SECRET}" STREQUAL "")
+    message(STATUS "Using UA_API_SECRET from environment")
+    add_definitions(-DUA_API_SECRET="${UA_API_SECRET}")
+endif()
+
 find_package(Threads REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 find_package(LIBEVDEV REQUIRED)
-find_package(LIBUSB REQUIRED)
+find_package(libusb REQUIRED)
+find_package(Curl REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 set(VITURE_LIB_NAME viture_sdk)
 
@@ -38,6 +47,7 @@ add_executable(xrealAirLinuxDriver
 		src/multitap.c
 		src/outputs.c
 		src/plugins.c
+		src/plugins/metrics.c
 		src/plugins/sideview.c
 		src/plugins/virtual_display.c
 		src/runtime_context.c
@@ -51,8 +61,17 @@ target_include_directories(xrealAirLinuxDriver
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary/interface_lib/include
 		${LIBUSB_INCLUDE_DIR}
+		${CURL_INCLUDE_DIR}
+		${OPENSSL_INCLUDE_DIRS}
 )
 
 target_link_libraries(xrealAirLinuxDriver
-		PRIVATE ${LIBEVDEV_LIBRARIES} nrealAirLibrary Threads::Threads m ${VITURE_LIB_NAME} ${LIBUSB_LIBRARY}
+		PRIVATE ${LIBEVDEV_LIBRARIES}
+		        nrealAirLibrary
+		        Threads::Threads
+		        m
+		        ${VITURE_LIB_NAME}
+		        ${LIBUSB_LIBRARY}
+		        ${CURL_LIBRARY}
+		        ${OPENSSL_LIBRARIES}
 )

@@ -1,14 +1,16 @@
 #include "plugins.h"
-#include "plugins/virtual_display.h"
+#include "plugins/metrics.h"
 #include "plugins/sideview.h"
+#include "plugins/virtual_display.h"
 #include "state.h"
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 2
+#define PLUGIN_COUNT 3
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &virtual_display_plugin,
-    &sideview_plugin
+    &sideview_plugin,
+    &metrics_plugin
 };
 
 void* all_plugins_default_config_func() {
@@ -64,6 +66,12 @@ void all_plugins_handle_state_func() {
         all_plugins[i]->handle_state();
     }
 }
+void all_plugins_handle_device_connect_func() {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->handle_device_connect == NULL) continue;
+        all_plugins[i]->handle_device_connect();
+    }
+}
 void all_plugins_handle_device_disconnect_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->handle_device_disconnect == NULL) continue;
@@ -80,5 +88,6 @@ const plugin_type plugins = {
     .handle_imu_data = all_plugins_handle_imu_data_func,
     .reset_imu_data = all_plugins_reset_imu_data_func,
     .handle_state = all_plugins_handle_state_func,
+    .handle_device_connect = all_plugins_handle_device_connect_func,
     .handle_device_disconnect = all_plugins_handle_device_disconnect_func
 };
