@@ -164,10 +164,6 @@ void viture_block_on_device() {
         imu_state = get_imu_state();
     }
 
-    if (imu_state < 0) {
-        fprintf(stderr, "VITURE glasses error %d\n", imu_state);
-    }
-
     // only do this if the device was disconnected
     if (imu_state == ERR_WRITE_FAIL) {
         connected = false;

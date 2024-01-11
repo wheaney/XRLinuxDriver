@@ -7,3 +7,6 @@ cmake-build-release/
 build/
 
 xrealAirLinuxDriver
+
+/include/custom_banner_config.h
+/custom_banner_config.yml
