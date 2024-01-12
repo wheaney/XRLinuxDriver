@@ -20,8 +20,9 @@ const char *network_interfaces[NET_INTERFACE_COUNT] = {"eth0", "wlan0"};
 
 char *get_mac_address_hash() {
     static char *mac_address_hash = NULL;
+    static bool no_mac_address = false;
 
-    if (!mac_address_hash) {
+    if (!mac_address_hash && !no_mac_address) {
         int fd;
         struct ifreq ifr;
         unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -39,7 +40,6 @@ char *get_mac_address_hash() {
                 unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
 
                 sprintf(mac_str, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-                printf("MAC: %s\n", mac_str);
 
                 SHA256((unsigned char*)mac_str, strlen(mac_str), hash);
 
@@ -49,6 +49,10 @@ char *get_mac_address_hash() {
                 found = true;
             }
             close(fd);
+        }
+
+        if (!found) {
+            no_mac_address = true;
         }
     }
 
