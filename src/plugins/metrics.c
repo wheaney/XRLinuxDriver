@@ -15,42 +15,44 @@
 #include <unistd.h>
 #include <openssl/sha.h>
 
-// Using mac address so it's always the same for the same hardware, but globally unique.
-// Hashing it for privacy.
-char *get_mac_address() {
-    static char *mac_address = NULL;
+#define NET_INTERFACE_COUNT 2
+const char *network_interfaces[NET_INTERFACE_COUNT] = {"eth0", "wlan0"};
 
-    if (!mac_address) {
+char *get_mac_address_hash() {
+    static char *mac_address_hash = NULL;
+
+    if (!mac_address_hash) {
         int fd;
         struct ifreq ifr;
-        char *iface = "eth0";
-        unsigned char *mac;
         unsigned char hash[SHA256_DIGEST_LENGTH];
-        char *mac_str = malloc(18 * sizeof(char));
-        mac_address = malloc(SHA256_DIGEST_LENGTH*2 + 1); // Space for SHA256 hash
+        char mac_str[18];
+        mac_address_hash = malloc(SHA256_DIGEST_LENGTH*2 + 1); // Space for SHA256 hash
 
-        fd = socket(AF_INET, SOCK_DGRAM, 0);
+        bool found = false;
+        for (int i = 0; i < NET_INTERFACE_COUNT && !found; i++) {
+            fd = socket(AF_INET, SOCK_DGRAM, 0);
 
-        ifr.ifr_addr.sa_family = AF_INET;
-        strncpy(ifr.ifr_name , iface , IFNAMSIZ-1);
+            ifr.ifr_addr.sa_family = AF_INET;
+            strncpy(ifr.ifr_name , network_interfaces[i] , IFNAMSIZ-1);
 
-        ioctl(fd, SIOCGIFHWADDR, &ifr);
+            if (ioctl(fd, SIOCGIFHWADDR, &ifr) >= 0) {
+                unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
 
-        close(fd);
+                sprintf(mac_str, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                printf("MAC: %s\n", mac_str);
 
-        mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
+                SHA256((unsigned char*)mac_str, strlen(mac_str), hash);
 
-        sprintf(mac_str, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+                    sprintf(mac_address_hash + (i*2), "%02x", hash[i]);
 
-        SHA256((unsigned char*)mac_str, strlen(mac_str), hash);
-
-        for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-            sprintf(mac_address + (i*2), "%02x", hash[i]);
-
-        free(mac_str);
+                found = true;
+            }
+            close(fd);
+        }
     }
 
-    return mac_address;
+    return mac_address_hash;
 }
 
 const char *UA_MEASUREMENT_ID = "G-Z94MXP18T6";
@@ -65,7 +67,7 @@ void log_metric(char *event_name) {
         curl_global_init(CURL_GLOBAL_DEFAULT);
 
         curl = curl_easy_init();
-        if(curl) {
+        if(curl && get_mac_address_hash()) {
             headers = curl_slist_append(headers, "Content-Type: application/json");
 
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -75,7 +77,7 @@ void log_metric(char *event_name) {
             curl_easy_setopt(curl, CURLOPT_URL, url);
 
             char post_data[1024];
-            snprintf(post_data, 1024, "{\"client_id\": \"%s\", \"user_id\": \"%s\", \"events\": [{\"name\": \"%s\"}]}", UA_CLIENT_ID, get_mac_address(), event_name);
+            snprintf(post_data, 1024, "{\"client_id\": \"%s\", \"user_id\": \"%s\", \"events\": [{\"name\": \"%s\"}]}", UA_CLIENT_ID, get_mac_address_hash(), event_name);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
 
             /* Perform the request, res will get the return code */
