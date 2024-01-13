@@ -6,6 +6,15 @@ set(CMAKE_C_STANDARD 17)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 set(UA_API_SECRET $ENV{UA_API_SECRET})
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set (py_cmd "${CMAKE_SOURCE_DIR}/bin/build_custom_banner_config.py")
+set (custom_banner_header_file "${CMAKE_SOURCE_DIR}/include/custom_banner_config.h")
+set (custom_banner_yaml_file "${CMAKE_SOURCE_DIR}/custom_banner_config.yml")
+
+add_custom_target(run_python_script ALL
+    COMMAND ${Python3_EXECUTABLE} ${py_cmd} ${custom_banner_yaml_file} ${custom_banner_header_file}
+)
+
 if(NOT "${UA_API_SECRET}" STREQUAL "")
     message(STATUS "Using UA_API_SECRET from environment")
     add_definitions(-DUA_API_SECRET="${UA_API_SECRET}")
@@ -47,6 +56,7 @@ add_executable(xrealAirLinuxDriver
 		src/multitap.c
 		src/outputs.c
 		src/plugins.c
+		src/plugins/custom_banner.c
 		src/plugins/metrics.c
 		src/plugins/sideview.c
 		src/plugins/virtual_display.c
@@ -75,3 +85,4 @@ target_link_libraries(xrealAirLinuxDriver
 		        ${CURL_LIBRARY}
 		        ${OPENSSL_LIBRARIES}
 )
+add_dependencies(xrealAirLinuxDriver run_python_script)

@@ -1,4 +1,5 @@
 #include "plugins.h"
+#include "plugins/custom_banner.h"
 #include "plugins/metrics.h"
 #include "plugins/sideview.h"
 #include "plugins/virtual_display.h"
@@ -6,11 +7,12 @@
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 3
+#define PLUGIN_COUNT 4
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &virtual_display_plugin,
     &sideview_plugin,
-    &metrics_plugin
+    &metrics_plugin,
+    &custom_banner_plugin
 };
 
 void* all_plugins_default_config_func() {

@@ -104,9 +104,5 @@ const plugin_type sideview_plugin = {
     .handle_config_line = sideview_handle_config_line_func,
     .set_config = sideview_set_config_func,
     .setup_ipc = sideview_setup_ipc_func,
-    .handle_imu_data = NULL,
-    .reset_imu_data = NULL,
-    .handle_state = NULL,
-    .handle_device_connect = NULL,
     .handle_device_disconnect = sideview_handle_device_disconnect_func
 };
