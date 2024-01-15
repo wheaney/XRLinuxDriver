@@ -112,7 +112,6 @@ void virtual_display_set_config_func(void* config) {
 const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
 const char *virtual_display_imu_data_ipc_name = "imu_quat_data";
 const char *virtual_display_imu_data_mutex_ipc_name = "imu_quat_data_mutex";
-const char *virtual_display_imu_data_period_name = "imu_data_period_ms";
 const char *virtual_display_look_ahead_cfg_ipc_name = "look_ahead_cfg";
 const char *virtual_display_display_zoom_ipc_name = "display_zoom";
 const char *virtual_display_display_north_offset_ipc_name = "display_north_offset";
@@ -125,7 +124,6 @@ bool virtual_display_setup_ipc_func() {
     if (!virtual_display_ipc_values) virtual_display_ipc_values = malloc(sizeof(virtual_display_ipc_values_type));
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_imu_data_ipc_name, (void**) &virtual_display_ipc_values->imu_data, sizeof(float) * 16, debug);
-    setup_ipc_value(virtual_display_imu_data_period_name, (void**) &virtual_display_ipc_values->imu_data_period, sizeof(float), debug);
     setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
     setup_ipc_value(virtual_display_display_zoom_ipc_name, (void**) &virtual_display_ipc_values->display_zoom, sizeof(float), debug);
     setup_ipc_value(virtual_display_display_north_offset_ipc_name, (void**) &virtual_display_ipc_values->display_north_offset, sizeof(float), debug);
