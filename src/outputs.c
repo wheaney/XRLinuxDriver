@@ -226,8 +226,8 @@ void deinit_outputs() {
     }
 }
 
-void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled, bool imu_calibrated,
-                       ipc_values_type *ipc_values) {
+void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
+                       bool imu_calibrated, ipc_values_type *ipc_values) {
     if (ipc_enabled) {
         // send keepalive every counter period
         if (imu_counter == 0) {
@@ -296,7 +296,7 @@ void handle_imu_update(imu_quat_type quat, imu_euler_type velocities, bool ipc_e
     prev_joystick_x = next_joystick_x;
     prev_joystick_y = next_joystick_y;
 
-    plugins.handle_imu_data(quat, velocities, ipc_enabled, imu_calibrated, ipc_values);
+    plugins.handle_imu_data(timestamp_ms, quat, velocities, ipc_enabled, imu_calibrated, ipc_values);
 
     // reset the counter every second
     if ((++imu_counter % context.device->imu_cycles_per_s) == 0) {

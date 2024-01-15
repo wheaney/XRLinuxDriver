@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#define GYRO_BUFFERS_COUNT 4 // quat values: x, y, z, w
+#define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
 
 buffer_type **quat_stage_1_buffer;
 buffer_type **quat_stage_2_buffer;
@@ -59,8 +59,6 @@ void set_virtual_display_ipc_values() {
 
     if (context.device) {
         *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled;
-        *virtual_display_ipc_values->imu_data_period       = 1000.0 * (float)context.device->imu_buffer_size /
-                                                                context.device->imu_cycles_per_s;
         *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
                                                                 vd_config->display_zoom;
         *virtual_display_ipc_values->display_north_offset  = vd_config->sbs_display_distance;
@@ -166,8 +164,8 @@ bool virtual_display_setup_ipc_func() {
     return true;
 }
 
-void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
-                                          bool imu_calibrated, ipc_values_type *ipc_values) {
+void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
+                                          bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (vd_config && vd_config->enabled && ipc_enabled && virtual_display_ipc_values) {
         if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
@@ -190,6 +188,7 @@ void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type vel
             float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
             float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
             float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
+            float stage_1_ts = push(quat_stage_1_buffer[4], (float)timestamp_ms);
 
             if (was_full) {
                 was_full = is_full(quat_stage_2_buffer[0]);
@@ -197,6 +196,7 @@ void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type vel
                 float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
                 float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
                 float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
+                float stage_2_ts = push(quat_stage_2_buffer[4], stage_1_ts);
 
                 if (was_full) {
                     pthread_mutex_lock(virtual_display_ipc_values->imu_data_mutex);
@@ -214,6 +214,9 @@ void virtual_display_handle_imu_data_func(imu_quat_type quat, imu_euler_type vel
                     virtual_display_ipc_values->imu_data[9] = stage_2_quat_y;
                     virtual_display_ipc_values->imu_data[10] = stage_2_quat_z;
                     virtual_display_ipc_values->imu_data[11] = stage_2_quat_w;
+                    virtual_display_ipc_values->imu_data[12] = (float)timestamp_ms;
+                    virtual_display_ipc_values->imu_data[13] = stage_1_ts;
+                    virtual_display_ipc_values->imu_data[14] = stage_2_ts;
 
                     pthread_mutex_unlock(virtual_display_ipc_values->imu_data_mutex);
                 }

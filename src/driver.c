@@ -119,7 +119,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
             }
         }
 
-        handle_imu_update(quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
+        handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
     }
 }
 

@@ -11,13 +11,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-// VITURE rotations seem to be about 5 degrees (about y axis) off of actual,
+// VITURE rotations seem to be about 6 degrees (about y axis) off of actual,
 // which results in slight twisting about the x axis when looking left/right.
 // Use this quaternion to adjust the rotation to balance out the error.
 const imu_quat_type adjustment_quat = {
-    .w = 0.999,
+    .w = 0.996,
     .x = 0,
-    .y = 0.044,
+    .y = 0.05235,
     .z = 0
 };
 
