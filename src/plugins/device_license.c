@@ -264,9 +264,9 @@ void refresh_license(bool force) {
         }
     #endif
 
-    if (context.state->enabled_features) free(context.state->enabled_features);
-    context.state->enabled_features = features;
-    context.state->enabled_features_count = features_count;
+    if (context.state->granted_features) free(context.state->granted_features);
+    context.state->granted_features = features;
+    context.state->granted_features_count = features_count;
 }
 
 void device_license_start_func() {

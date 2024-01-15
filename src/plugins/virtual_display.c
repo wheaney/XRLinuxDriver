@@ -1,8 +1,11 @@
 #include "buffer.h"
 #include "config.h"
 #include "device.h"
+#include "features/smooth_follow.h"
+#include "features/sbs.h"
 #include "ipc.h"
 #include "plugins.h"
+#include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
 #include "runtime_context.h"
 
@@ -54,7 +57,7 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
         boolean_config(key, value, &temp_config->sbs_mode_stretched);
     } else if (equal(key, "sbs_mode_stretched")) {
         boolean_config(key, value, &temp_config->sbs_mode_stretched);
-    } else if (equal(key, "sideview_smooth_follow_enabled")) {
+    } else if (equal(key, "sideview_smooth_follow_enabled") && is_smooth_follow_granted()) {
         boolean_config(key, value, &temp_config->passthrough_smooth_follow_enabled);
     }
 };
@@ -138,7 +141,7 @@ void virtual_display_set_config_func(void* config) {
 
 int virtual_display_register_features_func(char*** features) {
     *features = malloc(sizeof(char*) * virtual_display_feature_count);
-    (*features)[0] = strdup(virtual_display_feature_sbs);
+    (*features)[0] = strdup(sbs_feature_name);
 
     return virtual_display_feature_count;
 }
@@ -263,8 +266,7 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
 
 void virtual_display_handle_state_func() {
     if (!virtual_display_ipc_values) return;
-    *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled &&
-        in_array(virtual_display_feature_sbs, context.state->enabled_features, context.state->enabled_features_count);
+    *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted();
 
     set_virtual_display_ipc_values();
 }

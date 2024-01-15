@@ -27,8 +27,8 @@ struct driver_state_t {
     int registered_features_count;
     char** registered_features;
 
-    int enabled_features_count;
-    char** enabled_features;
+    int granted_features_count;
+    char** granted_features;
 
     char* device_license;
 };

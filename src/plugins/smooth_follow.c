@@ -1,4 +1,5 @@
 #include "config.h"
+#include "features/smooth_follow.h"
 #include "imu.h"
 #include "ipc.h"
 #include "plugins/smooth_follow.h"
@@ -112,7 +113,7 @@ void smooth_follow_set_config_func(void* config) {
 
 int smooth_follow_register_features_func(char*** features) {
     *features = malloc(sizeof(char*) * smooth_follow_feature_count);
-    (*features)[0] = strdup(smooth_follow_feature);
+    (*features)[0] = strdup(smooth_follow_feature_name);
 
     return smooth_follow_feature_count;
 }
@@ -177,7 +178,7 @@ imu_quat_type slerp(imu_quat_type x, imu_quat_type y, float a) {
 
 uint32_t last_timestamp_ms = -1;
 imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center) {
-    if (!in_array(smooth_follow_feature, context.state->enabled_features, context.state->enabled_features_count) ||
+    if (!is_smooth_follow_granted() ||
         !smooth_follow_enabled || !sf_params) {
         return screen_center;
     }
