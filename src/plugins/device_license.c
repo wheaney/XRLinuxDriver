@@ -141,7 +141,6 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                 int license_features = json_object_object_length(features_root);
                 if (license_features == 0) return 0;
 
-                *features = malloc(sizeof(char*) * license_features);
                 json_object_object_foreach(features_root, featureName, val) {
                     json_object *featureObject;
                     json_object_object_get_ex(features_root, featureName, &featureObject);
@@ -155,8 +154,9 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                     bool enabled = false;
                     if (strcmp(featureStatus, "on") == 0 || strcmp(featureStatus, "trial") == 0) {
                         if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
+                            *features = realloc(*features, (features_count + 1) * sizeof(char*));
+                            (*features)[features_count++] = strdup(featureName);
                             enabled = true;
-                            *features[features_count++] = strdup(featureName);
                         }
                     }
                     printf("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");

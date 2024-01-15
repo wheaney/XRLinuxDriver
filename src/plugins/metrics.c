@@ -57,7 +57,7 @@ enum metrics_output_mode {
 
 char *metrics_output_mode_to_event_name[5] = {
     "output_mode_disabled",
-    "output_mode_sideview",
+    "output_mode_follow",
     "output_mode_virtual_display",
     "output_mode_mouse",
     "output_mode_joystick"

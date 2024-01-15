@@ -3,20 +3,20 @@
 #include "plugins/device_license.h"
 #include "plugins/metrics.h"
 #include "plugins/sideview.h"
+#include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
 #include "state.h"
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 5
+#define PLUGIN_COUNT 6
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
-    // first so it can enable features before other plugins attempt to use them
     &device_license_plugin,
-
     &virtual_display_plugin,
     &sideview_plugin,
     &metrics_plugin,
-    &custom_banner_plugin
+    &custom_banner_plugin,
+    &smooth_follow_plugin
 };
 
 void all_plugins_start_func() {
@@ -84,6 +84,14 @@ bool all_plugins_setup_ipc_func() {
 
     return true;
 }
+imu_quat_type all_plugins_modify_screen_center_func(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center) {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->modify_screen_center == NULL) continue;
+        screen_center = all_plugins[i]->modify_screen_center(timestamp_ms, quat, screen_center);
+    }
+
+    return screen_center;
+}
 void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                       bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
@@ -125,6 +133,7 @@ const plugin_type plugins = {
     .handle_control_flag_line = all_plugins_handle_control_flag_line_func,
     .set_config = all_plugins_set_config_func,
     .setup_ipc = all_plugins_setup_ipc_func,
+    .modify_screen_center = all_plugins_modify_screen_center_func,
     .handle_imu_data = all_plugins_handle_imu_data_func,
     .reset_imu_data = all_plugins_reset_imu_data_func,
     .handle_state = all_plugins_handle_state_func,
