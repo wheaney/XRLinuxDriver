@@ -16,7 +16,6 @@ struct virtual_display_ipc_values_t {
     bool *enabled;
     float *imu_data;
     pthread_mutex_t *imu_data_mutex;
-    float *imu_data_period;
     float *look_ahead_cfg;
     float *display_zoom;
     float *display_north_offset;
