@@ -23,6 +23,14 @@ struct driver_state_t {
     bool sbs_mode_supported;
     bool sbs_mode_enabled;
     bool firmware_update_recommended;
+
+    int registered_features_count;
+    char** registered_features;
+
+    int enabled_features_count;
+    char** enabled_features;
+
+    char* device_license;
 };
 typedef struct driver_state_t driver_state_type;
 

@@ -6,9 +6,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// config parsing/handling functions
+// config and control flag parsing/handling functions
 typedef void* (*default_config_func)();
 typedef void (*handle_config_line_func)(void* config, char* key, char* value);
+typedef void (*handle_control_flag_line_func)(char* key, char* value);
 typedef void (*set_config_func)(void* config);
 
 // hook functions
@@ -19,13 +20,17 @@ typedef void (*reset_imu_data_func)();
 typedef void (*handle_state_func)();
 typedef void (*handle_device_connect_func)();
 typedef void (*handle_device_disconnect_func)();
+typedef int (*register_features_func)(char*** features);
 
 struct plugin_t {
     char* id;
 
     default_config_func default_config;
     handle_config_line_func handle_config_line;
+    handle_control_flag_line_func handle_control_flag_line;
     set_config_func set_config;
+
+    register_features_func register_features;
 
     setup_ipc_func setup_ipc;
     handle_imu_data_func handle_imu_data;

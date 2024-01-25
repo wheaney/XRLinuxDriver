@@ -1,8 +1,10 @@
 #include "buffer.h"
 #include "config.h"
 #include "device.h"
-#include "imu.h"
+#include "devices/viture.h"
+#include "devices/xreal.h"
 #include "files.h"
+#include "imu.h"
 #include "ipc.h"
 #include "multitap.h"
 #include "outputs.h"
@@ -10,8 +12,7 @@
 #include "runtime_context.h"
 #include "state.h"
 #include "strings.h"
-#include "devices/viture.h"
-#include "devices/xreal.h"
+#include "system.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -336,7 +337,7 @@ void *manage_state_thread_func(void *arg) {
         gettimeofday(&tv, NULL);
         state()->heartbeat = tv.tv_sec;
         state()->sbs_mode_enabled = device()->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
-        write_state(context.state);
+        write_state(state());
         plugins.handle_state();
 
         if (was_sbs_mode_enabled != state()->sbs_mode_enabled) {
@@ -358,7 +359,7 @@ void *manage_state_thread_func(void *arg) {
     }
 
     // in case any state changed during the last sleep()
-    write_state(context.state);
+    write_state(state());
 
     if (config()->debug_threads)
         printf("\tdebug: Exiting write_state thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
@@ -417,6 +418,11 @@ int main(int argc, const char** argv) {
     update_config_from_file(config_fp);
 
     context.state = malloc(sizeof(driver_state_type));
+    char** features = NULL;
+    int feature_count = plugins.register_features(&features);
+    state()->registered_features_count = feature_count;
+    state()->registered_features = features;
+
     control_flags = malloc(sizeof(control_flags_type));
     read_control_flags(control_flags);
 

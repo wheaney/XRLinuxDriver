@@ -37,7 +37,7 @@ const device_properties_type viture_one_properties = {
     .look_ahead_constant                = 20.0,
     .look_ahead_frametime_multiplier    = 0.6,
     .look_ahead_scanline_adjust         = 10.0,
-    .look_ahead_ms_cap                  = 30.0,
+    .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
     .firmware_update_recommended        = false
 };

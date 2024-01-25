@@ -2,62 +2,13 @@
 #include "device.h"
 #include "plugins.h"
 #include "runtime_context.h"
+#include "system.h"
 
 #include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <net/if.h>
 #include <unistd.h>
-#include <openssl/sha.h>
-
-#define NET_INTERFACE_COUNT 2
-const char *network_interfaces[NET_INTERFACE_COUNT] = {"eth0", "wlan0"};
-
-char *get_mac_address_hash() {
-    static char *mac_address_hash = NULL;
-    static bool no_mac_address = false;
-
-    if (!mac_address_hash && !no_mac_address) {
-        int fd;
-        struct ifreq ifr;
-        unsigned char hash[SHA256_DIGEST_LENGTH];
-        char mac_str[18];
-        mac_address_hash = malloc(SHA256_DIGEST_LENGTH*2 + 1); // Space for SHA256 hash
-
-        bool found = false;
-        for (int i = 0; i < NET_INTERFACE_COUNT && !found; i++) {
-            fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-            ifr.ifr_addr.sa_family = AF_INET;
-            strncpy(ifr.ifr_name , network_interfaces[i] , IFNAMSIZ-1);
-
-            if (ioctl(fd, SIOCGIFHWADDR, &ifr) >= 0) {
-                unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
-
-                sprintf(mac_str, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-                SHA256((unsigned char*)mac_str, strlen(mac_str), hash);
-
-                for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-                    sprintf(mac_address_hash + (i*2), "%02x", hash[i]);
-
-                found = true;
-            }
-            close(fd);
-        }
-
-        if (!found) {
-            no_mac_address = true;
-        }
-    }
-
-    return mac_address_hash;
-}
 
 const char *UA_MEASUREMENT_ID = "G-Z94MXP18T6";
 const char *UA_CLIENT_ID="ARLinuxDriver";
@@ -71,7 +22,7 @@ void log_metric(char *event_name) {
         curl_global_init(CURL_GLOBAL_DEFAULT);
 
         curl = curl_easy_init();
-        if(curl && get_mac_address_hash()) {
+        if(curl && get_hardware_id()) {
             headers = curl_slist_append(headers, "Content-Type: application/json");
 
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -81,7 +32,7 @@ void log_metric(char *event_name) {
             curl_easy_setopt(curl, CURLOPT_URL, url);
 
             char post_data[1024];
-            snprintf(post_data, 1024, "{\"client_id\": \"%s\", \"user_id\": \"%s\", \"events\": [{\"name\": \"%s\"}]}", UA_CLIENT_ID, get_mac_address_hash(), event_name);
+            snprintf(post_data, 1024, "{\"client_id\": \"%s\", \"user_id\": \"%s\", \"events\": [{\"name\": \"%s\"}]}", UA_CLIENT_ID, get_hardware_id(), event_name);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
 
             /* Perform the request, res will get the return code */

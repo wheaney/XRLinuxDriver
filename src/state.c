@@ -1,4 +1,5 @@
 #include "device.h"
+#include "plugins.h"
 #include "state.h"
 
 #include <inttypes.h>
@@ -31,6 +32,7 @@ void write_state(driver_state_type *state) {
     FILE* fp = get_state_file(state_filename, "w", &file_path[0]);
 
     fprintf(fp, "heartbeat=%d\n", state->heartbeat);
+    if (state->device_license) fprintf(fp, "device_license=%s\n", state->device_license);
     if (state->connected_device_model && state->connected_device_brand) {
         fprintf(fp, "connected_device_brand=%s\n", state->connected_device_brand);
         fprintf(fp, "connected_device_model=%s\n", state->connected_device_model);
@@ -71,6 +73,7 @@ void read_control_flags(control_flags_type *flags) {
                     printf("Invalid sbs_mode value: %s\n", value);
                 }
             }
+            plugins.handle_control_flag_line(key, value);
         }
         fclose(fp);
         remove(file_path);

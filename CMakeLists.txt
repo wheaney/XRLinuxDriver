@@ -4,7 +4,6 @@ project(xrealAirLinuxDriver C)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_STANDARD 17)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-set(UA_API_SECRET $ENV{UA_API_SECRET})
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set (py_cmd "${CMAKE_SOURCE_DIR}/bin/build_custom_banner_config.py")
@@ -15,10 +14,18 @@ add_custom_target(run_python_script ALL
     COMMAND ${Python3_EXECUTABLE} ${py_cmd} ${custom_banner_yaml_file} ${custom_banner_header_file}
 )
 
-if(NOT "${UA_API_SECRET}" STREQUAL "")
-    message(STATUS "Using UA_API_SECRET from environment")
-    add_definitions(-DUA_API_SECRET="${UA_API_SECRET}")
+if(DEFINED ENV{UA_API_SECRET})
+  set(UA_API_SECRET $ENV{UA_API_SECRET})
+  message(STATUS "Using UA_API_SECRET from environment")
+  add_definitions(-DUA_API_SECRET="${UA_API_SECRET}")
+else()
+  set(UA_API_SECRET "")
+  message(STATUS "!!! UA_API_SECRET is NOT set")
 endif()
+
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/license_public_key.pem DEVICE_LICENSE_PUBLIC_KEY_RAW)
+string(REPLACE "\n" "\\n" DEVICE_LICENSE_PUBLIC_KEY_ESCAPED ${DEVICE_LICENSE_PUBLIC_KEY_RAW})
+add_definitions(-DDEVICE_LICENSE_PUBLIC_KEY="${DEVICE_LICENSE_PUBLIC_KEY_ESCAPED}")
 
 find_package(Threads REQUIRED)
 
@@ -27,6 +34,7 @@ find_package(LIBEVDEV REQUIRED)
 find_package(libusb REQUIRED)
 find_package(Curl REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(json-c REQUIRED CONFIG)
 
 set(VITURE_LIB_NAME viture_sdk)
 
@@ -57,12 +65,14 @@ add_executable(xrealAirLinuxDriver
 		src/outputs.c
 		src/plugins.c
 		src/plugins/custom_banner.c
+		src/plugins/device_license.c
 		src/plugins/metrics.c
 		src/plugins/sideview.c
 		src/plugins/virtual_display.c
 		src/runtime_context.c
 		src/state.c
 		src/strings.c
+		src/system.c
 )
 
 target_include_directories(xrealAirLinuxDriver
@@ -77,6 +87,7 @@ target_include_directories(xrealAirLinuxDriver
 
 target_link_libraries(xrealAirLinuxDriver
 		PRIVATE ${LIBEVDEV_LIBRARIES}
+		        json-c::json-c
 		        nrealAirLibrary
 		        Threads::Threads
 		        m
