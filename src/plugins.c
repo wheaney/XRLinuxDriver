@@ -19,6 +19,31 @@ const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &custom_banner_plugin
 };
 
+void all_plugins_start_func() {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->start == NULL) continue;
+        all_plugins[i]->start();
+    }
+}
+int all_plugins_register_features_func(char*** features) {
+    int feature_count = 0;
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->register_features == NULL) continue;
+
+        char** plugin_features = NULL;
+        int plugin_features_count = all_plugins[i]->register_features(&plugin_features);
+
+        // append plugin_features
+        *features = realloc(*features, sizeof(char*) * (feature_count + plugin_features_count));
+        for (int j = 0; j < plugin_features_count; j++) {
+            (*features)[feature_count + j] = plugin_features[j];
+        }
+        free(plugin_features);
+        feature_count += plugin_features_count;
+    }
+
+    return feature_count;
+}
 void* all_plugins_default_config_func() {
     void** configs = malloc(sizeof(void*) * PLUGIN_COUNT);
     for (int i = 0; i < PLUGIN_COUNT; i++) {
@@ -47,25 +72,6 @@ void all_plugins_set_config_func(void* config) {
         if (all_plugins[i]->set_config == NULL) continue;
         all_plugins[i]->set_config(configs[i]);
     }
-}
-int all_plugins_register_features_func(char*** features) {
-    int feature_count = 0;
-    for (int i = 0; i < PLUGIN_COUNT; i++) {
-        if (all_plugins[i]->register_features == NULL) continue;
-
-        char** plugin_features = NULL;
-        int plugin_features_count = all_plugins[i]->register_features(&plugin_features);
-
-        // append plugin_features
-        *features = realloc(*features, sizeof(char*) * (feature_count + plugin_features_count));
-        for (int j = 0; j < plugin_features_count; j++) {
-            (*features)[feature_count + j] = plugin_features[j];
-        }
-        free(plugin_features);
-        feature_count += plugin_features_count;
-    }
-
-    return feature_count;
 }
 bool all_plugins_setup_ipc_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
@@ -112,11 +118,12 @@ void all_plugins_handle_device_disconnect_func() {
 
 const plugin_type plugins = {
     .id = "all_plugins",
+    .start = all_plugins_start_func,
+    .register_features = all_plugins_register_features_func,
     .default_config = all_plugins_default_config_func,
     .handle_config_line = all_plugins_handle_config_line_func,
     .handle_control_flag_line = all_plugins_handle_control_flag_line_func,
     .set_config = all_plugins_set_config_func,
-    .register_features = all_plugins_register_features_func,
     .setup_ipc = all_plugins_setup_ipc_func,
     .handle_imu_data = all_plugins_handle_imu_data_func,
     .reset_imu_data = all_plugins_reset_imu_data_func,

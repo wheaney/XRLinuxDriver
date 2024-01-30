@@ -131,16 +131,15 @@ then
 
             if [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
                 hardware_id=$(echo "$value" | jq -r '.hardwareId')
+                url="https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/tokens/v1"
 
                 if [ "$1" == "--request-token" ]; then
-                    url="https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/tokens/v1"
                     postbody=$(jq -n \
                                 --arg hardwareId "$hardware_id" \
                                 --arg email "$2" \
                                 '{hardwareId: $hardwareId, email: $email}')
                     message=$(curl -s -X POST -H "Content-Type: application/json" -d "$postbody" "$url" | jq -r '.message')
                 elif [ "$1" == "--verify-token" ]; then
-                    url="https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/tokens/v1"
                     postbody=$(jq -n \
                                 --arg hardwareId "$hardware_id" \
                                 --arg token "$2" \
@@ -148,6 +147,7 @@ then
                     message=$(curl -s -X PUT -H "Content-Type: application/json" -d "$postbody" "$url" | jq -r '.message')
                 elif [ "$1" == "--refresh-license" ]; then
                     echo "refresh_device_license=true" > /dev/shm/xr_driver_control
+                    message="License refresh requested"
                 fi
 
                 if [ -n "$message" ]; then

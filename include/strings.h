@@ -5,4 +5,4 @@
 
 void free_and_clear(char **str_ptr);
 
-bool in_array(char *str, char **array, int size);
+bool in_array(const char *str, char **array, int size);

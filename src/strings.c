@@ -9,7 +9,7 @@ void free_and_clear(char **str_ptr) {
     }
 }
 
-bool in_array(char *str, char **array, int size) {
+bool in_array(const char *str, char **array, int size) {
     for (int i = 0; i < size; i++) {
         if (strcmp(str, array[i]) == 0) {
             return true;

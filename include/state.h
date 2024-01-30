@@ -47,6 +47,10 @@ struct control_flags_t {
 };
 typedef struct control_flags_t control_flags_type;
 
-FILE* get_or_create_state_file(char *filename, char *mode, char *full_path);
+extern const char* state_files_directory;
+extern const char* state_filename;
+extern const char* control_flags_filename;
+
+FILE* get_state_file(const char *filename, char *mode, char *full_path);
 void write_state(driver_state_type *state);
-void read_control_flags(control_flags_type *flags);
+void read_control_flags(FILE *fp, control_flags_type *flags);

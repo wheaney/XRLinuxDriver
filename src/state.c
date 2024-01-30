@@ -3,9 +3,11 @@
 #include "state.h"
 
 #include <inttypes.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/inotify.h>
 
 const char *calibration_setup_strings[2] = {
     "AUTOMATIC",
@@ -18,12 +20,12 @@ const char *calibration_state_strings[4] = {
     "WAITING_ON_USER"
 };
 
-const char* shared_memory_directory = "/dev/shm";
+const char* state_files_directory = "/dev/shm";
 const char* state_filename = "xr_driver_state";
-const char* control_filename = "xr_driver_control";
+const char* control_flags_filename = "xr_driver_control";
 
 FILE* get_state_file(const char *filename, char *mode, char *full_path) {
-    snprintf(full_path, strlen(shared_memory_directory) + strlen(filename) + 2, "%s/%s", shared_memory_directory, filename);
+    snprintf(full_path, strlen(state_files_directory) + strlen(filename) + 2, "%s/%s", state_files_directory, filename);
     return fopen(full_path, mode ? mode : "r");
 }
 
@@ -46,13 +48,11 @@ void write_state(driver_state_type *state) {
     fclose(fp);
 }
 
-void read_control_flags(control_flags_type *flags) {
+void read_control_flags(FILE *fp, control_flags_type *flags) {
     flags->recenter_screen = false;
     flags->recalibrate = false;
     flags->sbs_mode = SBS_CONTROL_UNSET;
 
-    char file_path[1024];
-    FILE* fp = get_state_file(control_filename, "r", &file_path[0]);
     if (fp) {
         char line[1024];
         while (fgets(line, sizeof(line), fp) != NULL) {
@@ -75,7 +75,5 @@ void read_control_flags(control_flags_type *flags) {
             }
             plugins.handle_control_flag_line(key, value);
         }
-        fclose(fp);
-        remove(file_path);
     }
 }

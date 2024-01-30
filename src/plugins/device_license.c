@@ -18,7 +18,6 @@
 const char* DEVICE_LICENSE_FILE_PATH = "/var/lib/xr_driver/device_license";
 const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.tmp";
 
-
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     const char* postbody(char* hardwareId, char** features, int features_count) {
         json_object *root = json_object_new_object();
@@ -270,6 +269,10 @@ void refresh_license(bool force) {
     context.state->enabled_features_count = features_count;
 }
 
+void device_license_start_func() {
+    refresh_license(false);
+}
+
 void device_license_handle_control_flag_line_func(char* key, char* value) {
     if (strcmp(key, "refresh_device_license") == 0) {
         if (strcmp(value, "true") == 0) refresh_license(true);
@@ -282,6 +285,7 @@ void device_license_handle_device_connect_func() {
 
 const plugin_type device_license_plugin = {
     .id = "device_license",
+    .start = device_license_start_func,
     .handle_control_flag_line = device_license_handle_control_flag_line_func,
     .handle_device_connect = device_license_handle_device_connect_func
 };

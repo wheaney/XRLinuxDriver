@@ -197,6 +197,9 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
             float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
             float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
             float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
+
+            // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
+            //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
             float stage_1_ts = push(quat_stage_1_buffer[4], (float)timestamp_ms);
 
             if (was_full) {
@@ -237,7 +240,7 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
 void virtual_display_handle_state_func() {
     if (!virtual_display_ipc_values) return;
     *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled &&
-        in_array("sbs", context.state->enabled_features, context.state->enabled_features_count);
+        in_array(virtual_display_feature_sbs, context.state->enabled_features, context.state->enabled_features_count);
 
     set_virtual_display_ipc_values();
 }
