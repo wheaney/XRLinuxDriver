@@ -23,6 +23,14 @@ struct driver_state_t {
     bool sbs_mode_supported;
     bool sbs_mode_enabled;
     bool firmware_update_recommended;
+
+    int registered_features_count;
+    char** registered_features;
+
+    int enabled_features_count;
+    char** enabled_features;
+
+    char* device_license;
 };
 typedef struct driver_state_t driver_state_type;
 
@@ -39,6 +47,10 @@ struct control_flags_t {
 };
 typedef struct control_flags_t control_flags_type;
 
-FILE* get_or_create_state_file(char *filename, char *mode, char *full_path);
+extern const char* state_files_directory;
+extern const char* state_filename;
+extern const char* control_flags_filename;
+
+FILE* get_state_file(const char *filename, char *mode, char *full_path);
 void write_state(driver_state_type *state);
-void read_control_flags(control_flags_type *flags);
+void read_control_flags(FILE *fp, control_flags_type *flags);

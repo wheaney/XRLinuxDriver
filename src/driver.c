@@ -1,8 +1,10 @@
 #include "buffer.h"
 #include "config.h"
 #include "device.h"
-#include "imu.h"
+#include "devices/viture.h"
+#include "devices/xreal.h"
 #include "files.h"
+#include "imu.h"
 #include "ipc.h"
 #include "multitap.h"
 #include "outputs.h"
@@ -10,8 +12,7 @@
 #include "runtime_context.h"
 #include "state.h"
 #include "strings.h"
-#include "devices/viture.h"
-#include "devices/xreal.h"
+#include "system.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -40,7 +41,8 @@ const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
     &viture_driver
 };
 
-#define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
+#define INOTIFY_EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
+#define INOTIFY_EVENT_BUFFER_SIZE (1024 * INOTIFY_EVENT_SIZE)
 #define MT_RECENTER_SCREEN 2
 #define MT_RESET_CALIBRATION 3
 
@@ -274,7 +276,7 @@ void *monitor_config_file_thread_func(void *arg) {
         return NULL;
     }
 
-    char buffer[EVENT_SIZE];
+    char inotify_event_buffer[INOTIFY_EVENT_BUFFER_SIZE];
 
     // hold this pthread open while the glasses are plugged in, but if they become unplugged:
     // 1. hold this thread open as long as driver is disabled, this will block from re-initializing the glasses-polling thread until the driver becomes re-enabled
@@ -295,7 +297,7 @@ void *monitor_config_file_thread_func(void *arg) {
             perror("select()");
             return NULL;
         } else if (retval) {
-            int length = read(fd, buffer, EVENT_SIZE);
+            int length = read(fd, inotify_event_buffer, INOTIFY_EVENT_BUFFER_SIZE);
             if (length < 0) {
                 perror("Error reading inotify events");
                 return NULL;
@@ -303,7 +305,7 @@ void *monitor_config_file_thread_func(void *arg) {
 
             int i = 0;
             while (i < length) {
-                struct inotify_event *event = (struct inotify_event *) &buffer[i];
+                struct inotify_event *event = (struct inotify_event *) &inotify_event_buffer[i];
                 if (event->mask & IN_DELETE_SELF) {
                     // The file has been deleted, so we need to re-add the watch
                     wd = inotify_add_watch(fd, config_filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
@@ -315,7 +317,7 @@ void *monitor_config_file_thread_func(void *arg) {
                     config_fp = freopen(config_filename, "r", config_fp);
                     update_config_from_file(config_fp);
                 }
-                i += EVENT_SIZE + event->len;
+                i += INOTIFY_EVENT_SIZE + event->len;
             }
         }
     }
@@ -336,7 +338,7 @@ void *manage_state_thread_func(void *arg) {
         gettimeofday(&tv, NULL);
         state()->heartbeat = tv.tv_sec;
         state()->sbs_mode_enabled = device()->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
-        write_state(context.state);
+        write_state(state());
         plugins.handle_state();
 
         if (was_sbs_mode_enabled != state()->sbs_mode_enabled) {
@@ -347,22 +349,79 @@ void *manage_state_thread_func(void *arg) {
             }
         }
 
-        read_control_flags(control_flags);
-        if (device()->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
-            if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
-                fprintf(stderr, "Error setting requested SBS mode\n");
-            }
-        }
-
         sleep(1);
     }
 
     // in case any state changed during the last sleep()
-    write_state(context.state);
+    write_state(state());
 
     if (config()->debug_threads)
         printf("\tdebug: Exiting write_state thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
                                                                glasses_ready, config()->disabled, force_reset_threads);
+}
+
+void handle_control_flags_update() {
+    if (device() && device()->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
+        if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
+            fprintf(stderr, "Error setting requested SBS mode\n");
+        }
+    }
+}
+
+// pthread function for watching control flags file
+void *monitor_control_flags_file(void *arg) {
+    char control_file_path[1024];
+    FILE* fp = get_state_file(control_flags_filename, "r", &control_file_path[0]);
+    if (fp) {
+        read_control_flags(fp, control_flags);
+        write_state(state());
+        handle_control_flags_update();
+
+        fclose(fp);
+        remove(control_file_path);
+    }
+
+    int fd = inotify_init();
+    if (fd < 0) {
+        perror("inotify_init");
+        return NULL;
+    }
+
+    int wd = inotify_add_watch(fd, state_files_directory, IN_CLOSE_WRITE);
+    if (wd < 0) {
+        perror("inotify_add_watch");
+        close(fd);
+        return NULL;
+    }
+
+    char inotify_event_buffer[INOTIFY_EVENT_BUFFER_SIZE];
+    while (true) {
+        int length = read(fd, inotify_event_buffer, INOTIFY_EVENT_BUFFER_SIZE);
+        if (length < 0) {
+            perror("read");
+            break;
+        }
+
+        int i = 0;
+        while (i < length) {
+            struct inotify_event *event = (struct inotify_event *) &inotify_event_buffer[i];
+            if ((event->mask & IN_CLOSE_WRITE) && strcmp(event->name, control_flags_filename) == 0) {
+                fp = fopen(control_file_path, "r");
+                if (fp) {
+                    read_control_flags(fp, control_flags);
+                    write_state(state());
+                    handle_control_flags_update();
+
+                    fclose(fp);
+                    remove(control_file_path);
+                }
+            }
+            i += INOTIFY_EVENT_SIZE + event->len;
+        }
+    }
+
+    close(fd);
+    return NULL;
 }
 
 bool search_for_device() {
@@ -417,8 +476,18 @@ int main(int argc, const char** argv) {
     update_config_from_file(config_fp);
 
     context.state = malloc(sizeof(driver_state_type));
+    char** features = NULL;
+    int feature_count = plugins.register_features(&features);
+    state()->registered_features_count = feature_count;
+    state()->registered_features = features;
+
     control_flags = malloc(sizeof(control_flags_type));
-    read_control_flags(control_flags);
+    pthread_t monitor_control_flags_file_thread;
+    pthread_attr_t monitor_control_flags_file_thread_attr;
+
+    pthread_attr_init(&monitor_control_flags_file_thread_attr);
+    pthread_attr_setdetachstate(&monitor_control_flags_file_thread_attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&monitor_control_flags_file_thread, NULL, monitor_control_flags_file, NULL);
 
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];
@@ -441,6 +510,9 @@ int main(int argc, const char** argv) {
             fprintf(stderr, "Another instance of this program is already running.\n");
         exit(1);
     }
+
+    plugins.start();
+    write_state(state());
 
     printf("Starting up XR driver\n");
     while (1) {
@@ -478,6 +550,7 @@ int main(int argc, const char** argv) {
         if (config()->debug_threads)
             printf("\tdebug: All threads have exited, starting over\n");
     }
+    pthread_attr_destroy(&monitor_control_flags_file_thread_attr);
 
     return 0;
 }

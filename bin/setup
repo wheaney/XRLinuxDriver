@@ -46,14 +46,23 @@ cp xrealAirLinuxDriver $USER_HOME/bin
 cp xreal_driver_config $USER_HOME/bin
 cp xreal_driver_uninstall $USER_HOME/bin
 
+# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
+ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
+
+echo "Copying the verification script and manifest to ${USER_HOME}/.local/bin/xr_driver"
+sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" verify_installation
+if [ ! -d "$USER_HOME/.local/bin/xr_driver" ]; then
+  mkdir -p $USER_HOME/.local/bin/xr_driver
+fi
+cp -p verify_installation $USER_HOME/.local/bin/xr_driver
+cp manifest $USER_HOME/.local/bin/xr_driver
+
 echo "Setting up the systemd service"
 # check if the systemd service is already running from a previous install
 if systemctl is-active --quiet xreal-air-driver; then
   systemctl stop xreal-air-driver
 fi
 
-# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
-ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" systemd/xreal-air-driver.service
 cp systemd/xreal-air-driver.service /etc/systemd/system
 chmod 644 /etc/systemd/system/xreal-air-driver.service

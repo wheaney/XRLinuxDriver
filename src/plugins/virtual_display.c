@@ -6,6 +6,7 @@
 #include "plugins/virtual_display.h"
 #include "runtime_context.h"
 
+#include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 
@@ -15,6 +16,9 @@ buffer_type **quat_stage_1_buffer;
 buffer_type **quat_stage_2_buffer;
 virtual_display_config *vd_config;
 virtual_display_ipc_values_type *virtual_display_ipc_values;
+
+const int virtual_display_feature_count = 1;
+const char* virtual_display_feature_sbs = "sbs";
 
 void *virtual_display_default_config_func() {
     virtual_display_config *config = malloc(sizeof(virtual_display_config));
@@ -109,6 +113,13 @@ void virtual_display_set_config_func(void* config) {
     set_virtual_display_ipc_values();
 };
 
+int virtual_display_register_features_func(char*** features) {
+    *features = malloc(sizeof(char*) * virtual_display_feature_count);
+    *features[0] = strdup(virtual_display_feature_sbs);
+
+    return virtual_display_feature_count;
+}
+
 const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
 const char *virtual_display_imu_data_ipc_name = "imu_quat_data";
 const char *virtual_display_imu_data_mutex_ipc_name = "imu_quat_data_mutex";
@@ -186,6 +197,9 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
             float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
             float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
             float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
+
+            // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
+            //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
             float stage_1_ts = push(quat_stage_1_buffer[4], (float)timestamp_ms);
 
             if (was_full) {
@@ -225,7 +239,8 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
 
 void virtual_display_handle_state_func() {
     if (!virtual_display_ipc_values) return;
-    *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled;
+    *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled &&
+        in_array(virtual_display_feature_sbs, context.state->enabled_features, context.state->enabled_features_count);
 
     set_virtual_display_ipc_values();
 }
@@ -247,6 +262,7 @@ const plugin_type virtual_display_plugin = {
     .default_config = virtual_display_default_config_func,
     .handle_config_line = virtual_display_handle_config_line_func,
     .set_config = virtual_display_set_config_func,
+    .register_features = virtual_display_register_features_func,
     .setup_ipc = virtual_display_setup_ipc_func,
     .handle_imu_data = virtual_display_handle_imu_data_func,
     .reset_imu_data = virtual_display_reset_imu_data_func,

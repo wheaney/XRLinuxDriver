@@ -67,8 +67,8 @@ const device_properties_type xreal_air_properties = {
     .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS * FORCED_CYCLES_PER_S / EXPECTED_CYCLES_PER_S),
     .look_ahead_constant                = 10.0,
     .look_ahead_frametime_multiplier    = 0.3,
-    .look_ahead_scanline_adjust         = 5.0,  // the bottom row of pixels take 5 ms longer to display a frame
-    .look_ahead_ms_cap                  = 30.0,
+    .look_ahead_scanline_adjust         = 8.0,  // the bottom row of pixels take 5 ms longer to display a frame
+    .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
     .firmware_update_recommended        = false
 };
