@@ -36,6 +36,7 @@ rm -f $USER_HOME/.xreal_joystick_debug
 rm -f $USER_HOME/.xreal_driver_lock
 rm -f $USER_HOME/bin/xreal_driver_config
 rm -f $USER_HOME/bin/xrealAirLinuxDriver
+rm -rf $USER_HOME/.local/bin/xr_driver
 
 # this script is self-deleting, leave this as the last command
 rm -f $USER_HOME/bin/xreal_driver_uninstall

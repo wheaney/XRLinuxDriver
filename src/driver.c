@@ -406,7 +406,6 @@ void *monitor_control_flags_file(void *arg) {
         while (i < length) {
             struct inotify_event *event = (struct inotify_event *) &inotify_event_buffer[i];
             if ((event->mask & IN_CLOSE_WRITE) && strcmp(event->name, control_flags_filename) == 0) {
-                printf("Control flags file created\n");
                 fp = fopen(control_file_path, "r");
                 if (fp) {
                     read_control_flags(fp, control_flags);
