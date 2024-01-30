@@ -22,8 +22,8 @@ sideview_ipc_values_type *sideview_ipc_values;
 void *sideview_default_config_func() {
     sideview_config *config = malloc(sizeof(sideview_config));
     config->enabled = false;
-    config->position = 0;
-    config->display_size = 0.5;
+    config->position = 4; // center
+    config->display_size = 1.0;
 
     return config;
 };

@@ -20,14 +20,19 @@ virtual_display_ipc_values_type *virtual_display_ipc_values;
 const int virtual_display_feature_count = 1;
 const char* virtual_display_feature_sbs = "sbs";
 
-void *virtual_display_default_config_func() {
-    virtual_display_config *config = malloc(sizeof(virtual_display_config));
+void virtual_display_reset_config(virtual_display_config *config) {
     config->enabled = false;
     config->look_ahead_override = 0.0;
     config->display_zoom = 1.0;
     config->sbs_display_distance = 1.0;
     config->sbs_content = false;
     config->sbs_mode_stretched = false;
+    config->passthrough_smooth_follow_enabled = false;
+};
+
+void *virtual_display_default_config_func() {
+    virtual_display_config *config = malloc(sizeof(virtual_display_config));
+    virtual_display_reset_config(config);
 
     return config;
 };
@@ -49,6 +54,8 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
         boolean_config(key, value, &temp_config->sbs_mode_stretched);
     } else if (equal(key, "sbs_mode_stretched")) {
         boolean_config(key, value, &temp_config->sbs_mode_stretched);
+    } else if (equal(key, "sideview_smooth_follow_enabled")) {
+        boolean_config(key, value, &temp_config->passthrough_smooth_follow_enabled);
     }
 };
 
@@ -62,15 +69,23 @@ void set_virtual_display_ipc_values() {
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
     if (context.device) {
-        *virtual_display_ipc_values->enabled               = vd_config->enabled && !context.config->disabled;
+        *virtual_display_ipc_values->enabled               = !context.config->disabled &&
+                                                                (vd_config->enabled ||
+                                                                 vd_config->passthrough_smooth_follow_enabled);
         *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
                                                                 vd_config->display_zoom;
         *virtual_display_ipc_values->display_north_offset  = vd_config->sbs_display_distance;
-        virtual_display_ipc_values->look_ahead_cfg[0]      = vd_config->look_ahead_override == 0 ?
+        if (vd_config->enabled) {
+            virtual_display_ipc_values->look_ahead_cfg[0]  = vd_config->look_ahead_override == 0 ?
                                                                 context.device->look_ahead_constant :
                                                                 vd_config->look_ahead_override;
-        virtual_display_ipc_values->look_ahead_cfg[1]      = vd_config->look_ahead_override == 0 ?
+            virtual_display_ipc_values->look_ahead_cfg[1]  = vd_config->look_ahead_override == 0 ?
                                                                 context.device->look_ahead_frametime_multiplier : 0.0;
+        } else {
+            // smooth follow mode, don't use look-ahead
+            virtual_display_ipc_values->look_ahead_cfg[0]  = 0.0;
+            virtual_display_ipc_values->look_ahead_cfg[1]  = 0.0;
+        }
         virtual_display_ipc_values->look_ahead_cfg[2]      = context.device->look_ahead_scanline_adjust;
         virtual_display_ipc_values->look_ahead_cfg[3]      = context.device->look_ahead_ms_cap;
         *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
@@ -88,23 +103,31 @@ void virtual_display_set_config_func(void* config) {
         if (vd_config->enabled != temp_config->enabled)
             printf("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
-        if (vd_config->look_ahead_override != temp_config->look_ahead_override)
-            fprintf(stdout, "Look ahead override has changed to %f\n", temp_config->look_ahead_override);
+        if (!temp_config->enabled) {
+            if (temp_config->passthrough_smooth_follow_enabled) {
+                // passthrough mode should use the default configs
+                virtual_display_reset_config(temp_config);
+                temp_config->passthrough_smooth_follow_enabled = true;
+            }
+        } else {
+            if (vd_config->look_ahead_override != temp_config->look_ahead_override)
+                fprintf(stdout, "Look ahead override has changed to %f\n", temp_config->look_ahead_override);
 
-        if (vd_config->display_zoom != temp_config->display_zoom)
-            fprintf(stdout, "Display size has changed to %f\n", temp_config->display_zoom);
+            if (vd_config->display_zoom != temp_config->display_zoom)
+                fprintf(stdout, "Display size has changed to %f\n", temp_config->display_zoom);
 
-        if (vd_config->sbs_display_size != temp_config->sbs_display_size)
-            fprintf(stdout, "SBS display size has changed to %f\n", temp_config->sbs_display_size);
+            if (vd_config->sbs_display_size != temp_config->sbs_display_size)
+                fprintf(stdout, "SBS display size has changed to %f\n", temp_config->sbs_display_size);
 
-        if (vd_config->sbs_display_distance != temp_config->sbs_display_distance)
-            fprintf(stdout, "SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
+            if (vd_config->sbs_display_distance != temp_config->sbs_display_distance)
+                fprintf(stdout, "SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
 
-        if (vd_config->sbs_content != temp_config->sbs_content)
-            fprintf(stdout, "SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
+            if (vd_config->sbs_content != temp_config->sbs_content)
+                fprintf(stdout, "SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
 
-        if (vd_config->sbs_mode_stretched != temp_config->sbs_mode_stretched)
-            fprintf(stdout, "SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
+            if (vd_config->sbs_mode_stretched != temp_config->sbs_mode_stretched)
+                fprintf(stdout, "SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
+        }
 
         free(vd_config);
     }
@@ -115,7 +138,7 @@ void virtual_display_set_config_func(void* config) {
 
 int virtual_display_register_features_func(char*** features) {
     *features = malloc(sizeof(char*) * virtual_display_feature_count);
-    *features[0] = strdup(virtual_display_feature_sbs);
+    (*features)[0] = strdup(virtual_display_feature_sbs);
 
     return virtual_display_feature_count;
 }
@@ -175,7 +198,8 @@ bool virtual_display_setup_ipc_func() {
 
 void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (vd_config && vd_config->enabled && ipc_enabled && virtual_display_ipc_values) {
+    if (vd_config && (vd_config->enabled || vd_config->passthrough_smooth_follow_enabled) && ipc_enabled &&
+        virtual_display_ipc_values) {
         if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
                 quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);

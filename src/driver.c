@@ -67,6 +67,7 @@ control_flags_type *control_flags;
 
 bool captured_screen_center=false;
 imu_quat_type screen_center;
+imu_quat_type screen_center_conjugate;
 
 void reset_calibration(bool reset_device) {
     glasses_calibration_started_sec=0;
@@ -98,12 +99,16 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
                 if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
                 printf("Centering screen\n");
 
-                screen_center = conjugate(quat);
+                screen_center = quat;
+                screen_center_conjugate = conjugate(screen_center);
                 captured_screen_center=true;
                 control_flags->recenter_screen=false;
             } else {
+                screen_center = plugins.modify_screen_center(timestamp_ms, quat, screen_center);
+                screen_center_conjugate = conjugate(screen_center);
+
                 // adjust the current rotation by the conjugate of the screen placement quat
-                quat = multiply_quaternions(screen_center, quat);
+                quat = multiply_quaternions(screen_center_conjugate, quat);
             }
         } else {
             struct timeval tv;
@@ -425,8 +430,9 @@ void *monitor_control_flags_file(void *arg) {
 }
 
 bool search_for_device() {
+    if (!device_driver) device_driver = malloc(sizeof(device_driver_type));
     for (int i = 0; i < DEVICE_DRIVER_COUNT; i++) {
-        device_driver = device_drivers[i];
+        *device_driver = *device_drivers[i];
         context.device = device_driver->device_connect_func();
         if (device()) {
             plugins.handle_device_connect();
@@ -440,8 +446,6 @@ bool search_for_device() {
             state()->firmware_update_recommended = device()->firmware_update_recommended;
 
             return true;
-        } else {
-            device_driver = NULL;
         }
     }
 

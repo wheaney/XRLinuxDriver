@@ -33,6 +33,7 @@ struct virtual_display_config_t {
     float sbs_display_size;
     bool sbs_content;
     bool sbs_mode_stretched;
+    bool passthrough_smooth_follow_enabled;
 };
 typedef struct virtual_display_config_t virtual_display_config;
 

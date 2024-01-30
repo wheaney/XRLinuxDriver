@@ -6,6 +6,10 @@ float degree_to_radian(float deg) {
     return deg * M_PI / 180.0f;
 }
 
+float radian_to_degree(float rad) {
+    return rad * 180.0f / M_PI;
+}
+
 imu_quat_type normalize_quaternion(imu_quat_type q) {
     float magnitude = sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z);
     q.w /= magnitude;
