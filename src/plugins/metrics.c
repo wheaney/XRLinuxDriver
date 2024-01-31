@@ -75,8 +75,6 @@ bool was_auto_recenter_enabled = false;
 bool config_auto_recenter_enabled = false;
 
 void metrics_handle_config_line_func(void* config, char* key, char* value) {
-    was_smooth_follow_enabled = config_smooth_follow_enabled;
-    was_auto_recenter_enabled = config_auto_recenter_enabled;
     if (!config_output_mode) config_output_mode = strdup(mouse_output_mode);
     if (!config_external_mode) config_external_mode = strdup("none");
     if (equal(key, "output_mode")) {
@@ -107,18 +105,23 @@ void metrics_set_config_func(void* config) {
     }
 
     if (context.device) {
-        if (current_output_mode != new_output_mode && new_output_mode != OUTPUT_MODE_DISABLED) {
+        bool output_mode_changed = current_output_mode != new_output_mode;
+        if (output_mode_changed && new_output_mode != OUTPUT_MODE_DISABLED) {
             log_metric(metrics_output_mode_to_event_name[new_output_mode]);
         }
         current_output_mode = new_output_mode;
 
-        if (config_smooth_follow_enabled && !was_smooth_follow_enabled) {
+        if (config_smooth_follow_enabled && (!was_smooth_follow_enabled ||
+                output_mode_changed && new_output_mode == OUTPUT_MODE_SIDEVIEW)) {
             log_metric("smooth_follow_enabled");
         }
+        was_smooth_follow_enabled = config_smooth_follow_enabled;
 
-        if (config_auto_recenter_enabled && !was_auto_recenter_enabled) {
+        if (config_auto_recenter_enabled && (!was_auto_recenter_enabled ||
+                output_mode_changed && new_output_mode == OUTPUT_MODE_VIRTUAL_DISPLAY)) {
             log_metric("auto_recenter_enabled");
         }
+        was_auto_recenter_enabled = config_auto_recenter_enabled;
     }
 };
 
