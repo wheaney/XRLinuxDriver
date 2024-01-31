@@ -68,9 +68,15 @@ bool config_disabled = true;
 char *config_output_mode = NULL;
 char *config_external_mode = NULL;
 char *current_device = NULL;
-bool sbs_enabled = false;
+bool state_sbs_enabled = false;
+bool was_smooth_follow_enabled = false;
+bool config_smooth_follow_enabled = false;
+bool was_auto_recenter_enabled = false;
+bool config_auto_recenter_enabled = false;
 
 void metrics_handle_config_line_func(void* config, char* key, char* value) {
+    was_smooth_follow_enabled = config_smooth_follow_enabled;
+    was_auto_recenter_enabled = config_auto_recenter_enabled;
     if (!config_output_mode) config_output_mode = strdup(mouse_output_mode);
     if (!config_external_mode) config_external_mode = strdup("none");
     if (equal(key, "output_mode")) {
@@ -79,6 +85,10 @@ void metrics_handle_config_line_func(void* config, char* key, char* value) {
         string_config(key, value, &config_external_mode);
     } else if (equal(key, "disabled")) {
         boolean_config(key, value, &config_disabled);
+    } else if (equal(key, "virtual_display_smooth_follow_enabled")) {
+        boolean_config(key, value, &config_auto_recenter_enabled);
+    } else if (equal(key, "sideview_smooth_follow_enabled")) {
+        boolean_config(key, value, &config_smooth_follow_enabled);
     }
 };
 
@@ -101,14 +111,22 @@ void metrics_set_config_func(void* config) {
             log_metric(metrics_output_mode_to_event_name[new_output_mode]);
         }
         current_output_mode = new_output_mode;
+
+        if (config_smooth_follow_enabled && !was_smooth_follow_enabled) {
+            log_metric("smooth_follow_enabled");
+        }
+
+        if (config_auto_recenter_enabled && !was_auto_recenter_enabled) {
+            log_metric("auto_recenter_enabled");
+        }
     }
 };
 
 
 void metrics_handle_state_func() {
-    if (!sbs_enabled && context.state->sbs_mode_enabled) {
+    if (!state_sbs_enabled && context.state->sbs_mode_enabled) {
         log_metric("sbs_enabled");
-        sbs_enabled = context.state->sbs_mode_enabled;
+        state_sbs_enabled = context.state->sbs_mode_enabled;
     }
 };
 

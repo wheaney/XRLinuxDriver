@@ -3,15 +3,16 @@
 #include "system.h"
 
 #include <curl/curl.h>
-#include <sys/stat.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/time.h>
 #include <json-c/json.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
 
 #define SECONDS_PER_DAY 86400
 
@@ -19,7 +20,7 @@ const char* DEVICE_LICENSE_FILE_PATH = "/var/lib/xr_driver/device_license";
 const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.tmp";
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
-    const char* postbody(char* hardwareId, char** features, int features_count) {
+    char* postbody(char* hardwareId, char** features, int features_count) {
         json_object *root = json_object_new_object();
         json_object_object_add(root, "hardwareId", json_object_new_string(hardwareId));
         json_object *featuresArray = json_object_new_array();
@@ -27,7 +28,10 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
             json_object_array_add(featuresArray, json_object_new_string(features[i]));
         }
         json_object_object_add(root, "features", featuresArray);
-        return json_object_to_json_string(root);
+        const char* json_str = json_object_to_json_string(root);
+        char* result = strdup(json_str);
+        json_object_put(root);
+        return result;
     }
 
     bool is_valid_license_signature(const char* license, const char* signature) {
@@ -115,6 +119,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
         json_object_object_get_ex(root, "message", &message);
         if (message) {
             fprintf(stderr, "Error from server: %s\n", json_object_get_string(message));
+            json_object_put(root);
             return 0;
         }
 
@@ -136,10 +141,18 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                 valid_license = true;
                 json_object *features_root;
                 json_object_object_get_ex(license_root, "features", &features_root);
-                if (!features_root) return 0;
+                if (!features_root) {
+                    json_object_put(license_root);
+                    json_object_put(root);
+                    return 0;
+                }
 
                 int license_features = json_object_object_length(features_root);
-                if (license_features == 0) return 0;
+                if (license_features == 0) {
+                    json_object_put(license_root);
+                    json_object_put(root);
+                    return 0;
+                }
 
                 json_object_object_foreach(features_root, featureName, val) {
                     json_object *featureObject;
@@ -163,8 +176,15 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                 }
 
                 context.state->device_license = strdup(json_object_get_string(license));
+            } else {
+                if (context.config && context.config->debug_license) {
+                    printf("\tdebug: License hardwareId mismatch;\n\t\treceived: %s\n\t\texpected: %s\n",
+                        json_object_get_string(hardwareId), get_hardware_id());
+                }
             }
+            json_object_put(license_root);
         }
+        json_object_put(root);
 
         if (!valid_license) {
             return -1;
@@ -174,10 +194,12 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
     }
 #endif
 
+pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
     int features_count = 0;
     char** features = NULL;
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
+        pthread_mutex_lock(&refresh_license_lock);
         struct stat st = {0};
 
         if (stat("/var/lib/xr_driver", &st) == -1) {
@@ -187,9 +209,11 @@ void refresh_license(bool force) {
         int attempt = 0;
         bool valid_license = false;
         while (!valid_license && attempt < 2) {
+            if (context.config && context.config->debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
             char* file_path = strdup(DEVICE_LICENSE_FILE_PATH);
             FILE *file = force ? NULL : fopen(file_path, "r");
             if (file) {
+                if (context.config && context.config->debug_license) printf("\tdebug: License file already exists\n");
                 // remove the file if it hasn't been touched in over a day
                 struct stat attr;
                 stat(DEVICE_LICENSE_FILE_PATH, &attr);
@@ -199,6 +223,7 @@ void refresh_license(bool force) {
                     // do this to force a refresh
                     fclose(file);
                     file = NULL;
+                    if (context.config && context.config->debug_license) printf("\tdebug: License file is 1 day old, attempting to refresh it\n");
                 }
             }
 
@@ -213,28 +238,42 @@ void refresh_license(bool force) {
                 curl_global_init(CURL_GLOBAL_DEFAULT);
                 curl = curl_easy_init();
                 if(curl) {
-                    curl_easy_setopt(curl, CURLOPT_URL, "https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/licenses/v1");
-                    curl_easy_setopt(curl, CURLOPT_POSTFIELDS,
-                        postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count));
-
-                    headers = curl_slist_append(headers, "Content-Type: application/json");
-                    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
                     file = fopen(file_path, "w");
                     if (file == NULL) {
                         fprintf(stderr, "Error opening file\n");
                         return;
                     }
 
+                    curl_easy_setopt(curl, CURLOPT_URL, "https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/licenses/v1");
+                    char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
+                    if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
+                    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
+
+                    headers = curl_slist_append(headers, "Content-Type: application/json");
+                    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
                     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
                     curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
 
-                    res = curl_easy_perform(curl);
-                    if(res != CURLE_OK)
+                    long http_code = 0;
+                    CURLcode res = curl_easy_perform(curl);
+
+                    if(res != CURLE_OK) {
                         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+                    } else {
+                        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+                        if(http_code != 200) {
+                            fprintf(stderr, "Unexpected HTTP response: %ld\n", http_code);
+                            res = CURLE_HTTP_RETURNED_ERROR;
+                        }
+                    }
 
                     fclose(file);
+                    if(res != CURLE_OK) {
+                        remove(file_path);
+                    }
 
+                    free(postbody_string);
                     curl_easy_cleanup(curl);
                 }
                 curl_global_cleanup();
@@ -262,9 +301,15 @@ void refresh_license(bool force) {
             free(file_path);
             attempt++;
         }
+        pthread_mutex_unlock(&refresh_license_lock);
     #endif
 
-    if (context.state->granted_features) free(context.state->granted_features);
+    if (context.state->granted_features && context.state->granted_features_count > 0) {
+        for (int i = 0; i < context.state->granted_features_count; i++) {
+            free(context.state->granted_features[i]);
+        }
+        free(context.state->granted_features);
+    }
     context.state->granted_features = features;
     context.state->granted_features_count = features_count;
 }
