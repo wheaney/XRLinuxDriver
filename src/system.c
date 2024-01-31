@@ -44,6 +44,7 @@ char *get_hardware_id() {
                     sprintf(mac_address_hash + (i*2), "%02x", hash[i]);
 
                 found = true;
+                printf("Using hardware id %s\n", mac_address_hash);
             }
             close(fd);
         }
