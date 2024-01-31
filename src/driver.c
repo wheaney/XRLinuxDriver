@@ -249,6 +249,9 @@ void update_config_from_file(FILE *fp) {
     if (config()->debug_ipc != new_config->debug_ipc)
         fprintf(stdout, "IPC debugging has been %s\n", new_config->debug_ipc ? "enabled" : "disabled");
 
+    if (config()->debug_license != new_config->debug_license)
+        fprintf(stdout, "License debugging has been %s\n", new_config->debug_license ? "enabled" : "disabled");
+
     update_config(&context.config, new_config);
 
     if (output_mode_changed || driver_reenabled || driver_disabled)

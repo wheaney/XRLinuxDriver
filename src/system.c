@@ -1,21 +1,24 @@
+#include <net/if.h>
+#include <netinet/in.h>
+#include <openssl/sha.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <openssl/sha.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
-#include <unistd.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
+#include <unistd.h>
 
 #define NET_INTERFACE_COUNT 2
 const char *network_interfaces[NET_INTERFACE_COUNT] = {"eth0", "wlan0"};
 
+pthread_mutex_t get_hardware_id_lock = PTHREAD_MUTEX_INITIALIZER;
 char *get_hardware_id() {
     static char *mac_address_hash = NULL;
     static bool no_mac_address = false;
 
+    pthread_mutex_lock(&get_hardware_id_lock);
     if (!mac_address_hash && !no_mac_address) {
         int fd;
         struct ifreq ifr;
@@ -49,6 +52,7 @@ char *get_hardware_id() {
             no_mac_address = true;
         }
     }
+    pthread_mutex_unlock(&get_hardware_id_lock);
 
     return mac_address_hash;
 }

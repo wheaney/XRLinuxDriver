@@ -13,6 +13,7 @@ struct driver_config_t {
     bool debug_joystick;
     bool debug_multi_tap;
     bool debug_ipc;
+    bool debug_license;
 };
 
 typedef struct driver_config_t driver_config_type;
