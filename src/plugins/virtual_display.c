@@ -21,7 +21,6 @@ virtual_display_config *vd_config;
 virtual_display_ipc_values_type *virtual_display_ipc_values;
 
 const int virtual_display_feature_count = 1;
-const char* virtual_display_feature_sbs = "sbs";
 
 void virtual_display_reset_config(virtual_display_config *config) {
     config->enabled = false;

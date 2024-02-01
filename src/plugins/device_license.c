@@ -258,19 +258,23 @@ void refresh_license(bool force) {
                     long http_code = 0;
                     CURLcode res = curl_easy_perform(curl);
 
+                    bool failed = false;
                     if(res != CURLE_OK) {
+                        failed = true;
                         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
                     } else {
                         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
                         if(http_code != 200) {
+                            failed = true;
                             fprintf(stderr, "Unexpected HTTP response: %ld\n", http_code);
                             res = CURLE_HTTP_RETURNED_ERROR;
                         }
                     }
 
                     fclose(file);
-                    if(res != CURLE_OK) {
+                    if(failed) {
                         remove(file_path);
+                        file_path = strdup(DEVICE_LICENSE_FILE_PATH);
                     }
 
                     free(postbody_string);
