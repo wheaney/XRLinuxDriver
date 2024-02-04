@@ -198,6 +198,8 @@ pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
     int features_count = 0;
     char** features = NULL;
+    free_and_clear(&context.state->device_license);
+
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
         pthread_mutex_lock(&refresh_license_lock);
         struct stat st = {0};
@@ -241,8 +243,7 @@ void refresh_license(bool force) {
                     file = fopen(file_path, "w");
                     if (file == NULL) {
                         fprintf(stderr, "Error opening file\n");
-                        pthread_mutex_unlock(&refresh_license_lock);
-                        return;
+                        break;
                     }
 
                     curl_easy_setopt(curl, CURLOPT_URL, "https://q5sjkyqpwa.execute-api.eu-west-1.amazonaws.com/prod/licenses/v1");
@@ -287,9 +288,8 @@ void refresh_license(bool force) {
                 file = fopen(file_path, "r");
                 if (file == NULL) {
                     free(file_path);
-                    pthread_mutex_unlock(&refresh_license_lock);
                     fprintf(stderr, "Error opening file\n");
-                    return;
+                    break;
                 }
             }
 
