@@ -140,7 +140,7 @@ bool driver_disabled() {
 
 // pthread function to create outputs and block on the device
 void *block_on_device_thread_func(void *arg) {
-    if (!config()->disabled) {
+    if (!driver_disabled()) {
         fprintf(stdout, "Device connected, redirecting input to %s...\n", config()->output_mode);
         init_outputs();
     }
@@ -162,7 +162,7 @@ void *block_on_device_thread_func(void *arg) {
 
     if (config()->debug_threads)
         printf("\tdebug: Exiting block_on_device thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
-            glasses_ready, config()->disabled, force_reset_threads);
+            glasses_ready, driver_disabled(), force_reset_threads);
 }
 
 void setup_ipc() {
@@ -216,10 +216,10 @@ void setup_ipc() {
 void update_config_from_file(FILE *fp) {
     driver_config_type* new_config = parse_config_file(fp);
 
-    bool driver_disabled = !config()->disabled && new_config->disabled;
-    if (driver_disabled)
+    bool driver_newly_disabled = !driver_disabled() && new_config->disabled;
+    if (driver_newly_disabled)
         printf("Driver has been disabled\n");
-    bool driver_reenabled = config()->disabled && !new_config->disabled;
+    bool driver_reenabled = driver_disabled() && !new_config->disabled;
     if (driver_reenabled)
         printf("Driver has been re-enabled\n");
 
@@ -254,12 +254,12 @@ void update_config_from_file(FILE *fp) {
 
     update_config(&context.config, new_config);
 
-    if (output_mode_changed || driver_reenabled || driver_disabled)
+    if (output_mode_changed || driver_reenabled || driver_newly_disabled)
         // do this to teardown and re-initialize all outputs
         force_reset_threads = true;
 
     if (ipc_enabled) {
-        *ipc_values->disabled = config()->disabled;
+        *ipc_values->disabled = driver_disabled();
     } else if (!force_reset_threads && is_external_mode(config())) {
         fprintf(stderr, "error: no IPC path set, IMU data will not be available for external usage\n");
     }
@@ -299,7 +299,7 @@ void *monitor_config_file_thread_func(void *arg) {
         tv.tv_usec = 0;
 
         // wait for data to be available for reading, do this with select() so we can specify a timeout and make
-        // sure we shouldn't exit due to config()->disabled
+        // sure we shouldn't exit due to driver_disabled()
         int retval = select(fd + 1, &readfds, NULL, NULL, &tv);
         if (retval == -1) {
             perror("select()");
@@ -332,7 +332,7 @@ void *monitor_config_file_thread_func(void *arg) {
 
     if (config()->debug_threads)
         printf("\tdebug: Exiting monitor_config_file thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
-            glasses_ready, config()->disabled, force_reset_threads);
+            glasses_ready, driver_disabled(), force_reset_threads);
 
     inotify_rm_watch(fd, wd);
     close(fd);
@@ -365,7 +365,7 @@ void *manage_state_thread_func(void *arg) {
 
     if (config()->debug_threads)
         printf("\tdebug: Exiting write_state thread; glasses_ready %d, driver_disabled %d, force_reset_threads: %d\n",
-                                                               glasses_ready, config()->disabled, force_reset_threads);
+                                                               glasses_ready, driver_disabled(), force_reset_threads);
 }
 
 void handle_control_flags_update() {
@@ -478,24 +478,6 @@ int main(int argc, const char** argv) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGSEGV, &sa, NULL);
 
-    context.config = default_config();
-    config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
-    update_config_from_file(config_fp);
-
-    context.state = malloc(sizeof(driver_state_type));
-    char** features = NULL;
-    int feature_count = plugins.register_features(&features);
-    state()->registered_features_count = feature_count;
-    state()->registered_features = features;
-
-    control_flags = malloc(sizeof(control_flags_type));
-    pthread_t monitor_control_flags_file_thread;
-    pthread_attr_t monitor_control_flags_file_thread_attr;
-
-    pthread_attr_init(&monitor_control_flags_file_thread_attr);
-    pthread_attr_setdetachstate(&monitor_control_flags_file_thread_attr, PTHREAD_CREATE_DETACHED);
-    pthread_create(&monitor_control_flags_file_thread, NULL, monitor_control_flags_file, NULL);
-
     // ensure the log file exists, reroute stdout and stderr there
     char log_file_path[1024];
     FILE *log_file = get_or_create_home_file(".xreal_driver_log", NULL, &log_file_path[0], NULL);
@@ -517,6 +499,26 @@ int main(int argc, const char** argv) {
             fprintf(stderr, "Another instance of this program is already running.\n");
         exit(1);
     }
+
+    context.config = default_config();
+    config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
+    update_config_from_file(config_fp);
+
+    if (driver_disabled()) printf("Driver is disabled\n");
+
+    context.state = malloc(sizeof(driver_state_type));
+    char** features = NULL;
+    int feature_count = plugins.register_features(&features);
+    state()->registered_features_count = feature_count;
+    state()->registered_features = features;
+
+    control_flags = malloc(sizeof(control_flags_type));
+    pthread_t monitor_control_flags_file_thread;
+    pthread_attr_t monitor_control_flags_file_thread_attr;
+
+    pthread_attr_init(&monitor_control_flags_file_thread_attr);
+    pthread_attr_setdetachstate(&monitor_control_flags_file_thread_attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&monitor_control_flags_file_thread, NULL, monitor_control_flags_file, NULL);
 
     plugins.start();
     write_state(state());

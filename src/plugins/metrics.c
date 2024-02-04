@@ -1,4 +1,5 @@
 #include "config.h"
+#include "curl.h"
 #include "device.h"
 #include "plugins.h"
 #include "runtime_context.h"
@@ -19,7 +20,7 @@ void log_metric(char *event_name) {
 
         struct curl_slist *headers = NULL;
 
-        curl_global_init(CURL_GLOBAL_DEFAULT);
+        curl_init();
 
         curl = curl_easy_init();
         if(curl && get_hardware_id()) {
@@ -41,8 +42,6 @@ void log_metric(char *event_name) {
             /* always cleanup */
             curl_easy_cleanup(curl);
         }
-
-        curl_global_cleanup();
     #endif
 };
 

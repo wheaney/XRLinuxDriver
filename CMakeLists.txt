@@ -55,6 +55,7 @@ set_target_properties(
 add_executable(xrealAirLinuxDriver
 		src/buffer.c
 		src/config.c
+		src/curl.c
 		src/devices/viture.c
 		src/devices/xreal.c
 		src/driver.c

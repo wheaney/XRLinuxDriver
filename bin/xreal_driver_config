@@ -80,7 +80,7 @@ then
         config_value="$2"
     elif [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
         config_type="string"
-        config_key="device_license"
+        config_key="hardware_id"
         config_file="/dev/shm/xr_driver_state"
     fi
 
@@ -130,8 +130,8 @@ then
             done < "$config_file"
 
             if [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
-                hardware_id=$(echo "$value" | jq -r '.hardwareId')
-                url="https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/tokens/v1"
+                hardware_id=$value
+                url="https://q5sjkyqpwa.execute-api.eu-west-1.amazonaws.com/prod/tokens/v1"
 
                 if [ "$1" == "--request-token" ]; then
                     postbody=$(jq -n \

@@ -1,3 +1,4 @@
+#include "curl.h"
 #include "plugins/device_license.h"
 #include "runtime_context.h"
 #include "system.h"
@@ -131,14 +132,13 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
         int features_count = 0;
         bool valid_license = false;
         if (is_valid_license_signature(json_object_get_string(license), json_object_get_string(signature))) {
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-
             json_object *license_root = json_tokener_parse(json_object_get_string(license));
             json_object *hardwareId;
             json_object_object_get_ex(license_root, "hardwareId", &hardwareId);
             if (strcmp(json_object_get_string(hardwareId), get_hardware_id()) == 0) {
                 valid_license = true;
+                context.state->device_license = strdup(json_object_get_string(license));
+
                 json_object *features_root;
                 json_object_object_get_ex(license_root, "features", &features_root);
                 if (!features_root) {
@@ -166,6 +166,8 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                     // if status is "on" or "trial" and the current system time is not past the endDate, add to the features array
                     bool enabled = false;
                     if (strcmp(featureStatus, "on") == 0 || strcmp(featureStatus, "trial") == 0) {
+                        struct timeval tv;
+                        gettimeofday(&tv, NULL);
                         if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
                             *features = realloc(*features, (features_count + 1) * sizeof(char*));
                             (*features)[features_count++] = strdup(featureName);
@@ -174,8 +176,6 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                     }
                     printf("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                 }
-
-                context.state->device_license = strdup(json_object_get_string(license));
             } else {
                 if (context.config && context.config->debug_license) {
                     printf("\tdebug: License hardwareId mismatch;\n\t\treceived: %s\n\t\texpected: %s\n",
@@ -235,16 +235,17 @@ void refresh_license(bool force) {
                 CURLcode res;
                 struct curl_slist *headers = NULL;
 
-                curl_global_init(CURL_GLOBAL_DEFAULT);
+                curl_init();
                 curl = curl_easy_init();
                 if(curl) {
                     file = fopen(file_path, "w");
                     if (file == NULL) {
                         fprintf(stderr, "Error opening file\n");
+                        pthread_mutex_unlock(&refresh_license_lock);
                         return;
                     }
 
-                    curl_easy_setopt(curl, CURLOPT_URL, "https://xxoa007gw8.execute-api.us-east-1.amazonaws.com/prod/licenses/v1");
+                    curl_easy_setopt(curl, CURLOPT_URL, "https://q5sjkyqpwa.execute-api.eu-west-1.amazonaws.com/prod/licenses/v1");
                     char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
                     if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
                     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
@@ -274,18 +275,19 @@ void refresh_license(bool force) {
                     fclose(file);
                     if(failed) {
                         remove(file_path);
+                        free(file_path);
                         file_path = strdup(DEVICE_LICENSE_FILE_PATH);
                     }
 
                     free(postbody_string);
                     curl_easy_cleanup(curl);
                 }
-                curl_global_cleanup();
 
                 // Reopen the file
                 file = fopen(file_path, "r");
                 if (file == NULL) {
                     free(file_path);
+                    pthread_mutex_unlock(&refresh_license_lock);
                     fprintf(stderr, "Error opening file\n");
                     return;
                 }
