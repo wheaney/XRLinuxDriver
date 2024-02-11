@@ -34,15 +34,18 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define DEVICE_DRIVER_COUNT 2
+#define DEVICE_DRIVER_COUNT 2 
 const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
     &xreal_driver,
     &viture_driver
 };
 
 #define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
-#define MT_RECENTER_SCREEN 2
-#define MT_RESET_CALIBRATION 3
+#define MT_SINGLE_CLICK 1
+#define MT_DOUBLE_CLICK 2
+#define MT_RECENTER_SCREEN 3
+#define MT_RESET_CALIBRATION 4
+
 
 driver_config_type *config() {
     return context.config;
@@ -86,7 +89,19 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
         int multi_tap = detect_multi_tap(euler_velocities,
                                          timestamp_ms,
                                          config()->debug_multi_tap);
-        if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
+
+	if (multi_tap == MT_SINGLE_CLICK){
+		printf("Single Click detected...\n");
+		singletap(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);	
+	}
+
+        if (multi_tap == MT_DOUBLE_CLICK){
+	printf("Double Click detected...\n");
+	doubletap(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
+	
+	}
+	
+	if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
             if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
             printf("Kicking off calibration\n");
             reset_calibration(true);

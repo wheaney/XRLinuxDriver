@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define MT_BUFFER_MS 25
+#define MT_BUFFER_MS 15
 
 #define MT_STATE_IDLE 0
 #define MT_STATE_RISE 1
@@ -19,13 +19,13 @@ int imu_cycles_per_s;
 buffer_type *mt_buffer = NULL;
 int mt_state = MT_STATE_IDLE;
 const float mt_detect_threshold = 2000.0;
-const float mt_pause_threshold = 100.0;
+const float mt_pause_threshold = 1000.0;
 uint64_t tap_start_time = 0;
 uint64_t pause_start_time = 0;
 uint64_t last_logged_peak_time = 0;
-const int max_tap_period_ms = 750; // longest time-frame to allow between tap starts/rises
+const int max_tap_period_ms = 800; // longest time-frame to allow between tap starts/rises
 const int max_tap_duration_ms = 70; // a single tap should be very quick, ignore long accelerations
-const int min_pause_ms = 10; // must detect a pause (~0 acceleration) between taps
+const int min_pause_ms = 70; // must detect a pause (~0 acceleration) between taps
 float peak_max = 0.0;
 int tap_count = 0;
 
@@ -64,7 +64,7 @@ int detect_multi_tap(imu_euler_type velocities, uint32_t timestamp, bool debug) 
                 mt_state = MT_STATE_IDLE;
                 int final_tap_count = tap_count;
                 tap_count = 0;
-
+		printf("final_tap_count = %d\n",final_tap_count);
                 if (final_tap_count > 0 && debug) fprintf(stdout, "\tdebug: detected multi-tap of %d\n", final_tap_count);
                 return final_tap_count;
             } else {
