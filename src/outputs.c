@@ -227,18 +227,16 @@ void deinit_outputs() {
 }
 void singletap(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
-libevdev_uinput_write_event(uinput, EV_KEY, BTN_LEFT,1);
-libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
-libevdev_uinput_write_event(uinput, EV_KEY, BTN_LEFT,0);
-libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
+    libevdev_uinput_write_event(uinput, EV_KEY, BTN_LEFT,1);
+    libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
+    libevdev_uinput_write_event(uinput, EV_KEY, BTN_LEFT,0);
+    libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
 }
 
 void doubletap(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
-libevdev_uinput_write_event(uinput, EV_KEY, BTN_RIGHT, 1);
-libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
-libevdev_uinput_write_event(uinput, EV_KEY, BTN_RIGHT, 0);
-libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
+    singletap(timestamp_ms, quat, velocities, ipc_enabled, imu_calibrated, ipc_values);
+    singletap(timestamp_ms, quat, velocities, ipc_enabled, imu_calibrated, ipc_values);
 }
 
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,

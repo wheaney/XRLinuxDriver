@@ -91,14 +91,13 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
                                          config()->debug_multi_tap);
 
 	if (multi_tap == MT_SINGLE_CLICK){
-		printf("Single Click detected...\n");
-		singletap(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);	
+            printf("Single Click detected...\n");
+            singletap(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);	
 	}
 
         if (multi_tap == MT_DOUBLE_CLICK){
-	printf("Double Click detected...\n");
-	doubletap(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
-	
+            printf("Double Click detected...\n");
+            doubletap(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
 	}
 	
 	if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
