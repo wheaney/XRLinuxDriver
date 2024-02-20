@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <pthread.h>
 
 #define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
 

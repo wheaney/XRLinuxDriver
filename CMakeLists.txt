@@ -5,6 +5,7 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_STANDARD 17)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
+find_package(PkgConfig REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set (py_cmd "${CMAKE_SOURCE_DIR}/bin/build_custom_banner_config.py")
 set (custom_banner_header_file "${CMAKE_SOURCE_DIR}/include/custom_banner_config.h")
@@ -29,12 +30,11 @@ add_definitions(-DDEVICE_LICENSE_PUBLIC_KEY="${DEVICE_LICENSE_PUBLIC_KEY_ESCAPED
 
 find_package(Threads REQUIRED)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-find_package(LIBEVDEV REQUIRED)
-find_package(libusb REQUIRED)
-find_package(Curl REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(json-c REQUIRED CONFIG)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+pkg_check_modules(LIBCURL REQUIRED libcurl)
+pkg_check_modules(LIBEVDEV REQUIRED libevdev)
+pkg_check_modules(OPENSSL REQUIRED openssl)
+pkg_check_modules(JSONC REQUIRED json-c)
 
 set(VITURE_LIB_NAME viture_sdk)
 
@@ -82,22 +82,23 @@ add_executable(xrealAirLinuxDriver
 target_include_directories(xrealAirLinuxDriver
 		SYSTEM BEFORE PRIVATE
 		${LIBEVDEV_INCLUDE_DIRS}
+		${JSONC_INCLUDE_DIRS}
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary/interface_lib/include
-		${LIBUSB_INCLUDE_DIR}
-		${CURL_INCLUDE_DIR}
+		${LIBUSB_INCLUDE_DIRS}
+		${LIBCURL_INCLUDE_DIRS}
 		${OPENSSL_INCLUDE_DIRS}
 )
 
 target_link_libraries(xrealAirLinuxDriver
 		PRIVATE ${LIBEVDEV_LIBRARIES}
-		        json-c::json-c
+		        ${JSONC_LIBRARIES}
 		        nrealAirLibrary
 		        Threads::Threads
 		        m
 		        ${VITURE_LIB_NAME}
-		        ${LIBUSB_LIBRARY}
-		        ${CURL_LIBRARY}
+		        ${LIBUSB_LIBRARIES}
+		        ${LIBCURL_LIBRARIES}
 		        ${OPENSSL_LIBRARIES}
 )
 add_dependencies(xrealAirLinuxDriver run_python_script)
