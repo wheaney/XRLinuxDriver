@@ -29,7 +29,6 @@ string(REPLACE "\n" "\\n" DEVICE_LICENSE_PUBLIC_KEY_ESCAPED ${DEVICE_LICENSE_PUB
 add_definitions(-DDEVICE_LICENSE_PUBLIC_KEY="${DEVICE_LICENSE_PUBLIC_KEY_ESCAPED}")
 
 find_package(Threads REQUIRED)
-
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 pkg_check_modules(LIBEVDEV REQUIRED libevdev)
@@ -49,7 +48,7 @@ add_library (
 
 set_target_properties(
     ${VITURE_LIB_NAME} PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libviture_one_sdk.a
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libviture_one_sdk_static_debug.a
 )
 
 add_executable(xrealAirLinuxDriver
