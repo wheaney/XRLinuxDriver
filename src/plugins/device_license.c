@@ -201,113 +201,115 @@ void refresh_license(bool force) {
     free_and_clear(&context.state->device_license);
 
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
-        pthread_mutex_lock(&refresh_license_lock);
-        struct stat st = {0};
+        if (get_hardware_id()) {
+            pthread_mutex_lock(&refresh_license_lock);
+            struct stat st = {0};
 
-        if (stat("/var/lib/xr_driver", &st) == -1) {
-            mkdir("/var/lib/xr_driver", 0700);
-        }
-
-        int attempt = 0;
-        bool valid_license = false;
-        while (!valid_license && attempt < 2) {
-            if (context.config && context.config->debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
-            char* file_path = strdup(DEVICE_LICENSE_FILE_PATH);
-            FILE *file = force ? NULL : fopen(file_path, "r");
-            if (file) {
-                if (context.config && context.config->debug_license) printf("\tdebug: License file already exists\n");
-                // remove the file if it hasn't been touched in over a day
-                struct stat attr;
-                stat(DEVICE_LICENSE_FILE_PATH, &attr);
-                struct timeval tv;
-                gettimeofday(&tv, NULL);
-                if (tv.tv_sec - attr.st_mtime > SECONDS_PER_DAY) {
-                    // do this to force a refresh
-                    fclose(file);
-                    file = NULL;
-                    if (context.config && context.config->debug_license) printf("\tdebug: License file is 1 day old, attempting to refresh it\n");
-                }
+            if (stat("/var/lib/xr_driver", &st) == -1) {
+                mkdir("/var/lib/xr_driver", 0700);
             }
 
-            if (file == NULL) {
-                free(file_path);
-                file_path = strdup(DEVICE_LICENSE_TEMP_FILE_PATH);
+            int attempt = 0;
+            bool valid_license = false;
+            while (!valid_license && attempt < 2) {
+                if (context.config && context.config->debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
+                char* file_path = strdup(DEVICE_LICENSE_FILE_PATH);
+                FILE *file = force ? NULL : fopen(file_path, "r");
+                if (file) {
+                    if (context.config && context.config->debug_license) printf("\tdebug: License file already exists\n");
+                    // remove the file if it hasn't been touched in over a day
+                    struct stat attr;
+                    stat(DEVICE_LICENSE_FILE_PATH, &attr);
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    if (tv.tv_sec - attr.st_mtime > SECONDS_PER_DAY) {
+                        // do this to force a refresh
+                        fclose(file);
+                        file = NULL;
+                        if (context.config && context.config->debug_license) printf("\tdebug: License file is 1 day old, attempting to refresh it\n");
+                    }
+                }
 
-                CURL *curl;
-                CURLcode res;
-                struct curl_slist *headers = NULL;
+                if (file == NULL) {
+                    free(file_path);
+                    file_path = strdup(DEVICE_LICENSE_TEMP_FILE_PATH);
 
-                curl_init();
-                curl = curl_easy_init();
-                if(curl) {
-                    file = fopen(file_path, "w");
+                    CURL *curl;
+                    CURLcode res;
+                    struct curl_slist *headers = NULL;
+
+                    curl_init();
+                    curl = curl_easy_init();
+                    if(curl) {
+                        file = fopen(file_path, "w");
+                        if (file == NULL) {
+                            fprintf(stderr, "Error opening file\n");
+                            break;
+                        }
+
+                        curl_easy_setopt(curl, CURLOPT_URL, "https://q5sjkyqpwa.execute-api.eu-west-1.amazonaws.com/prod/licenses/v1");
+                        char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
+                        if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
+                        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
+
+                        headers = curl_slist_append(headers, "Content-Type: application/json");
+                        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+                        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+                        curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+
+                        long http_code = 0;
+                        CURLcode res = curl_easy_perform(curl);
+
+                        bool failed = false;
+                        if(res != CURLE_OK) {
+                            failed = true;
+                            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+                        } else {
+                            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+                            if(http_code != 200) {
+                                failed = true;
+                                fprintf(stderr, "Unexpected HTTP response: %ld\n", http_code);
+                                res = CURLE_HTTP_RETURNED_ERROR;
+                            }
+                        }
+
+                        fclose(file);
+                        if(failed) {
+                            remove(file_path);
+                            free(file_path);
+                            file_path = strdup(DEVICE_LICENSE_FILE_PATH);
+                        }
+
+                        free(postbody_string);
+                        curl_easy_cleanup(curl);
+                    }
+
+                    // Reopen the file
+                    file = fopen(file_path, "r");
                     if (file == NULL) {
+                        free(file_path);
                         fprintf(stderr, "Error opening file\n");
                         break;
                     }
+                }
 
-                    curl_easy_setopt(curl, CURLOPT_URL, "https://q5sjkyqpwa.execute-api.eu-west-1.amazonaws.com/prod/licenses/v1");
-                    char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
-                    if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
-                    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
-
-                    headers = curl_slist_append(headers, "Content-Type: application/json");
-                    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-                    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
-                    curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
-
-                    long http_code = 0;
-                    CURLcode res = curl_easy_perform(curl);
-
-                    bool failed = false;
-                    if(res != CURLE_OK) {
-                        failed = true;
-                        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-                    } else {
-                        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-                        if(http_code != 200) {
-                            failed = true;
-                            fprintf(stderr, "Unexpected HTTP response: %ld\n", http_code);
-                            res = CURLE_HTTP_RETURNED_ERROR;
-                        }
+                features_count = get_license_features(file, &features);
+                fclose(file);
+                if (features_count != -1) {
+                    valid_license = true;
+                    if (strcmp(file_path, DEVICE_LICENSE_TEMP_FILE_PATH) == 0) {
+                        rename(file_path, DEVICE_LICENSE_FILE_PATH);
                     }
-
-                    fclose(file);
-                    if(failed) {
-                        remove(file_path);
-                        free(file_path);
-                        file_path = strdup(DEVICE_LICENSE_FILE_PATH);
-                    }
-
-                    free(postbody_string);
-                    curl_easy_cleanup(curl);
+                } else {
+                    features_count = 0;
+                    remove(file_path);
                 }
-
-                // Reopen the file
-                file = fopen(file_path, "r");
-                if (file == NULL) {
-                    free(file_path);
-                    fprintf(stderr, "Error opening file\n");
-                    break;
-                }
+                free(file_path);
+                attempt++;
             }
-
-            features_count = get_license_features(file, &features);
-            fclose(file);
-            if (features_count != -1) {
-                valid_license = true;
-                if (strcmp(file_path, DEVICE_LICENSE_TEMP_FILE_PATH) == 0) {
-                    rename(file_path, DEVICE_LICENSE_FILE_PATH);
-                }
-            } else {
-                features_count = 0;
-                remove(file_path);
-            }
-            free(file_path);
-            attempt++;
+            pthread_mutex_unlock(&refresh_license_lock);
         }
-        pthread_mutex_unlock(&refresh_license_lock);
     #endif
 
     if (context.state->granted_features && context.state->granted_features_count > 0) {
