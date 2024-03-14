@@ -28,6 +28,7 @@ void virtual_display_reset_config(virtual_display_config *config) {
     config->look_ahead_override = 0.0;
     config->display_zoom = 1.0;
     config->sbs_display_distance = 1.0;
+    config->sbs_display_size = 1.0;
     config->sbs_content = false;
     config->sbs_mode_stretched = false;
     config->passthrough_smooth_follow_enabled = false;
@@ -54,7 +55,7 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
     } else if (equal(key, "sbs_display_size")) {
         float_config(key, value, &temp_config->sbs_display_size);
     } else if (equal(key, "sbs_content")) {
-        boolean_config(key, value, &temp_config->sbs_mode_stretched);
+        boolean_config(key, value, &temp_config->sbs_content);
     } else if (equal(key, "sbs_mode_stretched")) {
         boolean_config(key, value, &temp_config->sbs_mode_stretched);
     } else if (equal(key, "sideview_smooth_follow_enabled") && is_smooth_follow_granted()) {

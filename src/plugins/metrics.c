@@ -23,7 +23,7 @@ void log_metric(char *event_name) {
         curl_init();
 
         curl = curl_easy_init();
-        if(curl && get_hardware_id()) {
+        if(curl) {
             headers = curl_slist_append(headers, "Content-Type: application/json");
 
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -33,7 +33,7 @@ void log_metric(char *event_name) {
             curl_easy_setopt(curl, CURLOPT_URL, url);
 
             char post_data[1024];
-            snprintf(post_data, 1024, "{\"client_id\": \"%s\", \"user_id\": \"%s\", \"events\": [{\"name\": \"%s\"}]}", UA_CLIENT_ID, get_hardware_id(), event_name);
+            snprintf(post_data, 1024, "{\"client_id\": \"%s\", \"events\": [{\"name\": \"%s\"}]}", UA_CLIENT_ID, event_name);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
 
             /* Perform the request, res will get the return code */
