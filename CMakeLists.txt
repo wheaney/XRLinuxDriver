@@ -68,6 +68,7 @@ add_executable(xrealAirLinuxDriver
 		src/outputs.c
 		src/plugins.c
 		src/plugins/custom_banner.c
+		src/plugins/breezy_desktop.c
 		src/plugins/device_license.c
 		src/plugins/metrics.c
 		src/plugins/sideview.c
