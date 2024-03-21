@@ -1,5 +1,6 @@
 #include "plugins.h"
 #include "plugins/custom_banner.h"
+#include "plugins/breezy_desktop.h"
 #include "plugins/device_license.h"
 #include "plugins/metrics.h"
 #include "plugins/sideview.h"
@@ -9,14 +10,15 @@
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 6
+#define PLUGIN_COUNT 7
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
     &sideview_plugin,
     &metrics_plugin,
     &custom_banner_plugin,
-    &smooth_follow_plugin
+    &smooth_follow_plugin,
+    &breezy_desktop_plugin
 };
 
 void all_plugins_start_func() {
