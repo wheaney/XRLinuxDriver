@@ -89,6 +89,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
         int multi_tap = detect_multi_tap(euler_velocities,
                                          timestamp_ms,
                                          config()->debug_multi_tap);
+        if (multi_tap > 1) plugins.handle_multi_tap(multi_tap);
         if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
             if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
             printf("Kicking off calibration\n");

@@ -42,6 +42,25 @@ imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2) {
     return normalize_quaternion(q);
 }
 
+imu_quat_type quaternion_pow(imu_quat_type quat, float exponent) {
+    // Compute the angle (theta) and axis (u) of the input quaternion
+    float theta = 2.0f * acosf(quat.w);
+    imu_quat_type u_intermediate = { quat.x, quat.y, quat.z, 0.0f };
+    imu_quat_type u = normalize_quaternion(u_intermediate);
+
+    // Compute the new angle (new_theta) and construct the new quaternion
+    float new_theta = exponent * theta;
+    float half_new_theta = 0.5f * new_theta;
+    imu_quat_type q = {
+        .w = cosf(half_new_theta),
+        .x = u.x * sinf(half_new_theta),
+        .y = u.y * sinf(half_new_theta),
+        .z = u.z * sinf(half_new_theta)
+    };
+
+    return normalize_quaternion(q);
+}
+
 // produces euler angles for NWU coordinate system
 imu_euler_type quaternion_to_euler(imu_quat_type q) {
     imu_euler_type euler;

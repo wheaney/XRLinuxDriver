@@ -156,10 +156,10 @@ imu_quat_type slerp(imu_quat_type x, imu_quat_type y, float a) {
         z = tmp;
         cosTheta = -cosTheta;
     }
-    float a_compliment = 1 - a;
     imu_quat_type result;
     float half_angle = acos(cosTheta);
     if (next_state_for_angle(radian_to_degree(2 * half_angle)) == FOLLOW_STATE_SLERPING) {
+        float a_compliment = 1 - a;
         float sin_of_angle = sin(half_angle);
         float x_multiplier = sin(a_compliment * half_angle) / sin_of_angle;
         float z_multiplier = sin(a * half_angle) / sin_of_angle;

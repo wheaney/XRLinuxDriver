@@ -1,6 +1,7 @@
 #include "plugins.h"
 #include "plugins/custom_banner.h"
 #include "plugins/device_license.h"
+#include "plugins/drift_offset.h"
 #include "plugins/metrics.h"
 #include "plugins/sideview.h"
 #include "plugins/smooth_follow.h"
@@ -9,14 +10,15 @@
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 6
+#define PLUGIN_COUNT 7
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
     &sideview_plugin,
     &metrics_plugin,
     &custom_banner_plugin,
-    &smooth_follow_plugin
+    &smooth_follow_plugin,
+    &drift_offset_plugin
 };
 
 void all_plugins_start_func() {
@@ -123,6 +125,12 @@ void all_plugins_handle_device_disconnect_func() {
         all_plugins[i]->handle_device_disconnect();
     }
 }
+void all_plugins_handle_multi_tap_func(int tap_count) {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->handle_multi_tap == NULL) continue;
+        all_plugins[i]->handle_multi_tap(tap_count);
+    }
+}
 
 const plugin_type plugins = {
     .id = "all_plugins",
@@ -138,5 +146,6 @@ const plugin_type plugins = {
     .reset_imu_data = all_plugins_reset_imu_data_func,
     .handle_state = all_plugins_handle_state_func,
     .handle_device_connect = all_plugins_handle_device_connect_func,
-    .handle_device_disconnect = all_plugins_handle_device_disconnect_func
+    .handle_device_disconnect = all_plugins_handle_device_disconnect_func,
+    .handle_multi_tap = all_plugins_handle_multi_tap_func
 };

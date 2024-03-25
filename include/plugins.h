@@ -24,6 +24,7 @@ typedef void (*reset_imu_data_func)();
 typedef void (*handle_state_func)();
 typedef void (*handle_device_connect_func)();
 typedef void (*handle_device_disconnect_func)();
+typedef void (*handle_multi_tap_func)(int tap_count);
 
 struct plugin_t {
     char* id;
@@ -43,6 +44,7 @@ struct plugin_t {
     handle_state_func handle_state;
     handle_device_connect_func handle_device_connect;
     handle_device_disconnect_func handle_device_disconnect;
+    handle_multi_tap_func handle_multi_tap;
 
     // TODO handle feature access change
 };

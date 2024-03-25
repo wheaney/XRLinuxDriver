@@ -69,6 +69,7 @@ add_executable(xrealAirLinuxDriver
 		src/plugins.c
 		src/plugins/custom_banner.c
 		src/plugins/device_license.c
+		src/plugins/drift_offset.c
 		src/plugins/metrics.c
 		src/plugins/sideview.c
 		src/plugins/smooth_follow.c
