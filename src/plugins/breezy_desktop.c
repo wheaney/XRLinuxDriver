@@ -46,7 +46,7 @@ const float LOOK_AHEAD_CFG[4] = {10.0, 1.25, 1.0, 30.0};
 #define NUM_IMU_VALUES 16
 void write_imu_data(float values[NUM_IMU_VALUES]) {
     char file_path[1024];
-    FILE* fp = get_shared_mem_file("r+b", &file_path[0]);
+    FILE* fp = get_shared_mem_file("wb", &file_path[0]);
     if (fp == NULL) {
         printf("Error opening file %s: %s\n", file_path, strerror(errno));
         return;
