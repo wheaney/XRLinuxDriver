@@ -7,4 +7,5 @@ struct custom_banner_ipc_values_t {
 };
 typedef struct custom_banner_ipc_values_t custom_banner_ipc_values_type;
 
+extern custom_banner_ipc_values_type *custom_banner_ipc_values;
 extern const plugin_type custom_banner_plugin;

@@ -49,7 +49,7 @@ smooth_follow_config* sf_config = NULL;
 smooth_follow_params* sf_params = NULL;
 
 void *smooth_follow_default_config_func() {
-    smooth_follow_config *config = malloc(sizeof(smooth_follow_config));
+    smooth_follow_config *config = calloc(1, sizeof(smooth_follow_config));
     config->virtual_display_enabled = false;
     config->virtual_display_follow_enabled = false;
     config->sideview_enabled = false;
@@ -95,7 +95,7 @@ void smooth_follow_set_config_func(void* config) {
         free(sf_config);
     }
 
-    if (!sf_params) sf_params = malloc(sizeof(smooth_follow_params));
+    if (!sf_params) sf_params = calloc(1, sizeof(smooth_follow_params));
     if (temp_config->virtual_display_enabled && temp_config->virtual_display_follow_enabled) {
         *sf_params = virtual_display_smooth_follow_params;
         if (context.device) {
@@ -112,7 +112,7 @@ void smooth_follow_set_config_func(void* config) {
 }
 
 int smooth_follow_register_features_func(char*** features) {
-    *features = malloc(sizeof(char*) * smooth_follow_feature_count);
+    *features = calloc(smooth_follow_feature_count, sizeof(char*));
     (*features)[0] = strdup(smooth_follow_feature_name);
 
     return smooth_follow_feature_count;

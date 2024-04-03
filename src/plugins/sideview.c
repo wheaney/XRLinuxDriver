@@ -20,7 +20,7 @@ sideview_config *sv_config;
 sideview_ipc_values_type *sideview_ipc_values;
 
 void *sideview_default_config_func() {
-    sideview_config *config = malloc(sizeof(sideview_config));
+    sideview_config *config = calloc(1, sizeof(sideview_config));
     config->enabled = false;
     config->position = 4; // center
     config->display_size = 1.0;
@@ -88,7 +88,7 @@ const char *sideview_display_size_name = "sideview_display_size";
 
 bool sideview_setup_ipc_func() {
     bool debug = context.config->debug_ipc;
-    if (!sideview_ipc_values) sideview_ipc_values = malloc(sizeof(sideview_ipc_values_type));
+    if (!sideview_ipc_values) sideview_ipc_values = calloc(1, sizeof(sideview_ipc_values_type));
     setup_ipc_value(sideview_enabled_name, (void**) &sideview_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(int), debug);
     setup_ipc_value(sideview_display_size_name, (void**) &sideview_ipc_values->display_size, sizeof(float), debug);
