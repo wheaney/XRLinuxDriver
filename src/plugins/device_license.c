@@ -77,7 +77,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
 
         // Convert the signature from hex string to binary
         int sig_len = strlen(signature) / 2;
-        unsigned char* binary_sig = malloc(sig_len);
+        unsigned char* binary_sig = calloc(1, sig_len);
         for (int i = 0; i < sig_len; i++) {
             unsigned int temp;
             sscanf(signature + 2*i, "%02x", &temp);
@@ -106,7 +106,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
         fseek(file, 0, SEEK_END);
         long length = ftell(file);
         fseek(file, 0, SEEK_SET);
-        char* buffer = malloc(length);
+        char* buffer = calloc(1, length);
         if (buffer) {
             fread(buffer, 1, length, file);
         }

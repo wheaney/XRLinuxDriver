@@ -36,7 +36,7 @@ void virtual_display_reset_config(virtual_display_config *config) {
 };
 
 void *virtual_display_default_config_func() {
-    virtual_display_config *config = malloc(sizeof(virtual_display_config));
+    virtual_display_config *config = calloc(1, sizeof(virtual_display_config));
     virtual_display_reset_config(config);
 
     return config;
@@ -145,7 +145,7 @@ void virtual_display_set_config_func(void* config) {
 };
 
 int virtual_display_register_features_func(char*** features) {
-    *features = malloc(sizeof(char*) * virtual_display_feature_count);
+    *features = calloc(virtual_display_feature_count, sizeof(char*));
     (*features)[0] = strdup(sbs_feature_name);
 
     return virtual_display_feature_count;
@@ -163,7 +163,7 @@ const char *virtual_display_sbs_mode_stretched_name = "sbs_mode_stretched";
 
 bool virtual_display_setup_ipc_func() {
     bool debug = context.config->debug_ipc;
-    if (!virtual_display_ipc_values) virtual_display_ipc_values = malloc(sizeof(virtual_display_ipc_values_type));
+    if (!virtual_display_ipc_values) virtual_display_ipc_values = calloc(1, sizeof(virtual_display_ipc_values_type));
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_imu_data_ipc_name, (void**) &virtual_display_ipc_values->imu_data, sizeof(float) * 16, debug);
     setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
@@ -209,8 +209,8 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
     if (vd_config && ipc_enabled && virtual_display_ipc_values) {
         if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
-                quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-                quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+                quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
+                quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
                     quat_stage_1_buffer[i] = create_buffer(context.device->imu_buffer_size);
                     quat_stage_2_buffer[i] = create_buffer(context.device->imu_buffer_size);

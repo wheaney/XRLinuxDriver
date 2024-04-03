@@ -137,8 +137,8 @@ device_properties_type* viture_device_connect() {
         if (imu_freq < IMU_FREQUENCE_60 || imu_freq > IMU_FREQUENCE_240) {
             imu_freq = IMU_FREQUENCE_60;
         }
-        
-        device_properties_type* device = malloc(sizeof(device_properties_type));
+
+        device_properties_type* device = calloc(1, sizeof(device_properties_type));
         *device = viture_one_properties;
 
         // use the current value in case the frequency we requested isn't supported

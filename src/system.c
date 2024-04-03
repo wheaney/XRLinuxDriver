@@ -47,7 +47,7 @@ bool get_mac_address_hash(char **mac_address_hash, const char *interface) {
         unsigned char hash[SHA256_DIGEST_LENGTH];
         SHA256((unsigned char*)mac_str, strlen(mac_str), hash);
 
-        *mac_address_hash = malloc(SHA256_DIGEST_LENGTH*2 + 1);
+        *mac_address_hash = calloc(1, SHA256_DIGEST_LENGTH*2 + 1);
         for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
             sprintf(*mac_address_hash + (i*2), "%02x", hash[i]);
 

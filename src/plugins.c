@@ -47,7 +47,7 @@ int all_plugins_register_features_func(char*** features) {
     return feature_count;
 }
 void* all_plugins_default_config_func() {
-    void** configs = malloc(sizeof(void*) * PLUGIN_COUNT);
+    void** configs = calloc(PLUGIN_COUNT, sizeof(void*));
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->default_config == NULL) continue;
         configs[i] = all_plugins[i]->default_config();

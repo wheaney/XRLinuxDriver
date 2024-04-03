@@ -1,6 +1,9 @@
 #include "buffer.h"
 #include "device.h"
+#include "features/sbs.h"
 #include "plugins.h"
+#include "plugins/breezy_desktop.h"
+#include "plugins/custom_banner.h"
 #include "runtime_context.h"
 #include "state.h"
 #include "system.h"
@@ -16,16 +19,56 @@
 const char* shared_mem_directory = "/dev/shm";
 const char* shared_mem_filename = "imu_data";
 
+#define NUM_IMU_VALUES 16
+float IMU_RESET[NUM_IMU_VALUES] = {
+        0.0, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 0.0
+};
 
 #define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
 
 buffer_type **bd_quat_stage_1_buffer;
 buffer_type **bd_quat_stage_2_buffer;
+breezy_desktop_config *bd_config;
 
-FILE* get_shared_mem_file(char *mode, char *full_path) {
-    snprintf(full_path, strlen(shared_mem_directory) + strlen(shared_mem_filename) + 2, "%s/%s", shared_mem_directory, shared_mem_filename);
-    return fopen(full_path, mode ? mode : "r");
-}
+void breezy_desktop_reset_config(breezy_desktop_config *config) {
+    config->enabled = false;
+    config->look_ahead_override = 0.0;
+    config->display_zoom = 1.0;
+    config->sbs_display_distance = 1.0;
+    config->sbs_display_size = 1.0;
+    config->sbs_content = false;
+    config->sbs_mode_stretched = false;
+};
+
+void *breezy_desktop_default_config_func() {
+    breezy_desktop_config *config = calloc(1, sizeof(breezy_desktop_config));
+    breezy_desktop_reset_config(config);
+
+    return config;
+};
+
+void breezy_desktop_handle_config_line_func(void* config, char* key, char* value) {
+    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
+
+    if (equal(key, "external_mode")) {
+        temp_config->enabled = equal(value, "breezy_desktop");
+    } else if (equal(key, "look_ahead")) {
+        float_config(key, value, &temp_config->look_ahead_override);
+    } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
+        float_config(key, value, &temp_config->display_zoom);
+    } else if (equal(key, "sbs_display_distance")) {
+        float_config(key, value, &temp_config->sbs_display_distance);
+    } else if (equal(key, "sbs_display_size")) {
+        float_config(key, value, &temp_config->sbs_display_size);
+    } else if (equal(key, "sbs_content")) {
+        boolean_config(key, value, &temp_config->sbs_content);
+    } else if (equal(key, "sbs_mode_stretched")) {
+        boolean_config(key, value, &temp_config->sbs_mode_stretched);
+    }
+};
 
 uint32_t getEpochSec() {
     struct timespec ts;
@@ -33,52 +76,156 @@ uint32_t getEpochSec() {
     return ts.tv_sec;
 }
 
-const uint8_t BOOL_TRUE = 1;
-const uint8_t BOOL_FALSE = 0;
-const float FLOAT_ZERO = 0.0;
-const float DISPLAY_FOV = 46.0;
-const float DISPLAY_ZOOM = 1.0;
-const float DISPLAY_NORTH_OFFSET = 1.0;
-const float LENS_DISTANCE_RATIO = 0.04;
-const uint32_t DISPLAY_RES[2] = {1920, 1080};
-const float LOOK_AHEAD_CFG[4] = {10.0, 1.25, 1.0, 30.0};
+const uint8_t DATA_LAYOUT_VERSION = 1;
+#define BOOL_TRUE 1
+#define BOOL_FALSE 0
 
-#define NUM_IMU_VALUES 16
-void write_imu_data(float values[NUM_IMU_VALUES]) {
-    char file_path[1024];
-    FILE* fp = get_shared_mem_file("wb", &file_path[0]);
-    if (fp == NULL) {
-        printf("Error opening file %s: %s\n", file_path, strerror(errno));
-        return;
+// IMU data is written more frequently, so we need to know the offset in the file
+const int IMU_DATA_OFFSET = 
+    sizeof(uint8_t) + // version
+    sizeof(uint8_t) + // enabled
+    sizeof(uint32_t) + // epoch_sec
+    sizeof(float) * 4 + // look_ahead_cfg
+    sizeof(uint32_t) * 2 + // display_res
+    sizeof(float) + // fov
+    sizeof(float) + // display_zoom
+    sizeof(float) + // sbs_display_distance
+    sizeof(float) + // lens_distance_ratio
+    sizeof(uint8_t) + // sbs_enabled
+    sizeof(uint8_t) + // sbs_content
+    sizeof(uint8_t) + // sbs_mode_stretched
+    sizeof(uint8_t); // custom_banner_enabled
+
+void do_write_config_data(FILE* fp) {
+    if (!bd_config) bd_config = breezy_desktop_default_config_func();
+
+    uint8_t enabled = BOOL_FALSE;
+    fwrite(&DATA_LAYOUT_VERSION, sizeof(uint8_t), 1, fp);
+    if (context.device) {
+        enabled = !context.config->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
+        const uint32_t epoch_sec = getEpochSec();
+        const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
+                                                context.device->look_ahead_constant :
+                                                bd_config->look_ahead_override;
+        const float look_ahead_frametime_multiplier =   bd_config->look_ahead_override == 0 ?
+                                                            context.device->look_ahead_frametime_multiplier : 0.0;
+        float look_ahead_cfg[4] = {
+            look_ahead_constant,
+            look_ahead_frametime_multiplier,
+            context.device->look_ahead_scanline_adjust, 
+            context.device->look_ahead_ms_cap
+        };
+        float display_res[2] = {
+            context.device->resolution_w,
+            context.device->resolution_h
+        };
+        uint8_t display_zoom = context.state->sbs_mode_enabled ? bd_config->sbs_display_size : bd_config->display_zoom; 
+        uint8_t sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t sbs_content = bd_config->sbs_content ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t sbs_mode_stretched = bd_config->sbs_mode_stretched ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
+
+        fwrite(&enabled, sizeof(uint8_t), 1, fp);
+        fwrite(&epoch_sec, sizeof(uint32_t), 1, fp);
+        fwrite(look_ahead_cfg, sizeof(float), 4, fp);
+        fwrite(display_res, sizeof(uint32_t), 2, fp);
+        fwrite(&context.device->fov, sizeof(float), 1, fp);
+        fwrite(&display_zoom, sizeof(float), 1, fp);
+        fwrite(&bd_config->sbs_display_distance, sizeof(float), 1, fp);
+        fwrite(&context.device->lens_distance_ratio, sizeof(float), 1, fp);
+        fwrite(&sbs_enabled, sizeof(uint8_t), 1, fp);
+        fwrite(&sbs_content, sizeof(uint8_t), 1, fp);
+        fwrite(&sbs_mode_stretched, sizeof(uint8_t), 1, fp);
+        fwrite(&custom_banner_enabled, sizeof(uint8_t), 1, fp);
+    } else {
+        fwrite(&enabled, sizeof(uint8_t), 1, fp);
+
+        // we already wrote version and enabled flags
+        const int remainingBytes = IMU_DATA_OFFSET - sizeof(uint8_t) * 2;
+
+        uint8_t *zero_data = calloc(remainingBytes, 1);
+        fwrite(zero_data, remainingBytes, 1, fp);
+        free(zero_data);
     }
-    uint32_t epoch = getEpochSec();
+}
 
-    // Move the file pointer to the desired offset (e.g., offset 100)
+FILE* get_shared_mem_file() {
+    char file_path[1024];
+    snprintf(file_path, strlen(shared_mem_directory) + strlen(shared_mem_filename) + 2, "%s/%s", shared_mem_directory, shared_mem_filename);
+    FILE* fp = fopen(file_path, "r+b");
+
+    if (!fp) {
+        fp = fopen(file_path, "wb");
+        if (!fp) {
+            fprintf(stderr, "Error opening file %s: %s\n", file_path, strerror(errno));
+            return NULL;
+        }
+        do_write_config_data(fp);
+        fwrite(IMU_RESET, sizeof(float), NUM_IMU_VALUES, fp);
+    }
+
     fseek(fp, 0, SEEK_SET);
-    fwrite(&BOOL_TRUE, sizeof(uint8_t), 1, fp); // version
-    fwrite(&BOOL_TRUE, sizeof(uint8_t), 1, fp); // enabled
-    fwrite(&epoch, sizeof(uint32_t), 1, fp); // epoch_sec
-    fwrite(LOOK_AHEAD_CFG, sizeof(float), 4, fp); // look_ahead_cfg
-    fwrite(DISPLAY_RES, sizeof(uint32_t), 2, fp); // display_res
-    fwrite(&DISPLAY_FOV, sizeof(float), 1, fp); // display_fov
-    fwrite(&DISPLAY_ZOOM, sizeof(float), 1, fp); // display_zoom
-    fwrite(&FLOAT_ZERO, sizeof(float), 1, fp); // display_north_offset
-    fwrite(&FLOAT_ZERO, sizeof(float), 1, fp); // lens_distance_ratio
-    fwrite(&BOOL_FALSE, sizeof(uint8_t), 1, fp); // sbs_enabled
-    fwrite(&BOOL_FALSE, sizeof(uint8_t), 1, fp); // sbs_content
-    fwrite(&BOOL_FALSE, sizeof(uint8_t), 1, fp); // sbs_mode_stretched
-    fwrite(&BOOL_FALSE, sizeof(uint8_t), 1, fp); // custom_banner_enabled
-    fwrite(values, sizeof(float), NUM_IMU_VALUES, fp);
+
+    return fp;
+}
+
+void write_config_data() {
+    FILE* fp = get_shared_mem_file();
+    if (fp == NULL) return;
+
+    do_write_config_data(fp);
 
     fclose(fp);
 }
 
+void breezy_desktop_set_config_func(void* config) {
+    if (!config) return;
+    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
+
+    if (bd_config) {
+        if (bd_config->enabled != temp_config->enabled)
+            printf("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+
+        free(bd_config);
+    }
+    bd_config = temp_config;
+
+    write_config_data();
+};
+
+int breezy_imu_counter = 0;
+void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
+    FILE* fp = get_shared_mem_file();
+    if (fp == NULL) return;
+
+    if (breezy_imu_counter == 0) {
+        // write this periodically, to ensure a recent heartbeat at the very least
+        do_write_config_data(fp);
+    } else {
+        // if not writing config data, move the file pointer to the IMU offset
+        fseek(fp, IMU_DATA_OFFSET, SEEK_SET);
+    }
+    fwrite(values, sizeof(float), NUM_IMU_VALUES, fp);
+
+    fclose(fp);
+
+    // reset the counter every second
+    if ((++breezy_imu_counter % context.device->imu_cycles_per_s) == 0) {
+        breezy_imu_counter = 0;
+    }
+}
+
+void breezy_desktop_reset_imu_data_func() {
+    breezy_desktop_write_imu_data(IMU_RESET);
+}
+
+// TODO - share this with virtual_display plugin
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (imu_calibrated) {
+    if (imu_calibrated && bd_config && bd_config->enabled) {
         if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
-            bd_quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
-            bd_quat_stage_2_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
+            bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
+            bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
             for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
                 bd_quat_stage_1_buffer[i] = create_buffer(context.device->imu_buffer_size);
                 bd_quat_stage_2_buffer[i] = create_buffer(context.device->imu_buffer_size);
@@ -131,7 +278,7 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
                 imu_data[13] = stage_1_ts;
                 imu_data[14] = stage_2_ts;
 
-                write_imu_data(imu_data);
+                breezy_desktop_write_imu_data(imu_data);
 
                 // pthread_mutex_unlock(imu_data_mutex);
             }
@@ -141,5 +288,13 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
 
 const plugin_type breezy_desktop_plugin = {
     .id = "breezy_desktop",
-    .handle_imu_data = breezy_desktop_handle_imu_data_func
+    .default_config = breezy_desktop_default_config_func,
+    .handle_config_line = breezy_desktop_handle_config_line_func,
+    .set_config = breezy_desktop_set_config_func,
+    .handle_imu_data = breezy_desktop_handle_imu_data_func,
+    .reset_imu_data = breezy_desktop_reset_imu_data_func,
+
+    // just rewrite the config values whenever anything changes
+    .handle_state = write_config_data,
+    .handle_device_disconnect = write_config_data
 };
