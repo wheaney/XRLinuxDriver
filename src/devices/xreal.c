@@ -20,7 +20,7 @@
 #define FORCED_CYCLES_PER_S 250 // glasses may operate at a reduced frequency, let's force a reduced cycle time
 #define CYCLE_TIME_CHECK_ERROR_FACTOR 0.95 // cycle times won't be exact, check within a 5% margin
 #define FORCED_CYCLE_TIME_MS 1000.0 / FORCED_CYCLES_PER_S * CYCLE_TIME_CHECK_ERROR_FACTOR
-#define BUFFER_SIZE_TARGET_MS 10
+#define BUFFER_SIZE_TARGET_MS 10 // smooth IMU data over this period of time
 
 #define MAPPED_DISPLAY_MODE_COUNT 5
 
@@ -64,10 +64,10 @@ const device_properties_type xreal_air_properties = {
     .lens_distance_ratio                = 0.025,
     .calibration_wait_s                 = 15,
     .imu_cycles_per_s                   = FORCED_CYCLES_PER_S,
-    .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS * FORCED_CYCLES_PER_S / EXPECTED_CYCLES_PER_S),
+    .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / FORCED_CYCLE_TIME_MS),
     .look_ahead_constant                = 10.0,
     .look_ahead_frametime_multiplier    = 0.3,
-    .look_ahead_scanline_adjust         = 8.0,  // the bottom row of pixels take 5 ms longer to display a frame
+    .look_ahead_scanline_adjust         = 8.0,
     .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
     .firmware_update_recommended        = false
@@ -104,19 +104,19 @@ void handle_xreal_controller_event(
 device3_type* glasses_imu;
 device4_type* glasses_controller;
 device_properties_type* xreal_device_connect() {
-    glasses_imu = malloc(sizeof(device3_type));
+    glasses_imu = calloc(1, sizeof(device3_type));
     bool success = device3_open(glasses_imu, handle_xreal_event) == DEVICE3_ERROR_NO_ERROR;
     if (success) {
         device3_clear(glasses_imu);
         device3_calibrate(glasses_imu, 1000, true, true, false);
 
-        glasses_controller = malloc(sizeof(device4_type));
+        glasses_controller = calloc(1, sizeof(device4_type));
         success = device4_open(glasses_controller, handle_xreal_controller_event) == DEVICE4_ERROR_NO_ERROR;
         device4_clear(glasses_controller);
     }
 
     if (success) {
-        device_properties_type *connected_device = malloc(sizeof(device_properties_type));
+        device_properties_type *connected_device = calloc(1, sizeof(device_properties_type));
         *connected_device = xreal_air_properties;
 
         connected_device->hid_product_id = glasses_imu->product_id;

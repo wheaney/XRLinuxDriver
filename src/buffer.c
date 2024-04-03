@@ -4,13 +4,13 @@
 #include <stdlib.h>
 
 buffer_type *create_buffer(int size) {
-    buffer_type *buffer = malloc(sizeof(buffer_type));
+    buffer_type *buffer = calloc(1, sizeof(buffer_type));
     if (buffer == NULL) {
         return NULL;
     }
 
     buffer->size = size;
-    buffer->values = malloc(size * sizeof(float));
+    buffer->values = calloc(size, sizeof(float));
     if (buffer->values == NULL) {
         free(buffer);
         buffer = NULL;
