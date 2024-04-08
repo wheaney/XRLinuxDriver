@@ -15,7 +15,10 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libjson-c-dev \
     python3 \
-    python3-yaml
+    python3-yaml \
+    git
+
+RUN git config --global --add safe.directory /source
 
 WORKDIR /source
 ENV UA_API_SECRET_INTENTIONALLY_EMPTY=1

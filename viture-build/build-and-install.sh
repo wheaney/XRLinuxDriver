@@ -12,10 +12,10 @@ if [ -z "$1" ] || [ ! -f $1 ]; then
     exit 1
 fi
 
-rm -rf build/
+sudo rm -rf build/
 cp $1 lib/libviture_one_sdk.a
 
-docker run --rm -t -v ./:/source "viture-xr-driver"
+sudo docker run --rm -t -v ./:/source "viture-xr-driver"
 
 sudo bin/xreal_driver_setup build/xrealAirLinuxDriver.tar.gz
 
