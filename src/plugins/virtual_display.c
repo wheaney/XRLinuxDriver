@@ -202,8 +202,7 @@ bool virtual_display_setup_ipc_func() {
 
 void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (vd_config && (vd_config->enabled || vd_config->passthrough_smooth_follow_enabled) && ipc_enabled &&
-        virtual_display_ipc_values) {
+    if (vd_config && ipc_enabled && virtual_display_ipc_values) {
         if (imu_calibrated) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
                 quat_stage_1_buffer = malloc(sizeof(buffer_type*) * GYRO_BUFFERS_COUNT);
