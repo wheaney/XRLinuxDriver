@@ -131,7 +131,7 @@ then
 
             if [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
                 hardware_id=$value
-                url="https://q5sjkyqpwa.execute-api.eu-west-1.amazonaws.com/prod/tokens/v1"
+                url="https://91rxwjfwjk.execute-api.us-west-1.amazonaws.com/prod/tokens/v1"
 
                 if [ "$1" == "--request-token" ]; then
                     postbody=$(jq -n \

@@ -1,5 +1,6 @@
 #include "buffer.h"
 #include "device.h"
+#include "features/breezy_desktop.h"
 #include "features/sbs.h"
 #include "plugins.h"
 #include "plugins/breezy_desktop.h"
@@ -17,7 +18,8 @@
 
 
 const char* shared_mem_directory = "/dev/shm";
-const char* shared_mem_filename = "imu_data";
+const char* shared_mem_filename = "breezy_desktop_imu";
+const int breezy_desktop_feature_count = 2;
 
 #define NUM_IMU_VALUES 16
 float IMU_RESET[NUM_IMU_VALUES] = {
@@ -54,7 +56,7 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
 
     if (equal(key, "external_mode")) {
-        temp_config->enabled = equal(value, "breezy_desktop");
+        temp_config->enabled = equal(value, "breezy_desktop") && is_productivity_granted();
     } else if (equal(key, "look_ahead")) {
         float_config(key, value, &temp_config->look_ahead_override);
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
@@ -222,7 +224,7 @@ void breezy_desktop_reset_imu_data_func() {
 // TODO - share this with virtual_display plugin
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (imu_calibrated && bd_config && bd_config->enabled) {
+    if (is_productivity_granted() && imu_calibrated && bd_config && bd_config->enabled) {
         if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
             bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
             bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
@@ -286,11 +288,20 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
     }
 }
 
+int breezy_desktop_register_features_func(char*** features) {
+    *features = calloc(breezy_desktop_feature_count, sizeof(char*));
+    (*features)[0] = strdup(productivity_basic_feature_name);
+    (*features)[1] = strdup(productivity_pro_feature_name);
+
+    return breezy_desktop_feature_count;
+}
+
 const plugin_type breezy_desktop_plugin = {
     .id = "breezy_desktop",
     .default_config = breezy_desktop_default_config_func,
     .handle_config_line = breezy_desktop_handle_config_line_func,
     .set_config = breezy_desktop_set_config_func,
+    .register_features = breezy_desktop_register_features_func,
     .handle_imu_data = breezy_desktop_handle_imu_data_func,
     .reset_imu_data = breezy_desktop_reset_imu_data_func,
 
