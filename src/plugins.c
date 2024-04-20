@@ -10,11 +10,11 @@
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 7
+#define PLUGIN_COUNT 5
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
-    &virtual_display_plugin,
-    &sideview_plugin,
+    // &virtual_display_plugin,
+    // &sideview_plugin,
     &metrics_plugin,
     &custom_banner_plugin,
     &smooth_follow_plugin,

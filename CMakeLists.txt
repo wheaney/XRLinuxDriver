@@ -59,6 +59,7 @@ add_executable(xrealAirLinuxDriver
 		src/devices/viture.c
 		src/devices/xreal.c
 		src/driver.c
+		src/features/breezy_desktop.c
 		src/features/smooth_follow.c
 		src/features/sbs.c
 		src/files.c
