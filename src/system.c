@@ -29,9 +29,20 @@ bool get_mac_address_hash(char **mac_address_hash, const char *interface) {
     bool found = false;
     if (ioctl(fd, SIOCGIFHWADDR, &ifr) >= 0) {
         unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
+        
+        bool isZeroMac = true;
+        for (int i = 0; i < 6; ++i) {
+            if (mac[i] != 0) {
+                isZeroMac = false;
+                break;
+            }
+        }
+
+        if (isZeroMac) return false;
 
         char mac_str[18];
-        sprintf(mac_str, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
         unsigned char hash[SHA256_DIGEST_LENGTH];
         SHA256((unsigned char*)mac_str, strlen(mac_str), hash);
