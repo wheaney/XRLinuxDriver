@@ -72,30 +72,29 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     }
 };
 
-uint32_t getEpochSec() {
+uint64_t getEpochTimestampMS() {
     struct timespec ts;
     timespec_get(&ts, TIME_UTC);
-    return ts.tv_sec;
+
+    long int sec_ms = ts.tv_sec * 1000;
+    long int nsec_ms = ts.tv_nsec / 1000000;
+
+    return (uint64_t)(sec_ms + nsec_ms);
 }
 
-const uint8_t DATA_LAYOUT_VERSION = 1;
+const uint8_t DATA_LAYOUT_VERSION = 2;
 #define BOOL_TRUE 1
 #define BOOL_FALSE 0
 
 // IMU data is written more frequently, so we need to know the offset in the file
-const int IMU_DATA_OFFSET = 
+const int CONFIG_DATA_END_OFFSET = 
     sizeof(uint8_t) + // version
     sizeof(uint8_t) + // enabled
-    sizeof(uint32_t) + // epoch_sec
     sizeof(float) * 4 + // look_ahead_cfg
     sizeof(uint32_t) * 2 + // display_res
     sizeof(float) + // fov
-    sizeof(float) + // display_zoom
-    sizeof(float) + // sbs_display_distance
     sizeof(float) + // lens_distance_ratio
     sizeof(uint8_t) + // sbs_enabled
-    sizeof(uint8_t) + // sbs_content
-    sizeof(uint8_t) + // sbs_mode_stretched
     sizeof(uint8_t); // custom_banner_enabled
 
 void do_write_config_data(FILE* fp) {
@@ -105,7 +104,6 @@ void do_write_config_data(FILE* fp) {
     fwrite(&DATA_LAYOUT_VERSION, sizeof(uint8_t), 1, fp);
     if (context.device) {
         enabled = !context.config->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
-        const uint32_t epoch_sec = getEpochSec();
         const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
                                                 context.device->look_ahead_constant :
                                                 bd_config->look_ahead_override;
@@ -121,29 +119,21 @@ void do_write_config_data(FILE* fp) {
             context.device->resolution_w,
             context.device->resolution_h
         };
-        uint8_t display_zoom = context.state->sbs_mode_enabled ? bd_config->sbs_display_size : bd_config->display_zoom; 
         uint8_t sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
-        uint8_t sbs_content = bd_config->sbs_content ? BOOL_TRUE : BOOL_FALSE;
-        uint8_t sbs_mode_stretched = bd_config->sbs_mode_stretched ? BOOL_TRUE : BOOL_FALSE;
         uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
 
         fwrite(&enabled, sizeof(uint8_t), 1, fp);
-        fwrite(&epoch_sec, sizeof(uint32_t), 1, fp);
         fwrite(look_ahead_cfg, sizeof(float), 4, fp);
         fwrite(display_res, sizeof(uint32_t), 2, fp);
         fwrite(&context.device->fov, sizeof(float), 1, fp);
-        fwrite(&display_zoom, sizeof(float), 1, fp);
-        fwrite(&bd_config->sbs_display_distance, sizeof(float), 1, fp);
         fwrite(&context.device->lens_distance_ratio, sizeof(float), 1, fp);
         fwrite(&sbs_enabled, sizeof(uint8_t), 1, fp);
-        fwrite(&sbs_content, sizeof(uint8_t), 1, fp);
-        fwrite(&sbs_mode_stretched, sizeof(uint8_t), 1, fp);
         fwrite(&custom_banner_enabled, sizeof(uint8_t), 1, fp);
     } else {
         fwrite(&enabled, sizeof(uint8_t), 1, fp);
 
         // we already wrote version and enabled flags
-        const int remainingBytes = IMU_DATA_OFFSET - sizeof(uint8_t) * 2;
+        const int remainingBytes = CONFIG_DATA_END_OFFSET - sizeof(uint8_t) * 2;
 
         uint8_t *zero_data = calloc(remainingBytes, 1);
         fwrite(zero_data, remainingBytes, 1, fp);
@@ -151,9 +141,20 @@ void do_write_config_data(FILE* fp) {
     }
 }
 
+static char* shared_mem_file_path = NULL;
+char* get_shared_mem_file_path() {
+    if (!shared_mem_file_path) {
+        char file_path[1024];
+        snprintf(file_path, strlen(shared_mem_directory) + strlen(shared_mem_filename) + 2, "%s/%s", shared_mem_directory, shared_mem_filename);
+
+        shared_mem_file_path = strdup(file_path);
+    }
+
+    return shared_mem_file_path;
+}
+
 FILE* get_shared_mem_file() {
-    char file_path[1024];
-    snprintf(file_path, strlen(shared_mem_directory) + strlen(shared_mem_filename) + 2, "%s/%s", shared_mem_directory, shared_mem_filename);
+    char* file_path = get_shared_mem_file_path();
     FILE* fp = fopen(file_path, "r+b");
 
     if (!fp) {
@@ -205,8 +206,10 @@ void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
         do_write_config_data(fp);
     } else {
         // if not writing config data, move the file pointer to the IMU offset
-        fseek(fp, IMU_DATA_OFFSET, SEEK_SET);
+        fseek(fp, CONFIG_DATA_END_OFFSET, SEEK_SET);
     }
+    const uint64_t epoch_ms = getEpochTimestampMS();
+    fwrite(&epoch_ms, sizeof(uint64_t), 1, fp);
     fwrite(values, sizeof(float), NUM_IMU_VALUES, fp);
 
     fclose(fp);
@@ -296,8 +299,14 @@ int breezy_desktop_register_features_func(char*** features) {
     return breezy_desktop_feature_count;
 }
 
+void breezy_desktop_start_func() {
+    // delete this first, in case it's left over from a previous run
+    remove(get_shared_mem_file_path());
+}
+
 const plugin_type breezy_desktop_plugin = {
     .id = "breezy_desktop",
+    .start = breezy_desktop_start_func,
     .default_config = breezy_desktop_default_config_func,
     .handle_config_line = breezy_desktop_handle_config_line_func,
     .set_config = breezy_desktop_set_config_func,
