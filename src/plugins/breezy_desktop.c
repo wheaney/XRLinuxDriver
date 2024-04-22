@@ -11,15 +11,19 @@
 
 #include <inttypes.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/inotify.h>
+#include <unistd.h>
 
 
 const char* shared_mem_directory = "/dev/shm";
 const char* shared_mem_filename = "breezy_desktop_imu";
 const int breezy_desktop_feature_count = 2;
+static bool has_started = false;
+static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define NUM_IMU_VALUES 16
 float IMU_RESET[NUM_IMU_VALUES] = {
@@ -97,11 +101,12 @@ const int CONFIG_DATA_END_OFFSET =
     sizeof(uint8_t) + // sbs_enabled
     sizeof(uint8_t); // custom_banner_enabled
 
-void do_write_config_data(FILE* fp) {
+void do_write_config_data(int fd) {
     if (!bd_config) bd_config = breezy_desktop_default_config_func();
 
+    lseek(fd, 0, SEEK_SET);
     uint8_t enabled = BOOL_FALSE;
-    fwrite(&DATA_LAYOUT_VERSION, sizeof(uint8_t), 1, fp);
+    write(fd, &DATA_LAYOUT_VERSION, sizeof(uint8_t));
     if (context.device) {
         enabled = !context.config->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
         const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
@@ -122,27 +127,27 @@ void do_write_config_data(FILE* fp) {
         uint8_t sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
         uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
 
-        fwrite(&enabled, sizeof(uint8_t), 1, fp);
-        fwrite(look_ahead_cfg, sizeof(float), 4, fp);
-        fwrite(display_res, sizeof(uint32_t), 2, fp);
-        fwrite(&context.device->fov, sizeof(float), 1, fp);
-        fwrite(&context.device->lens_distance_ratio, sizeof(float), 1, fp);
-        fwrite(&sbs_enabled, sizeof(uint8_t), 1, fp);
-        fwrite(&custom_banner_enabled, sizeof(uint8_t), 1, fp);
+        write(fd, &enabled, sizeof(uint8_t));
+        write(fd, look_ahead_cfg, sizeof(float) * 4);
+        write(fd, display_res, sizeof(uint32_t) * 2);
+        write(fd, &context.device->fov, sizeof(float));
+        write(fd, &context.device->lens_distance_ratio, sizeof(float));
+        write(fd, &sbs_enabled, sizeof(uint8_t));
+        write(fd, &custom_banner_enabled, sizeof(uint8_t));
     } else {
-        fwrite(&enabled, sizeof(uint8_t), 1, fp);
+        write(fd, &enabled, sizeof(uint8_t));
 
         // we already wrote version and enabled flags
         const int remainingBytes = CONFIG_DATA_END_OFFSET - sizeof(uint8_t) * 2;
 
         uint8_t *zero_data = calloc(remainingBytes, 1);
-        fwrite(zero_data, remainingBytes, 1, fp);
+        write(fd, zero_data, remainingBytes);
         free(zero_data);
     }
 }
 
-static char* shared_mem_file_path = NULL;
 char* get_shared_mem_file_path() {
+    static char* shared_mem_file_path = NULL;
     if (!shared_mem_file_path) {
         char file_path[1024];
         snprintf(file_path, strlen(shared_mem_directory) + strlen(shared_mem_filename) + 2, "%s/%s", shared_mem_directory, shared_mem_filename);
@@ -153,32 +158,34 @@ char* get_shared_mem_file_path() {
     return shared_mem_file_path;
 }
 
-FILE* get_shared_mem_file() {
-    char* file_path = get_shared_mem_file_path();
-    FILE* fp = fopen(file_path, "r+b");
+int get_shared_mem_fd() {
+    static int fd = -2;
 
-    if (!fp) {
-        fp = fopen(file_path, "wb");
-        if (!fp) {
-            fprintf(stderr, "Error opening file %s: %s\n", file_path, strerror(errno));
-            return NULL;
+    if (fd == -2) {
+        char* file_path = get_shared_mem_file_path();
+
+        fd = open(file_path, O_WRONLY);
+        if (fd == -1) {
+            if (errno == ENOENT) {
+                // File doesn't exist; create it
+                fd = open(file_path, O_WRONLY | O_CREAT, 0644);
+                if (fd == -1) {
+                    perror("Error creating file");
+                }
+            } else {
+                perror("Error opening file");
+            }
         }
-        do_write_config_data(fp);
-        fwrite(IMU_RESET, sizeof(float), NUM_IMU_VALUES, fp);
     }
 
-    fseek(fp, 0, SEEK_SET);
-
-    return fp;
+    return fd;
 }
 
 void write_config_data() {
-    FILE* fp = get_shared_mem_file();
-    if (fp == NULL) return;
-
-    do_write_config_data(fp);
-
-    fclose(fp);
+    pthread_mutex_lock(&file_mutex);
+    int fd = get_shared_mem_fd();
+    if (fd != -1) do_write_config_data(fd);
+    pthread_mutex_unlock(&file_mutex);
 }
 
 void breezy_desktop_set_config_func(void* config) {
@@ -193,31 +200,29 @@ void breezy_desktop_set_config_func(void* config) {
     }
     bd_config = temp_config;
 
-    write_config_data();
+    if (has_started) write_config_data();
 };
 
 int breezy_imu_counter = 0;
 void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
-    FILE* fp = get_shared_mem_file();
-    if (fp == NULL) return;
+    pthread_mutex_lock(&file_mutex);
+    int fd = get_shared_mem_fd();
+    if (fd != -1) {
+        if (breezy_imu_counter == 0) {
+            // write this periodically, to ensure a recent heartbeat at the very least
+            do_write_config_data(fd);
+        }
+        const uint64_t epoch_ms = getEpochTimestampMS();
+        lseek(fd, CONFIG_DATA_END_OFFSET, SEEK_SET);
+        write(fd, &epoch_ms, sizeof(uint64_t));
+        write(fd, values, sizeof(float) * NUM_IMU_VALUES);
 
-    if (breezy_imu_counter == 0) {
-        // write this periodically, to ensure a recent heartbeat at the very least
-        do_write_config_data(fp);
-    } else {
-        // if not writing config data, move the file pointer to the IMU offset
-        fseek(fp, CONFIG_DATA_END_OFFSET, SEEK_SET);
+        // reset the counter every second
+        if (context.device && (++breezy_imu_counter % context.device->imu_cycles_per_s) == 0) {
+            breezy_imu_counter = 0;
+        }
     }
-    const uint64_t epoch_ms = getEpochTimestampMS();
-    fwrite(&epoch_ms, sizeof(uint64_t), 1, fp);
-    fwrite(values, sizeof(float), NUM_IMU_VALUES, fp);
-
-    fclose(fp);
-
-    // reset the counter every second
-    if ((++breezy_imu_counter % context.device->imu_cycles_per_s) == 0) {
-        breezy_imu_counter = 0;
-    }
+    pthread_mutex_unlock(&file_mutex);
 }
 
 void breezy_desktop_reset_imu_data_func() {
@@ -302,6 +307,10 @@ int breezy_desktop_register_features_func(char*** features) {
 void breezy_desktop_start_func() {
     // delete this first, in case it's left over from a previous run
     remove(get_shared_mem_file_path());
+    pthread_mutex_init(&file_mutex, NULL);
+
+    has_started = true;
+    breezy_desktop_write_imu_data(IMU_RESET);
 }
 
 const plugin_type breezy_desktop_plugin = {
