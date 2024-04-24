@@ -71,7 +71,7 @@ const device_properties_type xreal_air_properties = {
     .firmware_update_recommended        = false
 };
 
-uint32_t last_utilized_event_ts = 0;
+static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
 void handle_xreal_event(uint64_t timestamp,
 		   device3_event_type event,

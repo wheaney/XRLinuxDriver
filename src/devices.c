@@ -1,4 +1,5 @@
 #include "devices.h"
+#include "devices/rayneo.h"
 #include "devices/viture.h"
 #include "devices/xreal.h"
 #include "runtime_context.h"
@@ -7,8 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DEVICE_DRIVER_COUNT 2
+#define DEVICE_DRIVER_COUNT 3
 const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
+    &rayneo_driver,
     &xreal_driver,
     &viture_driver
 };
