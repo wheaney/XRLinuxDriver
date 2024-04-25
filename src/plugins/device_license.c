@@ -247,7 +247,7 @@ void refresh_license(bool force) {
                             break;
                         }
 
-                        curl_easy_setopt(curl, CURLOPT_URL, "https://91rxwjfwjk.execute-api.us-west-1.amazonaws.com/prod/licenses/v1");
+                        curl_easy_setopt(curl, CURLOPT_URL, "https://test.na.driver-backend.xronlinux.com/licenses/v1");
                         char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
                         if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
                         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
