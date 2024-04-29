@@ -91,3 +91,13 @@ char *get_hardware_id() {
 
     return mac_address_hash;
 }
+
+uint64_t get_epoch_timestamp_ms() {
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+
+    long int sec_ms = ts.tv_sec * 1000;
+    long int nsec_ms = ts.tv_nsec / 1000000;
+
+    return (uint64_t)(sec_ms + nsec_ms);
+}

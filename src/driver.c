@@ -206,10 +206,7 @@ void setup_ipc() {
         *ipc_values->disabled             = true;
 
         // set defaults for everything else
-        ipc_values->date[0]               = 0.0;
-        ipc_values->date[1]               = 0.0;
-        ipc_values->date[2]               = 0.0;
-        ipc_values->date[3]               = 0.0;
+        *ipc_values->timestamp_ms          = 0;
     }
 }
 

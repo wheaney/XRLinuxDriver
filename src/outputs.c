@@ -8,6 +8,7 @@
 #include "plugins.h"
 #include "runtime_context.h"
 #include "strings.h"
+#include "system.h"
 
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
@@ -229,17 +230,7 @@ void deinit_outputs() {
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
     if (ipc_enabled) {
-        // send keepalive every counter period
-        if (imu_counter == 0) {
-            time_t now = time(NULL);
-            struct tm *t = localtime(&now);
-
-            // match the float4 date uniform type definition
-            ipc_values->date[0] = (float)(t->tm_year + 1900);
-            ipc_values->date[1] = (float)(t->tm_mon + 1);
-            ipc_values->date[2] = (float)t->tm_mday;
-            ipc_values->date[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
-        }
+        *ipc_values->timestamp_ms = get_epoch_timestamp_ms();
     }
 
     // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw

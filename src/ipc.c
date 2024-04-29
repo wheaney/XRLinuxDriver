@@ -3,12 +3,13 @@
 #include <errno.h>
 #include <glob.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
 
 const char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
@@ -16,14 +17,14 @@ const char *display_res_ipc_name = "display_res";
 const char *display_fov_ipc_name = "display_fov";
 const char *lens_distance_ratio_ipc_name = "lens_distance_ratio";
 const char *disabled_ipc_name = "disabled";
-const char *date_ipc_name = "keepalive_date";
+const char *timestamp_ms_name = "timestamp_ms";
 
 bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
     setup_ipc_value(display_res_ipc_name, (void**) &ipc_values->display_res, sizeof(unsigned int) * 2, debug);
     setup_ipc_value(display_fov_ipc_name, (void**) &ipc_values->display_fov, sizeof(float), debug);
     setup_ipc_value(lens_distance_ratio_ipc_name, (void**) &ipc_values->lens_distance_ratio, sizeof(float), debug);
     setup_ipc_value(disabled_ipc_name, (void**) &ipc_values->disabled, sizeof(bool), debug);
-    setup_ipc_value(date_ipc_name, (void**) &ipc_values->date, sizeof(float) * 4, debug);
+    setup_ipc_value(timestamp_ms_name, (void**) &ipc_values->timestamp_ms, sizeof(uint64_t), debug);
 
     return true;
 }
