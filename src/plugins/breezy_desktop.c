@@ -21,7 +21,7 @@
 
 const char* shared_mem_directory = "/dev/shm";
 const char* shared_mem_filename = "breezy_desktop_imu";
-const int breezy_desktop_feature_count = 2;
+const int breezy_desktop_feature_count = 1;
 static bool has_started = false;
 static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -299,7 +299,7 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
 int breezy_desktop_register_features_func(char*** features) {
     *features = calloc(breezy_desktop_feature_count, sizeof(char*));
     (*features)[0] = strdup(productivity_basic_feature_name);
-    (*features)[1] = strdup(productivity_pro_feature_name);
+    // (*features)[1] = strdup(productivity_pro_feature_name);
 
     return breezy_desktop_feature_count;
 }
