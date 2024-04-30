@@ -32,6 +32,7 @@ void virtual_display_reset_config(virtual_display_config *config) {
     config->sbs_content = false;
     config->sbs_mode_stretched = false;
     config->passthrough_smooth_follow_enabled = false;
+    config->follow_mode_enabled = false;
 };
 
 void *virtual_display_default_config_func() {
@@ -46,6 +47,7 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
 
     if (equal(key, "external_mode")) {
         temp_config->enabled = equal(value, "virtual_display");
+        temp_config->follow_mode_enabled = equal(value, "sideview");
     } else if (equal(key, "look_ahead")) {
         float_config(key, value, &temp_config->look_ahead_override);
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
@@ -75,6 +77,7 @@ void set_virtual_display_ipc_values() {
     if (context.device) {
         *virtual_display_ipc_values->enabled               = !context.config->disabled &&
                                                                 (vd_config->enabled ||
+                                                                 vd_config->follow_mode_enabled &&
                                                                  vd_config->passthrough_smooth_follow_enabled);
         *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
                                                                 vd_config->display_zoom;
@@ -108,10 +111,11 @@ void virtual_display_set_config_func(void* config) {
             printf("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
         if (!temp_config->enabled) {
-            if (temp_config->passthrough_smooth_follow_enabled) {
+            if (temp_config->passthrough_smooth_follow_enabled && temp_config->follow_mode_enabled) {
                 // passthrough mode should use the default configs
                 virtual_display_reset_config(temp_config);
                 temp_config->passthrough_smooth_follow_enabled = true;
+                temp_config->follow_mode_enabled = true;
             }
         } else {
             if (vd_config->look_ahead_override != temp_config->look_ahead_override)
