@@ -501,12 +501,12 @@ int main(int argc, const char** argv) {
     }
 
     context.config = default_config();
+    context.state = calloc(1, sizeof(driver_state_type));
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);
 
     if (driver_disabled()) printf("Driver is disabled\n");
 
-    context.state = calloc(1, sizeof(driver_state_type));
     char** features = NULL;
     int feature_count = plugins.register_features(&features);
     state()->registered_features_count = feature_count;
