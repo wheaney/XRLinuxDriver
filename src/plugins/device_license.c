@@ -247,6 +247,8 @@ void refresh_license(bool force) {
                             break;
                         }
 
+                        // TODO - remove verbose logging, set URL to prod
+                        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
                         curl_easy_setopt(curl, CURLOPT_URL, "https://test.na.driver-backend.xronlinux.com/licenses/v1");
                         char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
                         if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
