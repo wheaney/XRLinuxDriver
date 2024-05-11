@@ -96,9 +96,9 @@ target_link_libraries(xrealAirLinuxDriver
 		        nrealAirLibrary
 		        Threads::Threads
 		        m
-		        ${VITURE_LIB_NAME}
-		        ${LIBUSB_LIBRARIES}
 		        ${LIBCURL_LIBRARIES}
 		        ${OPENSSL_LIBRARIES}
+		        ${VITURE_LIB_NAME}
+		        ${LIBUSB_LIBRARIES}
 )
 add_dependencies(xrealAirLinuxDriver run_python_script)
