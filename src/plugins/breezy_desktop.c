@@ -101,6 +101,7 @@ const int CONFIG_DATA_END_OFFSET =
     sizeof(uint8_t) + // sbs_enabled
     sizeof(uint8_t); // custom_banner_enabled
 
+uint64_t last_config_write_ts = 0;
 void do_write_config_data(int fd) {
     if (!bd_config) bd_config = breezy_desktop_default_config_func();
 
@@ -125,7 +126,7 @@ void do_write_config_data(int fd) {
             context.device->resolution_h
         };
         uint8_t sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
-        uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled && *custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
 
         write(fd, &enabled, sizeof(uint8_t));
         write(fd, look_ahead_cfg, sizeof(float) * 4);
@@ -144,6 +145,7 @@ void do_write_config_data(int fd) {
         write(fd, zero_data, remainingBytes);
         free(zero_data);
     }
+    last_config_write_ts = getEpochTimestampMS();
 }
 
 char* get_shared_mem_file_path() {
@@ -203,24 +205,18 @@ void breezy_desktop_set_config_func(void* config) {
     if (has_started) write_config_data();
 };
 
-int breezy_imu_counter = 0;
 void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
     pthread_mutex_lock(&file_mutex);
     int fd = get_shared_mem_fd();
     if (fd != -1) {
-        if (breezy_imu_counter == 0) {
+        const uint64_t epoch_ms = getEpochTimestampMS();
+        if (last_config_write_ts == 0 || epoch_ms - last_config_write_ts > 250) {
             // write this periodically, to ensure a recent heartbeat at the very least
             do_write_config_data(fd);
         }
-        const uint64_t epoch_ms = getEpochTimestampMS();
         lseek(fd, CONFIG_DATA_END_OFFSET, SEEK_SET);
         write(fd, &epoch_ms, sizeof(uint64_t));
         write(fd, values, sizeof(float) * NUM_IMU_VALUES);
-
-        // reset the counter every second
-        if (context.device && (++breezy_imu_counter % context.device->imu_cycles_per_s) == 0) {
-            breezy_imu_counter = 0;
-        }
     }
     pthread_mutex_unlock(&file_mutex);
 }
@@ -232,66 +228,70 @@ void breezy_desktop_reset_imu_data_func() {
 // TODO - share this with virtual_display plugin
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (is_productivity_granted() && imu_calibrated && bd_config && bd_config->enabled) {
-        if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
-            bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-            bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-            for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                bd_quat_stage_1_buffer[i] = create_buffer(context.device->imu_buffer_size);
-                bd_quat_stage_2_buffer[i] = create_buffer(context.device->imu_buffer_size);
-                if (bd_quat_stage_1_buffer[i] == NULL || bd_quat_stage_2_buffer[i] == NULL) {
-                    fprintf(stderr, "Error allocating memory\n");
-                    exit(1);
+    if (is_productivity_granted() && bd_config && bd_config->enabled) {
+        if (imu_calibrated) {
+            if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
+                bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
+                bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
+                for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                    bd_quat_stage_1_buffer[i] = create_buffer(context.device->imu_buffer_size);
+                    bd_quat_stage_2_buffer[i] = create_buffer(context.device->imu_buffer_size);
+                    if (bd_quat_stage_1_buffer[i] == NULL || bd_quat_stage_2_buffer[i] == NULL) {
+                        fprintf(stderr, "Error allocating memory\n");
+                        exit(1);
+                    }
                 }
             }
-        }
 
-        // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
-        // push/pop, to know if the values that are returned will be relevant to our calculations
-        bool was_full = is_full(bd_quat_stage_1_buffer[0]);
-        float stage_1_quat_w = push(bd_quat_stage_1_buffer[0], quat.w);
-        float stage_1_quat_x = push(bd_quat_stage_1_buffer[1], quat.x);
-        float stage_1_quat_y = push(bd_quat_stage_1_buffer[2], quat.y);
-        float stage_1_quat_z = push(bd_quat_stage_1_buffer[3], quat.z);
+            // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
+            // push/pop, to know if the values that are returned will be relevant to our calculations
+            bool was_full = is_full(bd_quat_stage_1_buffer[0]);
+            float stage_1_quat_w = push(bd_quat_stage_1_buffer[0], quat.w);
+            float stage_1_quat_x = push(bd_quat_stage_1_buffer[1], quat.x);
+            float stage_1_quat_y = push(bd_quat_stage_1_buffer[2], quat.y);
+            float stage_1_quat_z = push(bd_quat_stage_1_buffer[3], quat.z);
 
-        // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
-        //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
-        float stage_1_ts = push(bd_quat_stage_1_buffer[4], (float)timestamp_ms);
-
-        if (was_full) {
-            was_full = is_full(bd_quat_stage_2_buffer[0]);
-            float stage_2_quat_w = push(bd_quat_stage_2_buffer[0], stage_1_quat_w);
-            float stage_2_quat_x = push(bd_quat_stage_2_buffer[1], stage_1_quat_x);
-            float stage_2_quat_y = push(bd_quat_stage_2_buffer[2], stage_1_quat_y);
-            float stage_2_quat_z = push(bd_quat_stage_2_buffer[3], stage_1_quat_z);
-            float stage_2_ts = push(bd_quat_stage_2_buffer[4], stage_1_ts);
+            // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
+            //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
+            float stage_1_ts = push(bd_quat_stage_1_buffer[4], (float)timestamp_ms);
 
             if (was_full) {
-                // TODO - locking
-                // pthread_mutex_lock(imu_data_mutex);
+                was_full = is_full(bd_quat_stage_2_buffer[0]);
+                float stage_2_quat_w = push(bd_quat_stage_2_buffer[0], stage_1_quat_w);
+                float stage_2_quat_x = push(bd_quat_stage_2_buffer[1], stage_1_quat_x);
+                float stage_2_quat_y = push(bd_quat_stage_2_buffer[2], stage_1_quat_y);
+                float stage_2_quat_z = push(bd_quat_stage_2_buffer[3], stage_1_quat_z);
+                float stage_2_ts = push(bd_quat_stage_2_buffer[4], stage_1_ts);
 
-                // write to shared memory for anyone using the same ipc prefix to consume
-                float imu_data[NUM_IMU_VALUES];
-                imu_data[0] = quat.x;
-                imu_data[1] = quat.y;
-                imu_data[2] = quat.z;
-                imu_data[3] = quat.w;
-                imu_data[4] = stage_1_quat_x;
-                imu_data[5] = stage_1_quat_y;
-                imu_data[6] = stage_1_quat_z;
-                imu_data[7] = stage_1_quat_w;
-                imu_data[8] = stage_2_quat_x;
-                imu_data[9] = stage_2_quat_y;
-                imu_data[10] = stage_2_quat_z;
-                imu_data[11] = stage_2_quat_w;
-                imu_data[12] = (float)timestamp_ms;
-                imu_data[13] = stage_1_ts;
-                imu_data[14] = stage_2_ts;
+                if (was_full) {
+                    // TODO - locking
+                    // pthread_mutex_lock(imu_data_mutex);
 
-                breezy_desktop_write_imu_data(imu_data);
+                    // write to shared memory for anyone using the same ipc prefix to consume
+                    float imu_data[NUM_IMU_VALUES];
+                    imu_data[0] = quat.x;
+                    imu_data[1] = quat.y;
+                    imu_data[2] = quat.z;
+                    imu_data[3] = quat.w;
+                    imu_data[4] = stage_1_quat_x;
+                    imu_data[5] = stage_1_quat_y;
+                    imu_data[6] = stage_1_quat_z;
+                    imu_data[7] = stage_1_quat_w;
+                    imu_data[8] = stage_2_quat_x;
+                    imu_data[9] = stage_2_quat_y;
+                    imu_data[10] = stage_2_quat_z;
+                    imu_data[11] = stage_2_quat_w;
+                    imu_data[12] = (float)timestamp_ms;
+                    imu_data[13] = stage_1_ts;
+                    imu_data[14] = stage_2_ts;
 
-                // pthread_mutex_unlock(imu_data_mutex);
+                    breezy_desktop_write_imu_data(imu_data);
+
+                    // pthread_mutex_unlock(imu_data_mutex);
+                }
             }
+        } else {
+            breezy_desktop_reset_imu_data_func();
         }
     }
 }
