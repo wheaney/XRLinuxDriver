@@ -10,16 +10,27 @@
 
 #include <stdlib.h>
 
+#ifdef BREEZY_DESKTOP
 #define PLUGIN_COUNT 5
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
-    // &virtual_display_plugin,
-    // &sideview_plugin,
     &metrics_plugin,
     &custom_banner_plugin,
     &smooth_follow_plugin,
     &breezy_desktop_plugin
 };
+#else
+#define PLUGIN_COUNT 6
+const plugin_type* all_plugins[PLUGIN_COUNT] = {
+    &device_license_plugin,
+    &virtual_display_plugin,
+    &sideview_plugin,
+    &metrics_plugin,
+    &custom_banner_plugin,
+    &smooth_follow_plugin
+};
+#endif
+
 
 void all_plugins_start_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
