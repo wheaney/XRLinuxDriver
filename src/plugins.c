@@ -1,5 +1,6 @@
 #include "plugins.h"
 #include "plugins/custom_banner.h"
+#include "plugins/breezy_desktop.h"
 #include "plugins/device_license.h"
 #include "plugins/metrics.h"
 #include "plugins/sideview.h"
@@ -9,6 +10,16 @@
 
 #include <stdlib.h>
 
+#ifdef BREEZY_DESKTOP
+#define PLUGIN_COUNT 5
+const plugin_type* all_plugins[PLUGIN_COUNT] = {
+    &device_license_plugin,
+    &metrics_plugin,
+    &custom_banner_plugin,
+    &smooth_follow_plugin,
+    &breezy_desktop_plugin
+};
+#else
 #define PLUGIN_COUNT 6
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
@@ -18,6 +29,8 @@ const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &custom_banner_plugin,
     &smooth_follow_plugin
 };
+#endif
+
 
 void all_plugins_start_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
@@ -45,7 +58,7 @@ int all_plugins_register_features_func(char*** features) {
     return feature_count;
 }
 void* all_plugins_default_config_func() {
-    void** configs = malloc(sizeof(void*) * PLUGIN_COUNT);
+    void** configs = calloc(PLUGIN_COUNT, sizeof(void*));
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->default_config == NULL) continue;
         configs[i] = all_plugins[i]->default_config();

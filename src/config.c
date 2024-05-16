@@ -11,7 +11,7 @@ const char *mouse_output_mode = "mouse";
 const char *external_only_output_mode = "external_only";
 
 driver_config_type *default_config() {
-    driver_config_type *config = malloc(sizeof(driver_config_type));
+    driver_config_type *config = calloc(1, sizeof(driver_config_type));
     if (config == NULL) {
         fprintf(stderr, "Error allocating config");
         exit(1);

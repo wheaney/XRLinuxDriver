@@ -52,32 +52,43 @@ set_target_properties(
     IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libviture_one_sdk.a
 )
 
-add_executable(xrealAirLinuxDriver
-		src/buffer.c
-		src/config.c
-		src/curl.c
-		src/devices/viture.c
-		src/devices/xreal.c
-		src/driver.c
-		src/features/smooth_follow.c
-		src/features/sbs.c
-		src/files.c
-		src/imu.c
-		src/ipc.c
-		src/multitap.c
-		src/outputs.c
-		src/plugins.c
-		src/plugins/custom_banner.c
-		src/plugins/device_license.c
-		src/plugins/metrics.c
-		src/plugins/sideview.c
-		src/plugins/smooth_follow.c
-		src/plugins/virtual_display.c
-		src/runtime_context.c
-		src/state.c
-		src/strings.c
-		src/system.c
+set(SOURCES
+    src/buffer.c
+    src/config.c
+    src/curl.c
+    src/devices/viture.c
+    src/devices/xreal.c
+    src/driver.c
+    src/features/breezy_desktop.c
+    src/features/smooth_follow.c
+    src/features/sbs.c
+    src/files.c
+    src/imu.c
+    src/ipc.c
+    src/multitap.c
+    src/outputs.c
+    src/plugins.c
+    src/plugins/custom_banner.c
+    src/plugins/device_license.c
+    src/plugins/metrics.c
+    src/plugins/sideview.c
+    src/plugins/smooth_follow.c
+    src/plugins/virtual_display.c
+    src/runtime_context.c
+    src/state.c
+    src/strings.c
+    src/system.c
 )
+
+if(DEFINED ENV{BREEZY_DESKTOP})
+  message(STATUS "Breezy Desktop build")
+  set(BREEZY_DESKTOP $ENV{BREEZY_DESKTOP})
+  list(APPEND SOURCES
+    src/plugins/breezy_desktop.c
+  )
+endif()
+
+add_executable(xrealAirLinuxDriver ${SOURCES})
 
 target_include_directories(xrealAirLinuxDriver
 		SYSTEM BEFORE PRIVATE

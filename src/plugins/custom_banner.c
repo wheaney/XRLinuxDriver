@@ -43,7 +43,7 @@ const char *custom_banner_enabled_name = "custom_banner_enabled";
 
 bool custom_banner_setup_ipc_func() {
     bool debug = context.config->debug_ipc;
-    if (!custom_banner_ipc_values) custom_banner_ipc_values = malloc(sizeof(custom_banner_ipc_values_type));
+    if (!custom_banner_ipc_values) custom_banner_ipc_values = calloc(1, sizeof(custom_banner_ipc_values_type));
     setup_ipc_value(custom_banner_enabled_name, (void**) &custom_banner_ipc_values->enabled, sizeof(bool), debug);
 
     evaluate_banner_conditions();

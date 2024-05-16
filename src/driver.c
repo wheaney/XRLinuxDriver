@@ -169,7 +169,7 @@ void setup_ipc() {
     bool not_external_only = config()->output_mode && !is_external_mode(config());
     if (!ipc_enabled) {
         if (config()->debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
-        if (!ipc_values) ipc_values = malloc(sizeof(*ipc_values));
+        if (!ipc_values) ipc_values = calloc(1, sizeof(*ipc_values));
         if (setup_ipc_values(ipc_values, config()->debug_ipc) && plugins.setup_ipc()) {
             ipc_enabled = true;
 
@@ -433,7 +433,7 @@ void *monitor_control_flags_file(void *arg) {
 }
 
 bool search_for_device() {
-    if (!device_driver) device_driver = malloc(sizeof(device_driver_type));
+    if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
     for (int i = 0; i < DEVICE_DRIVER_COUNT; i++) {
         *device_driver = *device_drivers[i];
         context.device = device_driver->device_connect_func();
@@ -501,18 +501,18 @@ int main(int argc, const char** argv) {
     }
 
     context.config = default_config();
+    context.state = calloc(1, sizeof(driver_state_type));
     config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
     update_config_from_file(config_fp);
 
     if (driver_disabled()) printf("Driver is disabled\n");
 
-    context.state = malloc(sizeof(driver_state_type));
     char** features = NULL;
     int feature_count = plugins.register_features(&features);
     state()->registered_features_count = feature_count;
     state()->registered_features = features;
 
-    control_flags = malloc(sizeof(control_flags_type));
+    control_flags = calloc(1, sizeof(control_flags_type));
     pthread_t monitor_control_flags_file_thread;
     pthread_attr_t monitor_control_flags_file_thread_attr;
 

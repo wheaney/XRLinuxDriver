@@ -22,6 +22,7 @@ struct driver_state_t {
     calibration_state_type calibration_state;
     bool sbs_mode_supported;
     bool sbs_mode_enabled;
+    bool breezy_desktop_smooth_follow_enabled;
     bool firmware_update_recommended;
 
     int registered_features_count;
