@@ -264,9 +264,6 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
                 float stage_2_ts = push(bd_quat_stage_2_buffer[4], stage_1_ts);
 
                 if (was_full) {
-                    // TODO - locking
-                    // pthread_mutex_lock(imu_data_mutex);
-
                     // write to shared memory for anyone using the same ipc prefix to consume
                     float imu_data[NUM_IMU_VALUES];
                     imu_data[0] = quat.x;
@@ -286,8 +283,6 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
                     imu_data[14] = stage_2_ts;
 
                     breezy_desktop_write_imu_data(imu_data);
-
-                    // pthread_mutex_unlock(imu_data_mutex);
                 }
             }
         } else {
