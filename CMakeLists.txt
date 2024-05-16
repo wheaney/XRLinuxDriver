@@ -71,9 +71,7 @@ set(SOURCES
     src/plugins/custom_banner.c
     src/plugins/device_license.c
     src/plugins/metrics.c
-    src/plugins/sideview.c
     src/plugins/smooth_follow.c
-    src/plugins/virtual_display.c
     src/runtime_context.c
     src/state.c
     src/strings.c
@@ -82,9 +80,15 @@ set(SOURCES
 
 if(DEFINED ENV{BREEZY_DESKTOP})
   message(STATUS "Breezy Desktop build")
-  set(BREEZY_DESKTOP $ENV{BREEZY_DESKTOP})
+  add_definitions(-DBREEZY_DESKTOP)
   list(APPEND SOURCES
     src/plugins/breezy_desktop.c
+  )
+else()
+  message(STATUS "Standard build")
+  list(APPEND SOURCES
+    src/plugins/sideview.c
+    src/plugins/virtual_display.c
   )
 endif()
 

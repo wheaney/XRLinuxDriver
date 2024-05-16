@@ -294,6 +294,7 @@ void refresh_license(bool force) {
                     }
                 }
 
+                // TODO - pass the requested features list and verify all features are present in the license, otherwise refresh it
                 features_count = get_license_features(file, &features);
                 fclose(file);
                 if (features_count != -1) {
