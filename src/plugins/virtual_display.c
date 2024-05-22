@@ -21,7 +21,7 @@ buffer_type **quat_stage_2_buffer;
 virtual_display_config *vd_config;
 virtual_display_ipc_values_type *virtual_display_ipc_values;
 
-const int virtual_display_feature_count = 1;
+const int virtual_display_feature_count = 2;
 
 void virtual_display_reset_config(virtual_display_config *config) {
     config->enabled = false;
@@ -147,6 +147,7 @@ void virtual_display_set_config_func(void* config) {
 int virtual_display_register_features_func(char*** features) {
     *features = calloc(virtual_display_feature_count, sizeof(char*));
     (*features)[0] = strdup(sbs_feature_name);
+    (*features)[1] = strdup(smooth_follow_feature_name);
 
     return virtual_display_feature_count;
 }

@@ -13,10 +13,6 @@
 #include <string.h>
 #include <sys/time.h>
 
-// don't explicitly request productivity feature, we'll use it if another plugin has enabled it
-const int smooth_follow_feature_count = 1;
-const char* smooth_follow_feature = "smooth_follow";
-
 typedef enum {
     FOLLOW_STATE_NONE,
     FOLLOW_STATE_WAITING,
@@ -151,13 +147,6 @@ void smooth_follow_set_config_func(void* config) {
 
     sf_config = temp_config;
     handle_config_and_state_update();
-}
-
-int smooth_follow_register_features_func(char*** features) {
-    *features = calloc(smooth_follow_feature_count, sizeof(char*));
-    (*features)[0] = strdup(smooth_follow_feature_name);
-
-    return smooth_follow_feature_count;
 }
 
 follow_state_type follow_state = FOLLOW_STATE_NONE;
@@ -314,6 +303,5 @@ const plugin_type smooth_follow_plugin = {
     .handle_config_line = smooth_follow_handle_config_line_func,
     .handle_control_flag_line = smooth_follow_handle_control_flag_line_func,
     .set_config = smooth_follow_set_config_func,
-    .register_features = smooth_follow_register_features_func,
     .modify_screen_center = smooth_follow_modify_screen_center_func,
 };
