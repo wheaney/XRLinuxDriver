@@ -70,6 +70,9 @@ void *smooth_follow_default_config_func() {
     return config;
 };
 
+// TODO -   This has become a bit of a mess with smooth_follow having to be aware of how it interacts with
+//          3 other plugins and their configs and control flags. Smooth follow should just become a utility 
+//          function that any plugin can utilize however it deems appropriate.
 void smooth_follow_handle_config_line_func(void* config, char* key, char* value) {
     smooth_follow_config* temp_config = (smooth_follow_config*) config;
     if (equal(key, "virtual_display_smooth_follow_enabled")) {
@@ -108,6 +111,20 @@ void handle_config_and_state_update() {
         *sf_params = tight_follow_params;
     } else if (breezy_desktop_follow) {
         *sf_params = keep_close_follow_params;
+        if (context.state) {
+            if (context.state->breezy_desktop_follow_threshold) {
+                sf_params->lower_angle_threshold = context.state->breezy_desktop_follow_threshold;
+                sf_params->upper_angle_threshold = context.state->breezy_desktop_follow_threshold;
+                sf_params->return_to_angle = context.state->breezy_desktop_follow_threshold;
+            }
+            if (context.state->breezy_desktop_display_distance) {
+                // a closer display (lower number) results in a loosening of the thresholds,
+                // a further display (higher number) results in a tightening of the thresholds
+                sf_params->lower_angle_threshold /= context.state->breezy_desktop_display_distance;
+                sf_params->upper_angle_threshold /= context.state->breezy_desktop_display_distance;
+                sf_params->return_to_angle /= context.state->breezy_desktop_display_distance;
+            }
+        }
     }
 
     bool was_smooth_follow_enabled = smooth_follow_enabled;
@@ -288,6 +305,14 @@ void smooth_follow_handle_control_flag_line_func(char* key, char* value) {
             boolean_config(key, value, &context.state->breezy_desktop_smooth_follow_enabled);
         } else if (equal(key, "toggle_breezy_desktop_smooth_follow")) {
             context.state->breezy_desktop_smooth_follow_enabled = !context.state->breezy_desktop_smooth_follow_enabled;
+        }
+
+        // these will be applied to the thresholds on the next call to handle_config_and_state_update()
+        if (equal(key, "breezy_desktop_follow_threshold")) {
+            float_config(key, value, &context.state->breezy_desktop_follow_threshold);
+        }
+        if (equal(key, "breezy_desktop_display_distance")) {
+            float_config(key, value, &context.state->breezy_desktop_display_distance);
         }
 
         if (was_enabled != context.state->breezy_desktop_smooth_follow_enabled)
