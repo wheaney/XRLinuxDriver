@@ -31,7 +31,6 @@ add_definitions(-DDEVICE_LICENSE_PUBLIC_KEY="${DEVICE_LICENSE_PUBLIC_KEY_ESCAPED
 find_package(Threads REQUIRED)
 
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
-pkg_check_modules(LIBCURL REQUIRED libcurl)
 pkg_check_modules(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
@@ -41,6 +40,7 @@ set(VITURE_LIB_NAME viture_sdk)
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
+add_subdirectory(modules/curl)
 
 add_library (
 	${VITURE_LIB_NAME}
@@ -111,7 +111,7 @@ target_link_libraries(xrealAirLinuxDriver
 		        nrealAirLibrary
 		        Threads::Threads
 		        m
-		        ${LIBCURL_LIBRARIES}
+		        libcurl
 		        ${OPENSSL_LIBRARIES}
 		        ${VITURE_LIB_NAME}
 		        ${LIBUSB_LIBRARIES}

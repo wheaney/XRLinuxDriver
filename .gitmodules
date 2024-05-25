@@ -2,3 +2,6 @@
 	path = modules/xrealInterfaceLibrary
 	url = https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver.git
 	branch = main
+[submodule "modules/curl"]
+	path = modules/curl
+	url = https://github.com/curl/curl.git
