@@ -12,11 +12,29 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VITURE_ID_PRODUCT_COUNT 3
+#define VITURE_ID_PRODUCT_COUNT 7
 #define VITURE_ID_VENDOR 0x35ca
-#define VITURE_PRO_ID_PRODUCT 0x101d
-const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {0x1011, 0x1015, VITURE_PRO_ID_PRODUCT};
-const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {"One", "One Lite", "Pro"};
+#define VITURE_ONE_MODEL_NAME "One"
+#define VITURE_ONE_LITE_MODEL_NAME "One Lite"
+#define VITURE_PRO_MODEL_NAME "Pro"
+const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
+    0x1011, // One
+    0x1013, // One
+    0x1017, // One
+    0x1015, // One Lite
+    0x101b, // One Lite
+    0x1019, // Pro
+    0x101d, // Pro
+};
+const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
+    VITURE_ONE_MODEL_NAME, 
+    VITURE_ONE_MODEL_NAME,
+    VITURE_ONE_MODEL_NAME,
+    VITURE_ONE_LITE_MODEL_NAME,
+    VITURE_ONE_LITE_MODEL_NAME,
+    VITURE_PRO_MODEL_NAME,
+    VITURE_PRO_MODEL_NAME,
+};
 
 
 // VITURE rotations seem to be about 6 degrees (about y axis) off of actual,
@@ -143,7 +161,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 device->hid_product_id = product_id;
                 device->model = strdup(viture_supported_models[i]);
 
-                if (product_id == VITURE_PRO_ID_PRODUCT) device->fov = 43.0;
+                if (equal(VITURE_PRO_MODEL_NAME, device->model)) device->fov = 43.0;
 
                 return device;
             }
@@ -172,7 +190,7 @@ bool viture_device_connect() {
         device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
 
         // not a great way to check the firmware version but it's all we have
-        old_firmware_version = (device->hid_product_id == VITURE_PRO_ID_PRODUCT) ? false : (device->imu_cycles_per_s == 60);
+        old_firmware_version = equal(VITURE_PRO_MODEL_NAME, device->model) ? false : (device->imu_cycles_per_s == 60);
 
         device->sbs_mode_supported = !old_firmware_version;
         device->firmware_update_recommended = old_firmware_version;

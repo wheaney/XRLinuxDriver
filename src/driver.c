@@ -177,7 +177,7 @@ pthread_mutex_t block_on_device_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t block_on_device_cond = PTHREAD_COND_INITIALIZER;
 static bool block_on_device_ready = false;
 
-// reevaluates the conditions that determine whether the block_on_ready function can be unblocked,
+// reevaluates the conditions that determine whether the block_on_device_thread function can be unblocked,
 // we should call this whenever a condition changes that may effect the evaluation of block_on_device_ready
 void evaluate_block_on_device_ready() {
     pthread_mutex_lock(&block_on_device_mutex);
@@ -289,7 +289,7 @@ void *monitor_config_file_thread_func(void *arg) {
         return NULL;
     }
 
-    int wd = inotify_add_watch(fd, config_filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+    int wd = inotify_add_watch(fd, config_filename, IN_CLOSE_WRITE | IN_DELETE_SELF | IN_ATTRIB);
     if (wd < 0) {
         perror("Error adding watch");
         return NULL;
@@ -307,11 +307,11 @@ void *monitor_config_file_thread_func(void *arg) {
         tv.tv_usec = 0;
 
         // wait for data to be available for reading, do this with select() so we can specify a timeout and make
-        // sure we shouldn't exit due to driver_disabled()
+        // sure we shouldn't exit due to force_quit
         int retval = select(fd + 1, &readfds, NULL, NULL, &tv);
         if (retval == -1) {
             perror("select()");
-            return NULL;
+            exit(EXIT_FAILURE);
         } else if (retval) {
             int length = read(fd, inotify_event_buffer, INOTIFY_EVENT_BUFFER_SIZE);
             if (length < 0) {
@@ -319,22 +319,31 @@ void *monitor_config_file_thread_func(void *arg) {
                 return NULL;
             }
 
+            bool updated = false;
             int i = 0;
             while (i < length) {
                 struct inotify_event *event = (struct inotify_event *) &inotify_event_buffer[i];
                 if (event->mask & IN_DELETE_SELF) {
                     // The file has been deleted, so we need to re-add the watch
-                    wd = inotify_add_watch(fd, config_filename, IN_MODIFY | IN_DELETE_SELF | IN_ATTRIB);
+                    wd = inotify_add_watch(fd, config_filename, IN_CLOSE_WRITE | IN_DELETE_SELF | IN_ATTRIB);
                     if (wd < 0) {
                         perror("Error re-adding watch");
-                        return NULL;
+                        exit(EXIT_FAILURE);
                     }
                 } else {
-                    config_fp = freopen(config_filename, "r", config_fp);
-                    update_config_from_file(config_fp);
+                    updated = true;
                 }
                 i += INOTIFY_EVENT_SIZE + event->len;
             }
+            if (ferror(config_fp) != 0 || feof(config_fp) != 0) {
+                config_fp = freopen(config_filename, "r", config_fp);
+                if (config_fp == NULL) {
+                    perror("Error reopening config file");
+                    exit(EXIT_FAILURE);
+                }
+                if (!updated) update_config_from_file(config_fp);
+            }
+            if (updated) update_config_from_file(config_fp);
         }
     }
 

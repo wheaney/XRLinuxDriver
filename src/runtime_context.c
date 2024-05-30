@@ -63,12 +63,13 @@ device_properties_type* device_checkout() {
 }
 
 void device_checkin(device_properties_type* device) {
-    pthread_mutex_lock(&device_ref_count_mutex);
     // if the returned device is NULL or doesn't match the current, don't decrement the ref count
     bool same_device = device != NULL && context.device != NULL && 
                        device->hid_product_id == context.device->hid_product_id && 
                        device->hid_vendor_id == context.device->hid_vendor_id;
     bool device_changed = false;
+    
+    pthread_mutex_lock(&device_ref_count_mutex);
     if (device_ref_count > 0 && same_device) {
         device_ref_count--;
         if (device_ref_count == 0) {
