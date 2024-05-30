@@ -1,6 +1,6 @@
 #pragma once
 
-#include "device.h" // for calibration_setup_type
+#include "devices.h" // for calibration_setup_type
 
 #include <inttypes.h>
 #include <stdbool.h>

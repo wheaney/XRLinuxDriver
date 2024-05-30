@@ -51,11 +51,13 @@ struct device_properties_t {
 
 typedef struct device_properties_t device_properties_type;
 
-// open device connection, expected to perform cleanup on failure
-typedef device_properties_type* (*device_connect_func)();
+// if this driver supports the device, return the device properties, otherwise NULL
+typedef device_properties_type* (*supported_device_func)(uint16_t id_vendor, uint16_t id_product);
 
-// hold open while device is connected and driver_device_should_disconnect() returns false,
-// expected to perform cleanup before exiting
+// open device connection, expected to perform cleanup on failure
+typedef bool (*device_connect_func)();
+
+// hold open the connection while the device is present and disconnect_func has not been called
 typedef void (*block_on_device_func)();
 
 // return true if device is in SBS mode
@@ -64,11 +66,37 @@ typedef bool (*device_is_sbs_mode_func)();
 // set SBS mode on device, return true on success
 typedef bool (*device_set_sbs_mode_func)(bool enabled);
 
+// whether the driver is currently holding open a connection to the device
+typedef bool (*is_connected_func)();
+
+// forces the driver to release its connection to the device
+typedef void (*disconnect_func)();
+
 struct device_driver_t {
+    supported_device_func supported_device_func;
     device_connect_func device_connect_func;
     block_on_device_func block_on_device_func;
     device_is_sbs_mode_func device_is_sbs_mode_func;
     device_set_sbs_mode_func device_set_sbs_mode_func;
+    is_connected_func is_connected_func;
+    disconnect_func disconnect_func;
 };
 
 typedef struct device_driver_t device_driver_type;
+
+struct connected_device_t {
+    device_driver_type* driver;
+    device_properties_type* device;
+};
+
+typedef struct connected_device_t connected_device_type;
+
+typedef void (*handle_device_update_func)(connected_device_type* device);
+
+void init_devices(handle_device_update_func callback);
+
+void deinit_devices();
+
+connected_device_type* find_connected_device();
+
+void handle_device_connection_events();

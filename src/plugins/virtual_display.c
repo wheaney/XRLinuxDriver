@@ -1,6 +1,6 @@
 #include "buffer.h"
 #include "config.h"
-#include "device.h"
+#include "devices.h"
 #include "features/smooth_follow.h"
 #include "features/sbs.h"
 #include "ipc.h"
@@ -74,32 +74,34 @@ void set_virtual_display_ipc_values() {
     if (!virtual_display_ipc_values) return;
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
-    if (context.device) {
-        *virtual_display_ipc_values->enabled               = !context.config->disabled &&
+    device_properties_type* device = device_checkout();
+    if (device) {
+        *virtual_display_ipc_values->enabled               = !config()->disabled &&
                                                                 (vd_config->enabled ||
                                                                  vd_config->follow_mode_enabled &&
                                                                  vd_config->passthrough_smooth_follow_enabled);
-        *virtual_display_ipc_values->display_zoom          = context.state->sbs_mode_enabled ? vd_config->sbs_display_size :
+        *virtual_display_ipc_values->display_zoom          = state()->sbs_mode_enabled ? vd_config->sbs_display_size :
                                                                 vd_config->display_zoom;
         *virtual_display_ipc_values->display_north_offset  = vd_config->sbs_display_distance;
         if (vd_config->enabled) {
             virtual_display_ipc_values->look_ahead_cfg[0]  = vd_config->look_ahead_override == 0 ?
-                                                                context.device->look_ahead_constant :
+                                                                device->look_ahead_constant :
                                                                 vd_config->look_ahead_override;
             virtual_display_ipc_values->look_ahead_cfg[1]  = vd_config->look_ahead_override == 0 ?
-                                                                context.device->look_ahead_frametime_multiplier : 0.0;
+                                                                device->look_ahead_frametime_multiplier : 0.0;
         } else {
             // smooth follow mode, don't use look-ahead
             virtual_display_ipc_values->look_ahead_cfg[0]  = 0.0;
             virtual_display_ipc_values->look_ahead_cfg[1]  = 0.0;
         }
-        virtual_display_ipc_values->look_ahead_cfg[2]      = context.device->look_ahead_scanline_adjust;
-        virtual_display_ipc_values->look_ahead_cfg[3]      = context.device->look_ahead_ms_cap;
+        virtual_display_ipc_values->look_ahead_cfg[2]      = device->look_ahead_scanline_adjust;
+        virtual_display_ipc_values->look_ahead_cfg[3]      = device->look_ahead_ms_cap;
         *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
         *virtual_display_ipc_values->sbs_mode_stretched    = vd_config->sbs_mode_stretched;
     } else {
         virtual_display_handle_device_disconnect_func();
     }
+    device_checkin(device);
 }
 
 void virtual_display_set_config_func(void* config) {
@@ -163,7 +165,7 @@ const char *virtual_display_sbs_content_name = "sbs_content";
 const char *virtual_display_sbs_mode_stretched_name = "sbs_mode_stretched";
 
 bool virtual_display_setup_ipc_func() {
-    bool debug = context.config->debug_ipc;
+    bool debug = config()->debug_ipc;
     if (!virtual_display_ipc_values) virtual_display_ipc_values = calloc(1, sizeof(virtual_display_ipc_values_type));
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_imu_data_ipc_name, (void**) &virtual_display_ipc_values->imu_data, sizeof(float) * 16, debug);
@@ -208,13 +210,14 @@ bool virtual_display_setup_ipc_func() {
 void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (vd_config && ipc_enabled && virtual_display_ipc_values) {
-        if (imu_calibrated) {
+        device_properties_type* device = device_checkout();
+        if (imu_calibrated && device) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
                 quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                    quat_stage_1_buffer[i] = create_buffer(context.device->imu_buffer_size);
-                    quat_stage_2_buffer[i] = create_buffer(context.device->imu_buffer_size);
+                    quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
+                    quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
                     if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
                         fprintf(stderr, "Error allocating memory\n");
                         exit(1);
@@ -266,12 +269,13 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
                 }
             }
         }
+        device_checkin(device);
     }
 }
 
 void virtual_display_handle_state_func() {
     if (!virtual_display_ipc_values) return;
-    *virtual_display_ipc_values->sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted();
+    *virtual_display_ipc_values->sbs_enabled = state()->sbs_mode_enabled && is_sbs_granted();
 
     set_virtual_display_ipc_values();
 }

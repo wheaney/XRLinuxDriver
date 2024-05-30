@@ -58,6 +58,7 @@ set(SOURCES
     src/curl.c
     src/devices/viture.c
     src/devices/xreal.c
+    src/devices.c
     src/driver.c
     src/features/breezy_desktop.c
     src/features/smooth_follow.c
