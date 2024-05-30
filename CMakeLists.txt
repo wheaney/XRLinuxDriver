@@ -109,7 +109,7 @@ target_include_directories(xrealAirLinuxDriver
 target_link_libraries(xrealAirLinuxDriver
 		PRIVATE ${LIBEVDEV_LIBRARIES}
 		        ${JSONC_LIBRARIES}
-		        $<LINK_ONLY:nrealAirLibrary>
+		        nrealAirLibrary
 		        Threads::Threads
 		        m
 		        libcurl
