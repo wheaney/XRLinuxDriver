@@ -1,10 +1,11 @@
-#include "device.h"
+#include "devices.h"
 #include "plugins.h"
 #include "state.h"
 #include "system.h"
 
 #include <inttypes.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -30,7 +31,9 @@ FILE* get_state_file(const char *filename, char *mode, char *full_path) {
     return fopen(full_path, mode ? mode : "r");
 }
 
+pthread_mutex_t write_state_mutex = PTHREAD_MUTEX_INITIALIZER;
 void write_state(driver_state_type *state) {
+    pthread_mutex_lock(&write_state_mutex);
     char file_path[1024];
     FILE* fp = get_state_file(state_filename, "w", &file_path[0]);
 
@@ -50,6 +53,7 @@ void write_state(driver_state_type *state) {
     }
 
     fclose(fp);
+    pthread_mutex_unlock(&write_state_mutex);
 }
 
 void read_control_flags(FILE *fp, control_flags_type *flags) {

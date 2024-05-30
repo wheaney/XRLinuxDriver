@@ -9,6 +9,8 @@ void init_outputs();
 
 void deinit_outputs();
 
+void reinit_outputs();
+
 // return the rate-of-change of the euler value against the previous euler value, in degrees/sec
 imu_euler_type get_euler_velocities(imu_euler_type euler);
 

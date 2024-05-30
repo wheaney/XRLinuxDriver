@@ -137,7 +137,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
             json_object_object_get_ex(license_root, "hardwareId", &hardwareId);
             if (strcmp(json_object_get_string(hardwareId), get_hardware_id()) == 0) {
                 valid_license = true;
-                context.state->device_license = strdup(json_object_get_string(license));
+                state()->device_license = strdup(json_object_get_string(license));
 
                 json_object *features_root;
                 json_object_object_get_ex(license_root, "features", &features_root);
@@ -177,7 +177,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
                     printf("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                 }
             } else {
-                if (context.config && context.config->debug_license) {
+                if (config() && config()->debug_license) {
                     printf("\tdebug: License hardwareId mismatch;\n\t\treceived: %s\n\t\texpected: %s\n",
                         json_object_get_string(hardwareId), get_hardware_id());
                 }
@@ -198,7 +198,7 @@ pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
     int features_count = 0;
     char** features = NULL;
-    free_and_clear(&context.state->device_license);
+    free_and_clear(&state()->device_license);
 
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
         if (get_hardware_id()) {
@@ -211,12 +211,13 @@ void refresh_license(bool force) {
 
             int attempt = 0;
             bool valid_license = false;
+            bool debug_license = config() && config()->debug_license;
             while (!valid_license && attempt < 2) {
-                if (context.config && context.config->debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
+                if (debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
                 char* file_path = strdup(DEVICE_LICENSE_FILE_PATH);
                 FILE *file = force ? NULL : fopen(file_path, "r");
                 if (file) {
-                    if (context.config && context.config->debug_license) printf("\tdebug: License file already exists\n");
+                    if (debug_license) printf("\tdebug: License file already exists\n");
                     // remove the file if it hasn't been touched in over a day
                     struct stat attr;
                     stat(DEVICE_LICENSE_FILE_PATH, &attr);
@@ -226,7 +227,7 @@ void refresh_license(bool force) {
                         // do this to force a refresh
                         fclose(file);
                         file = NULL;
-                        if (context.config && context.config->debug_license) printf("\tdebug: License file is 1 day old, attempting to refresh it\n");
+                        if (debug_license) printf("\tdebug: License file is 1 day old, attempting to refresh it\n");
                     }
                 }
 
@@ -248,8 +249,8 @@ void refresh_license(bool force) {
                         }
 
                         curl_easy_setopt(curl, CURLOPT_URL, "https://eu.driver-backend.xronlinux.com/licenses/v1");
-                        char* postbody_string = postbody(get_hardware_id(), context.state->registered_features, context.state->registered_features_count);
-                        if (context.config && context.config->debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
+                        char* postbody_string = postbody(get_hardware_id(), state()->registered_features, state()->registered_features_count);
+                        if (debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
                         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
 
                         headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -313,14 +314,14 @@ void refresh_license(bool force) {
         }
     #endif
 
-    if (context.state->granted_features && context.state->granted_features_count > 0) {
-        for (int i = 0; i < context.state->granted_features_count; i++) {
-            free(context.state->granted_features[i]);
+    if (state()->granted_features && state()->granted_features_count > 0) {
+        for (int i = 0; i < state()->granted_features_count; i++) {
+            free(state()->granted_features[i]);
         }
-        free(context.state->granted_features);
+        free(state()->granted_features);
     }
-    context.state->granted_features = features;
-    context.state->granted_features_count = features_count;
+    state()->granted_features = features;
+    state()->granted_features_count = features_count;
 }
 
 void device_license_start_func() {

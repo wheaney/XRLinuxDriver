@@ -1,6 +1,6 @@
 #include "config.h"
 #include "curl.h"
-#include "device.h"
+#include "devices.h"
 #include "plugins.h"
 #include "runtime_context.h"
 #include "system.h"
@@ -103,7 +103,7 @@ void metrics_set_config_func(void* config) {
         }
     }
 
-    if (context.device) {
+    if (device() != NULL) {
         bool output_mode_changed = current_output_mode != new_output_mode;
         if (output_mode_changed && new_output_mode != OUTPUT_MODE_DISABLED) {
             log_metric(metrics_output_mode_to_event_name[new_output_mode]);
@@ -126,21 +126,25 @@ void metrics_set_config_func(void* config) {
 
 
 void metrics_handle_state_func() {
-    if (!state_sbs_enabled && context.state->sbs_mode_enabled) {
+    if (!state_sbs_enabled && state()->sbs_mode_enabled) {
         log_metric("sbs_enabled");
-        state_sbs_enabled = context.state->sbs_mode_enabled;
+        state_sbs_enabled = state()->sbs_mode_enabled;
     }
 };
 
 void metrics_handle_device_connect_func() {
-    char new_device[1024];
-    snprintf(new_device, 1024, "device_%x_%x", context.device->hid_vendor_id, context.device->hid_product_id);
+    device_properties_type* device = device_checkout();
+    if (device) {
+        char new_device[1024];
+        snprintf(new_device, 1024, "device_%x_%x", device->hid_vendor_id, device->hid_product_id);
 
-    if (!current_device || strcmp(new_device, current_device) != 0) {
-        log_metric(new_device);
-        free_and_clear(&current_device);
-        current_device = strdup(new_device);
+        if (!current_device || strcmp(new_device, current_device) != 0) {
+            log_metric(new_device);
+            free_and_clear(&current_device);
+            current_device = strdup(new_device);
+        }
     }
+    device_checkin(device);
 };
 
 const plugin_type metrics_plugin = {

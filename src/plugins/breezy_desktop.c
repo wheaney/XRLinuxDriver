@@ -1,5 +1,5 @@
 #include "buffer.h"
-#include "device.h"
+#include "devices.h"
 #include "features/breezy_desktop.h"
 #include "features/sbs.h"
 #include "plugins.h"
@@ -108,31 +108,32 @@ void do_write_config_data(int fd) {
     lseek(fd, 0, SEEK_SET);
     uint8_t enabled = BOOL_FALSE;
     write(fd, &DATA_LAYOUT_VERSION, sizeof(uint8_t));
-    if (context.device) {
-        enabled = !context.config->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
+    device_properties_type* device = device_checkout();
+    if (device) {
+        enabled = !config()->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
         const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
-                                                context.device->look_ahead_constant :
+                                                device->look_ahead_constant :
                                                 bd_config->look_ahead_override;
         const float look_ahead_frametime_multiplier =   bd_config->look_ahead_override == 0 ?
-                                                            context.device->look_ahead_frametime_multiplier : 0.0;
+                                                            device->look_ahead_frametime_multiplier : 0.0;
         float look_ahead_cfg[4] = {
             look_ahead_constant,
             look_ahead_frametime_multiplier,
-            context.device->look_ahead_scanline_adjust, 
-            context.device->look_ahead_ms_cap
+            device->look_ahead_scanline_adjust, 
+            device->look_ahead_ms_cap
         };
         float display_res[2] = {
-            context.device->resolution_w,
-            context.device->resolution_h
+            device->resolution_w,
+            device->resolution_h
         };
-        uint8_t sbs_enabled = context.state->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t sbs_enabled = state()->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
         uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled && *custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
 
         write(fd, &enabled, sizeof(uint8_t));
         write(fd, look_ahead_cfg, sizeof(float) * 4);
         write(fd, display_res, sizeof(uint32_t) * 2);
-        write(fd, &context.device->fov, sizeof(float));
-        write(fd, &context.device->lens_distance_ratio, sizeof(float));
+        write(fd, &device->fov, sizeof(float));
+        write(fd, &device->lens_distance_ratio, sizeof(float));
         write(fd, &sbs_enabled, sizeof(uint8_t));
         write(fd, &custom_banner_enabled, sizeof(uint8_t));
     } else {
@@ -145,6 +146,7 @@ void do_write_config_data(int fd) {
         write(fd, zero_data, remainingBytes);
         free(zero_data);
     }
+    device_checkin(device);
     last_config_write_ts = getEpochTimestampMS();
 }
 
@@ -229,13 +231,14 @@ void breezy_desktop_reset_imu_data_func() {
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
-        if (imu_calibrated) {
+        device_properties_type* device = device_checkout();
+        if (imu_calibrated && device) {
             if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
                 bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                    bd_quat_stage_1_buffer[i] = create_buffer(context.device->imu_buffer_size);
-                    bd_quat_stage_2_buffer[i] = create_buffer(context.device->imu_buffer_size);
+                    bd_quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
+                    bd_quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
                     if (bd_quat_stage_1_buffer[i] == NULL || bd_quat_stage_2_buffer[i] == NULL) {
                         fprintf(stderr, "Error allocating memory\n");
                         exit(1);
@@ -288,6 +291,7 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
         } else {
             breezy_desktop_reset_imu_data_func();
         }
+        device_checkin(device);
     }
 }
 

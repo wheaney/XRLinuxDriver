@@ -31,10 +31,10 @@ driver_config_type *default_config() {
     return config;
 }
 
-void update_config(driver_config_type **config, driver_config_type *new_config) {
-    free((*config)->output_mode);
-    free(*config);
-    *config = new_config;
+void update_config(driver_config_type *config, driver_config_type *new_config) {
+    free(config->output_mode);
+    *config = *new_config;
+    free(new_config);
 }
 
 bool equal(char *key, const char *desired_key) {

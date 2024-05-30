@@ -13,14 +13,15 @@ const int target_device_product_id = CUSTOM_BANNER_TARGET_DEVICE_PRODUCT_ID;
 
 custom_banner_ipc_values_type *custom_banner_ipc_values;
 void evaluate_banner_conditions() {
-    if (custom_banner_ipc_values && context.device) {
+    device_properties_type* device = device_checkout();
+    if (custom_banner_ipc_values && device) {
         bool any_conditions_set = false;
         bool banner_device_conditions_met = true;
         if (target_device_vendor_id != 0) {
             any_conditions_set = true;
-            banner_device_conditions_met = context.device->hid_vendor_id == target_device_vendor_id;
+            banner_device_conditions_met = device->hid_vendor_id == target_device_vendor_id;
             if (target_device_product_id != 0) {
-                banner_device_conditions_met &= context.device->hid_product_id == target_device_product_id;
+                banner_device_conditions_met &= device->hid_product_id == target_device_product_id;
             }
         }
 
@@ -37,12 +38,13 @@ void evaluate_banner_conditions() {
 
         *custom_banner_ipc_values->enabled = any_conditions_set && banner_device_conditions_met && banner_time_conditions_met;
     }
+    device_checkin(device);
 }
 
 const char *custom_banner_enabled_name = "custom_banner_enabled";
 
 bool custom_banner_setup_ipc_func() {
-    bool debug = context.config->debug_ipc;
+    bool debug = config()->debug_ipc;
     if (!custom_banner_ipc_values) custom_banner_ipc_values = calloc(1, sizeof(custom_banner_ipc_values_type));
     setup_ipc_value(custom_banner_enabled_name, (void**) &custom_banner_ipc_values->enabled, sizeof(bool), debug);
 

@@ -1,5 +1,5 @@
 #include "config.h"
-#include "device.h"
+#include "devices.h"
 #include "ipc.h"
 #include "plugins.h"
 #include "plugins/sideview.h"
@@ -52,8 +52,8 @@ void set_sideview_ipc_values_from_config() {
     if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
-    if (context.device) {
-        *sideview_ipc_values->enabled = sv_config->enabled && !context.config->disabled;
+    if (device() != NULL) {
+        *sideview_ipc_values->enabled = sv_config->enabled && !config()->disabled;
         *sideview_ipc_values->position = sv_config->position;
         *sideview_ipc_values->display_size = sv_config->display_size;
     } else {
@@ -62,7 +62,7 @@ void set_sideview_ipc_values_from_config() {
 }
 
 void sideview_set_config_func(void* config) {
-    if (!context.config || !config) return;
+    if (!config) return;
     sideview_config* temp_config = (sideview_config*) config;
 
     if (sv_config) {
@@ -87,7 +87,7 @@ const char *sideview_position_name = "sideview_position";
 const char *sideview_display_size_name = "sideview_display_size";
 
 bool sideview_setup_ipc_func() {
-    bool debug = context.config->debug_ipc;
+    bool debug = config()->debug_ipc;
     if (!sideview_ipc_values) sideview_ipc_values = calloc(1, sizeof(sideview_ipc_values_type));
     setup_ipc_value(sideview_enabled_name, (void**) &sideview_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(int), debug);
