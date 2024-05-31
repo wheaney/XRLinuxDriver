@@ -22,6 +22,10 @@ rm -f /etc/systemd/system/xreal-air-driver.service
 
 USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
+if [ -z "$XDG_DATA_HOME" ]; then
+  XDG_DATA_HOME="$USER_HOME/.local/share"
+fi
+DATA_DIR="$XDG_DATA_HOME/xr_driver"
 if [ "$for_install" -eq 0 ]; then
     echo "Removing installed files from $USER_HOME"
 
@@ -37,6 +41,7 @@ rm -f $USER_HOME/.xreal_driver_lock
 rm -f $USER_HOME/bin/xreal_driver_config
 rm -f $USER_HOME/bin/xrealAirLinuxDriver
 rm -rf $USER_HOME/.local/bin/xr_driver
+rm -rf $DATA_DIR
 
 # this script is self-deleting, leave this as the last command
 rm -f $USER_HOME/bin/xreal_driver_uninstall

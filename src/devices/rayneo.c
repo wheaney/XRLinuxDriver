@@ -25,6 +25,8 @@ const int rayneo_supported_id_product[RAYNEO_ID_PRODUCT_COUNT] = {
     0xaf50
 };
 
+// RayNeo SDK is returning rotations relative to an east-up-south coordinate system,
+// this converts to to north-west-up, and applies a 15-degree offset based on factory device calibration
 static const imu_quat_type adjustment_quat = {
     .w = 0.561,
     .x = -0.430,
@@ -126,8 +128,7 @@ void rayneo_block_on_device() {
 };
 
 bool rayneo_device_is_sbs_mode() {
-    // const struct XRDeviceInfo info = FetchDeviceInfo();
-    // return info.sideBySide;
+    // TODO - need to figure out how to retrieve this state
 
     return false;
 };
