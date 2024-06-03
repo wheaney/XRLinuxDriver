@@ -119,16 +119,6 @@ static bool connected = false;
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     if (!connected || driver_disabled()) return;
 
-    float euler_roll = float_from_imu_data(data);
-    float euler_pitch = float_from_imu_data(data + 4);
-    float euler_yaw = float_from_imu_data(data + 8);
-
-    imu_euler_type euler = {
-        .roll = euler_roll,
-        .pitch = euler_pitch,
-        .yaw = euler_yaw
-    };
-
     imu_quat_type quat;
     if (len >= 36 && !old_firmware_version) {
         quat.w = float_from_imu_data(data + 20);
@@ -136,12 +126,21 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
         quat.y = float_from_imu_data(data + 28);
         quat.z = float_from_imu_data(data + 32);
     } else {
+        float euler_roll = float_from_imu_data(data);
+        float euler_pitch = float_from_imu_data(data + 4);
+        float euler_yaw = float_from_imu_data(data + 8);
+
+        imu_euler_type euler = {
+            .roll = euler_roll,
+            .pitch = euler_pitch,
+            .yaw = euler_yaw
+        };
         quat = zxy_euler_to_quaternion(euler);
     }
 
     quat = multiply_quaternions(quat, adjustment_quat);
 
-    driver_handle_imu_event(timestamp, quat, euler);
+    driver_handle_imu_event(timestamp, quat);
 }
 
 bool sbs_mode_enabled = false;
@@ -191,6 +190,7 @@ bool viture_device_connect() {
 
         // not a great way to check the firmware version but it's all we have
         old_firmware_version = equal(VITURE_PRO_MODEL_NAME, device->model) ? false : (device->imu_cycles_per_s == 60);
+        if (old_firmware_version) printf("VITURE: Detected old firmware version\n");
 
         device->sbs_mode_supported = !old_firmware_version;
         device->firmware_update_recommended = old_firmware_version;

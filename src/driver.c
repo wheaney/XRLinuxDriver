@@ -69,19 +69,10 @@ void reset_calibration(bool reset_device) {
     } else if (ipc_enabled) printf("Waiting on device calibration\n");
 }
 
-void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler) {
+void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
+    static int multi_tap = 0;
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
-        imu_euler_type euler_velocities = get_euler_velocities(euler);
-
-        int multi_tap = detect_multi_tap(euler_velocities,
-                                         timestamp_ms,
-                                         config()->debug_multi_tap);
-        if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
-            if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
-            printf("Kicking off calibration\n");
-            reset_calibration(true);
-        }
         if (glasses_calibrated) {
             if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
                 if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
@@ -112,6 +103,18 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
                     printf("Device calibration complete\n");
                 }
             }
+        }
+
+        imu_euler_type euler = quaternion_to_euler(quat);
+        imu_euler_type euler_velocities = get_euler_velocities(euler);
+
+        multi_tap = detect_multi_tap(euler_velocities,
+                                         timestamp_ms,
+                                         config()->debug_multi_tap);
+        if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
+            if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
+            printf("Kicking off calibration\n");
+            reset_calibration(true);
         }
 
         handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);

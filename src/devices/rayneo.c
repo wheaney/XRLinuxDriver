@@ -70,8 +70,7 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
 
         imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
-        imu_euler_type nwu_euler = quaternion_to_euler(nwu_quat);
-        driver_handle_imu_event(ts, nwu_quat, nwu_euler);
+        driver_handle_imu_event(ts, nwu_quat);
 
         last_utilized_event_ts = ts;
     }

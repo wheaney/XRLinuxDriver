@@ -84,8 +84,7 @@ void handle_xreal_event(uint64_t timestamp,
         device3_quat_type quat = device3_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, nwu_conversion_quat);
-        imu_euler_type nwu_euler = quaternion_to_euler(nwu_quat);
-        driver_handle_imu_event(ts, nwu_quat, nwu_euler);
+        driver_handle_imu_event(ts, nwu_quat);
 
         last_utilized_event_ts = ts;
     }
