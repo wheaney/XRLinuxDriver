@@ -85,15 +85,17 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             } else {
                 screen_center = plugins.modify_screen_center(timestamp_ms, quat, screen_center);
                 screen_center_conjugate = conjugate(screen_center);
-
-                // adjust the current rotation by the conjugate of the screen placement quat
-                quat = multiply_quaternions(screen_center_conjugate, quat);
             }
         } else {
             struct timeval tv;
             gettimeofday(&tv, NULL);
 
             if (glasses_calibration_started_sec == 0) {
+                // defaults used for mouse/joystick while waiting on calibration
+                imu_quat_type tmp_screen_center = { .w = 1.0, .x = 0.0, .y = 0.0, .z = 0.0 };
+                screen_center = tmp_screen_center;
+                screen_center_conjugate = conjugate(screen_center);
+
                 glasses_calibration_started_sec=tv.tv_sec;
                 if (ipc_enabled) plugins.reset_imu_data();
             } else {
@@ -104,13 +106,14 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 }
             }
         }
+        // adjust the current rotation by the conjugate of the screen placement quat
+        quat = multiply_quaternions(screen_center_conjugate, quat);
 
         imu_euler_type euler = quaternion_to_euler(quat);
         imu_euler_type euler_velocities = get_euler_velocities(euler);
-
         multi_tap = detect_multi_tap(euler_velocities,
-                                         timestamp_ms,
-                                         config()->debug_multi_tap);
+                                     timestamp_ms,
+                                     config()->debug_multi_tap);
         if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
             if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
             printf("Kicking off calibration\n");

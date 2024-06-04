@@ -42,24 +42,23 @@ imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2) {
     return normalize_quaternion(q);
 }
 
-// produces euler angles for NWU coordinate system
 imu_euler_type quaternion_to_euler(imu_quat_type q) {
     imu_euler_type euler;
 
     // roll (x-axis rotation)
-    double sinr_cosp = -2 * (q.w * q.x + q.y * q.z);
+    double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
     double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
     euler.roll = atan2(sinr_cosp, cosr_cosp) * (180.0 / M_PI);
 
     // pitch (y-axis rotation)
-    double sinp = -2 * (q.w * q.y - q.z * q.x);
+    double sinp = 2 * (q.w * q.y - q.z * q.x);
     if (fabs(sinp) >= 1)
         euler.pitch = copysign(M_PI / 2, sinp) * (180.0 / M_PI); // use 90 degrees if out of range
     else
         euler.pitch = asin(sinp) * (180.0 / M_PI);
 
     // yaw (z-axis rotation)
-    double siny_cosp = -2 * (q.w * q.z + q.x * q.y);
+    double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
     double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
     euler.yaw = atan2(siny_cosp, cosy_cosp) * (180.0 / M_PI);
 
