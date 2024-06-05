@@ -36,7 +36,7 @@ void set_device_and_checkout(device_properties_type *device);
 device_properties_type* device_checkout();
 
 // decrements the reference count for the current device properties, releasing the device if the count reaches 0
-void device_checkin();
+void device_checkin(device_properties_type* device);
 
 // returns the current device properties without incrementing the reference count,
 // should only be used if you're grabbing a single property

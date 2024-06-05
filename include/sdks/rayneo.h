@@ -38,4 +38,10 @@ void Recenter();
 void GetHeadTrackerPose(float rotation[4], float position[3], uint64_t* timeNsInDevice);
 
 uint64_t ConvertHostTime2DeviceTime(uint64_t timeNsInHost);
+
+void GetDeviceType(char* device);
+
+void AcquireDeviceInfo();
+
+int8_t GetSideBySideStatus();
 #endif

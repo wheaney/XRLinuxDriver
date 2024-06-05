@@ -362,27 +362,12 @@ void *monitor_config_file_thread_func(void *arg) {
 
 // pthread function to update the state and read control flags
 void *manage_state_thread_func(void *arg) {
-    struct timeval tv;
     while (!force_quit) {
-        bool was_sbs_mode_enabled = state()->sbs_mode_enabled;
-        gettimeofday(&tv, NULL);
-        state()->heartbeat = tv.tv_sec;
         device_properties_type* device = device_checkout();
-        if (is_driver_connected() && device != NULL) {
-            state()->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
-            state()->firmware_update_recommended = device->firmware_update_recommended;
-        }
+        update_state_from_device(state(), device, device_driver);
         device_checkin(device);
         write_state(state());
         plugins.handle_state();
-
-        if (was_sbs_mode_enabled != state()->sbs_mode_enabled) {
-            if (state()->sbs_mode_enabled) {
-                printf("SBS mode has been enabled\n");
-            } else {
-                printf("SBS mode has been disabled\n");
-            }
-        }
 
         sleep(1);
     }
@@ -473,9 +458,6 @@ void handle_device_update(connected_device_type* usb_device) {
         // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
         device_checkin(connected_device);
         connected_device = NULL;
-
-        free_and_clear(&state()->connected_device_brand);
-        free_and_clear(&state()->connected_device_model);
     }
 
     if (usb_device != NULL) {
@@ -484,16 +466,11 @@ void handle_device_update(connected_device_type* usb_device) {
         connected_device = usb_device->device;
         set_device_and_checkout(connected_device);
         init_multi_tap(connected_device->imu_cycles_per_s);
-        state()->connected_device_brand = strdup(connected_device->brand);
-        state()->connected_device_model = strdup(connected_device->model);
-        state()->calibration_setup = connected_device->calibration_setup;
-        state()->calibration_state = NOT_CALIBRATED;
-        state()->sbs_mode_supported = connected_device->sbs_mode_supported;
-        state()->sbs_mode_enabled = false;
-        state()->firmware_update_recommended = false;
 
         free(usb_device);
     }
+
+    update_state_from_device(state(), connected_device, device_driver);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {

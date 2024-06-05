@@ -127,6 +127,6 @@ target_link_libraries(xrealAirLinuxDriver
 		        ${OPENSSL_LIBRARIES}
 		        ${VITURE_LIB_NAME}
 		        ${LIBUSB_LIBRARIES}
-				${RAYNEO_LIB_NAME}
+		        ${RAYNEO_LIB_NAME}
 )
 add_dependencies(xrealAirLinuxDriver run_python_script)
