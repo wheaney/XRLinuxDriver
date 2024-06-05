@@ -23,7 +23,7 @@ const smooth_follow_params loose_follow_params = {
     .lower_angle_threshold = 20.0,
     .upper_angle_threshold = 40.0,
     .delay_ms = 2000,
-    .return_to_angle = 1.0,
+    .return_to_angle = 5.0,
 
     // moves 99% of the way to the center in 1.5 seconds
     .interpolation_ratio_ms = 1-pow(1 - 0.99, 1.0/1500.0)

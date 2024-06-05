@@ -4,6 +4,7 @@
 #include "plugins.h"
 #include "plugins/sideview.h"
 #include "runtime_context.h"
+#include "strings.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
