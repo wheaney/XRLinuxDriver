@@ -6,6 +6,7 @@
 #include "sdks/rayneo.h"
 
 #include <math.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -93,10 +94,15 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
     }
 }
 
+pthread_mutex_t device_name_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t device_name_cond = PTHREAD_COND_INITIALIZER;
+static char* device_brand = NULL;
+static char* device_model = NULL;
 static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t length, const void* data) {
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
-    if (!connected || driver_disabled()) return;
+    if (!connected) return;
     if (state == STATE_EVENT_DEVICE_INFO) {
+        pthread_mutex_lock(&device_name_mutex);
         if (retrieve_device_name) {
             char device_type[64];
             GetDeviceType(device_type);
@@ -111,31 +117,21 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
                     strcat(device_name, model);
 
                     if (strcmp(device_type, device_name) == 0) {
-                        device->brand = strdup(brand);
-                        device->model = strdup(model);
+                        device_brand = strdup(brand);
+                        device_model = strdup(model);
                         break;
                     }
                 }
             }
             device_checkin(device);
+            retrieve_device_name = false;
+            pthread_cond_signal(&device_name_cond);
         }
+        pthread_mutex_unlock(&device_name_mutex);
 
         is_sbs_mode = GetSideBySideStatus() == 1;
-        
-        retrieve_device_name = false;
     }
 }
-
-device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id) {
-    if (vendor_id == RAYNEO_ID_VENDOR && product_id == RAYNEO_ID_PRODUCT) {
-        device_properties_type* device = calloc(1, sizeof(device_properties_type));
-        *device = rayneo_properties;
-
-        return device;
-    }
-
-    return NULL;
-};
 
 bool rayneo_device_connect() {
     if (!connected) {
@@ -157,16 +153,51 @@ bool rayneo_device_connect() {
     return connected;
 };
 
+void rayneo_device_disconnect() {
+    if (connected) {
+        CloseIMU();
+        StopXR();
+        NotifyDeviceDisconnected();
+        ResetUsbConnection();
+        UnregisterIMUEventCallback(rayneo_imu_callback);
+        UnregisterStateEventCallback(rayneo_mcu_callback);
+        connected = false;
+    }
+};
+
+device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id) {
+    if (vendor_id == RAYNEO_ID_VENDOR && product_id == RAYNEO_ID_PRODUCT) {
+        device_properties_type* device = calloc(1, sizeof(device_properties_type));
+        *device = rayneo_properties;
+
+        // device_connect is actually out-of-turn here, the driver would normally call connect after we return the device 
+        // properties, but we kick this off now so we can acquire the device name, which unfortunately comes from the SDK 
+        // only after establishing a connection.
+        if (rayneo_device_connect()) {
+            pthread_mutex_lock(&device_name_mutex);
+            while (retrieve_device_name) {
+                pthread_cond_wait(&device_name_cond, &device_name_mutex);
+            }
+            pthread_mutex_unlock(&device_name_mutex);
+            device->brand = device_brand;
+            device->model = device_model;
+
+            // Leave the connection open if we think it'll be used, but if the driver is disabled, disconnect now
+            if (driver_disabled()) rayneo_device_disconnect();
+
+            return device;
+        }
+    }
+
+    return NULL;
+};
+
 void rayneo_block_on_device() {
     while (connected) {
         sleep(1);
     }
-    CloseIMU();
-    StopXR();
-    NotifyDeviceDisconnected();
-    ResetUsbConnection();
-    UnregisterIMUEventCallback(rayneo_imu_callback);
-    UnregisterStateEventCallback(rayneo_mcu_callback);
+
+    rayneo_device_disconnect();
 };
 
 bool rayneo_device_is_sbs_mode() {

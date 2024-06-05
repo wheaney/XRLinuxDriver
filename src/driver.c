@@ -228,7 +228,7 @@ void *block_on_device_thread_func(void *arg) {
     }
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting block_on_device thread; driver_disabled %d\n", driver_disabled());
+        printf("\tdebug: Exiting block_on_device thread; force_quit %d\n", force_quit);
 }
 
 void update_config_from_file(FILE *fp) {
@@ -464,6 +464,7 @@ void handle_device_update(connected_device_type* usb_device) {
         if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
         *device_driver = *usb_device->driver;
         connected_device = usb_device->device;
+        state()->calibration_state = NOT_CALIBRATED;
         set_device_and_checkout(connected_device);
         init_multi_tap(connected_device->imu_cycles_per_s);
 

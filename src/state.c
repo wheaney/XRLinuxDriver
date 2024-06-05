@@ -96,17 +96,19 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
     gettimeofday(&tv, NULL);
     state->heartbeat = tv.tv_sec;
     state->calibration_setup = CALIBRATION_SETUP_AUTOMATIC;
-    state->calibration_state = NOT_CALIBRATED;
     state->sbs_mode_supported = false;
     state->sbs_mode_enabled = false;
     state->breezy_desktop_smooth_follow_enabled = false;
     state->firmware_update_recommended = false;
-    if (device == NULL || device_driver == NULL || !device_driver->is_connected_func()) {
+    if (device == NULL) {
         // not connected
         free_and_clear(&state->connected_device_brand);
         free_and_clear(&state->connected_device_model);
     } else {
-        state->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
+        state->sbs_mode_enabled = false;
+        if (device->sbs_mode_supported && device_driver != NULL && device_driver->is_connected_func()) {
+            state->sbs_mode_enabled = device_driver->device_is_sbs_mode_func();
+        }
         state->firmware_update_recommended = device->firmware_update_recommended;
         if (state->connected_device_brand == NULL || !equal(state->connected_device_brand, device->brand)) {
             free_and_clear(&state->connected_device_brand);
