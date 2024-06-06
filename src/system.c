@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 #define NET_INTERFACE_COUNT 2
-char *network_interfaces[NET_INTERFACE_COUNT] = {"eth0", "wlan0"};
+const char *network_interfaces[NET_INTERFACE_COUNT] = {"eth0", "wlan0"};
 
 bool get_mac_address_hash(char **mac_address_hash, const char *interface) {
     int fd;
