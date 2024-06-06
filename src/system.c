@@ -29,7 +29,7 @@ bool get_mac_address_hash(char **mac_address_hash, const char *interface) {
     bool found = false;
     if (ioctl(fd, SIOCGIFHWADDR, &ifr) >= 0) {
         unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
-        
+
         bool isZeroMac = true;
         for (int i = 0; i < 6; ++i) {
             if (mac[i] != 0) {
