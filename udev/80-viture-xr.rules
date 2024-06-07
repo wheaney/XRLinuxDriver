@@ -1,2 +1,12 @@
 # Viture One
 SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011", MODE="0666"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1013", MODE="0666"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1017", MODE="0666"
+
+# Viture One Lite
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015", MODE="0666"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="101b", MODE="0666"
+
+# Viture Pro
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019", MODE="0666"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="101d", MODE="0666"

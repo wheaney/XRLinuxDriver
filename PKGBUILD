@@ -33,6 +33,9 @@ package() {
     sed -i '/Environment/d' ${_pkgbase}/systemd/xreal-air-driver.service
     install -Dm644 ${_pkgbase}/systemd/xreal-air-driver.service "${pkgdir}"/usr/lib/systemd/user/xreal-air-driver.service
     install -Dm755 ${_pkgbase}/bin/xreal_driver_config "${pkgdir}"/usr/bin/xreal_driver_config
+
+    # udev rules
     install -Dm644 ${_pkgbase}/udev/80-viture-xr.rules "${pkgdir}"/usr/lib/udev/rules.d/80-viture-xr.rules
+    install -Dm644 ${_pkgbase}/udev/80-xreal-xr.rules "${pkgdir}"/usr/lib/udev/rules.d/80-xreal-xr.rules
 }
 

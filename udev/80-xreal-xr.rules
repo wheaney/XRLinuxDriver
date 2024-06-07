@@ -1,0 +1,8 @@
+# XREAL Air
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424", MODE="0666"
+
+# XREAL Air 2
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0428", MODE="0666"
+
+# XREAL Air 2 Pro
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0432", MODE="0666"
