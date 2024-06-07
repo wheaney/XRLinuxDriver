@@ -1,0 +1,2 @@
+# Viture One
+SUBSYSTEM=="usb", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011", MODE="0666"

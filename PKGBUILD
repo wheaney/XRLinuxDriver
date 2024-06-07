@@ -8,7 +8,7 @@ arch=('x86_64')
 url="https://github.com/wheaney/XRLinuxDriver"
 license=('GPL-3.0')
 makedepends=('cmake' 'make')
-depends=('openssl' 'libevdev' 'libusb' 'json-c')
+depends=('openssl' 'libevdev' 'libusb' 'json-c' 'curl')
 conflicts=("${_pkgbase}")
 source=("git+${url}")
 md5sums=(SKIP)
@@ -33,5 +33,6 @@ package() {
     sed -i '/Environment/d' ${_pkgbase}/systemd/xreal-air-driver.service
     install -Dm644 ${_pkgbase}/systemd/xreal-air-driver.service "${pkgdir}"/usr/lib/systemd/user/xreal-air-driver.service
     install -Dm755 ${_pkgbase}/bin/xreal_driver_config "${pkgdir}"/usr/bin/xreal_driver_config
+    install -Dm644 ${_pkgbase}/udev/80-viture-xr.rules "${pkgdir}"/usr/lib/udev/rules.d/80-viture-xr.rules
 }
 
