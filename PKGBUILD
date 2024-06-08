@@ -31,7 +31,7 @@ package() {
     install -Dm755 ${_pkgbase}/build/xrealAirLinuxDriver "${pkgdir}"/usr/bin/xrealAirLinuxDriver
     sed -i '/ExecStart/c\ExecStart=xrealAirLinuxDriver' ${_pkgbase}/systemd/xreal-air-driver.service
     sed -i '/Environment/d' ${_pkgbase}/systemd/xreal-air-driver.service
-    sed .i '8ReadWritePaths=/var/lib/xr_driver8' ${_pkgbase}/systemd/xreal-air-driver.service
+    sed -i '8ReadWritePaths=/var/lib/xr_driver8' ${_pkgbase}/systemd/xreal-air-driver.service
     install -Dm644 ${_pkgbase}/systemd/xreal-air-driver.service "${pkgdir}"/usr/lib/systemd/user/xreal-air-driver.service
     install -Dm755 ${_pkgbase}/bin/xreal_driver_config "${pkgdir}"/usr/bin/xreal_driver_config
 
