@@ -1,0 +1,2 @@
+# RayNeo
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="1bbb", ATTRS{idProduct}=="af50", TAG+="uaccess"
