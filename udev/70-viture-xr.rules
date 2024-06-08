@@ -1,17 +1,17 @@
 # Viture One
-SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE=“0660”, TAG+="uaccess"
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1011|1013|1017", MODE="0660", TAG+="uaccess"
 
 # Viture One Lite
-SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE=“0660”, TAG+="uaccess"
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1015|101b", MODE="0660", TAG+="uaccess"
 
 # Viture Pro
-SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE=“0660”, TAG+="uaccess"
-SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE=“0660”, TAG+="uaccess"
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="35ca", ATTRS{idProduct}=="1019|101d", MODE="0660", TAG+="uaccess"
