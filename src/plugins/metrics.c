@@ -103,7 +103,7 @@ void metrics_set_config_func(void* config) {
         }
     }
 
-    if (device() != NULL) {
+    if (device_present()) {
         bool output_mode_changed = current_output_mode != new_output_mode;
         if (output_mode_changed && new_output_mode != OUTPUT_MODE_DISABLED) {
             log_metric(metrics_output_mode_to_event_name[new_output_mode]);
@@ -134,7 +134,7 @@ void metrics_handle_state_func() {
 
 void metrics_handle_device_connect_func() {
     device_properties_type* device = device_checkout();
-    if (device) {
+    if (device != NULL) {
         char new_device[1024];
         snprintf(new_device, 1024, "device_%x_%x", device->hid_vendor_id, device->hid_product_id);
 

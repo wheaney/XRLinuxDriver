@@ -109,7 +109,7 @@ void do_write_config_data(int fd) {
     uint8_t enabled = BOOL_FALSE;
     write(fd, &DATA_LAYOUT_VERSION, sizeof(uint8_t));
     device_properties_type* device = device_checkout();
-    if (device) {
+    if (device != NULL) {
         enabled = !config()->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
         const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
                                                 device->look_ahead_constant :
@@ -232,7 +232,7 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
         device_properties_type* device = device_checkout();
-        if (imu_calibrated && device) {
+        if (imu_calibrated && device != NULL) {
             if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
                 bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));

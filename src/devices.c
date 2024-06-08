@@ -46,7 +46,7 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
     }
 
     device_properties_type* device = device_checkout();
-    if (device) {
+    if (device != NULL) {
         if (descriptor.idVendor == device->hid_vendor_id && 
             descriptor.idProduct == device->hid_product_id &&
             event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {

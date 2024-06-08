@@ -103,7 +103,7 @@ void handle_config_and_state_update() {
     if (virtual_display_follow) {
         *sf_params = loose_follow_params;
         device_properties_type* device = device_checkout();
-        if (device) {
+        if (device != NULL) {
             float device_fov_threshold = device->fov * 0.9;
             sf_params->lower_angle_threshold = device_fov_threshold / 2.0 * sf_config->virtual_display_size;
             sf_params->upper_angle_threshold = device_fov_threshold * sf_config->virtual_display_size;

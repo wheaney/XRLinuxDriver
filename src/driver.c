@@ -106,21 +106,26 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 }
             }
         }
-        // adjust the current rotation by the conjugate of the screen placement quat
-        quat = multiply_quaternions(screen_center_conjugate, quat);
 
-        imu_euler_type euler = quaternion_to_euler(quat);
-        imu_euler_type euler_velocities = get_euler_velocities(euler);
-        multi_tap = detect_multi_tap(euler_velocities,
-                                     timestamp_ms,
-                                     config()->debug_multi_tap);
-        if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
-            if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
-            printf("Kicking off calibration\n");
-            reset_calibration(true);
+        // be resilient to bad values that may come from device drivers
+        if (!isnan(quat.w)) {
+            // adjust the current rotation by the conjugate of the screen placement quat
+            quat = multiply_quaternions(screen_center_conjugate, quat);
+
+
+            imu_euler_type euler = quaternion_to_euler(quat);
+            imu_euler_type euler_velocities = get_euler_velocities(euler, device->imu_cycles_per_s);
+            multi_tap = detect_multi_tap(euler_velocities,
+                                        timestamp_ms,
+                                        config()->debug_multi_tap);
+            if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
+                if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
+                printf("Kicking off calibration\n");
+                reset_calibration(true);
+            }
+
+            handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
         }
-
-        handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
     }
     device_checkin(device);
 }
@@ -187,7 +192,7 @@ static bool block_on_device_ready = false;
 // we should call this whenever a condition changes that may effect the evaluation of block_on_device_ready
 void evaluate_block_on_device_ready() {
     pthread_mutex_lock(&block_on_device_mutex);
-    block_on_device_ready = !force_quit && !driver_disabled() && device() != NULL;
+    block_on_device_ready = !force_quit && !driver_disabled() && device_present();
     if (block_on_device_ready) pthread_cond_signal(&block_on_device_cond);
     pthread_mutex_unlock(&block_on_device_mutex);
 }
@@ -207,21 +212,27 @@ void *block_on_device_thread_func(void *arg) {
         }
         pthread_mutex_unlock(&block_on_device_mutex);
 
-        if (!force_quit && device_driver->device_connect_func()) {
-            setup_ipc();
-            reset_calibration(false);
-            if (ipc_enabled) *ipc_values->disabled = false;
+        if (!force_quit) {
+            if (device_driver->device_connect_func()) {
+                setup_ipc();
+                reset_calibration(false);
+                if (ipc_enabled) *ipc_values->disabled = false;
 
-            plugins.handle_device_connect();
-            if (!driver_disabled()) {
-                printf("Device connected, redirecting input to %s...\n", config()->output_mode);
-                init_outputs();
+                plugins.handle_device_connect();
+                if (!driver_disabled()) {
+                    printf("Device connected, redirecting input to %s...\n", config()->output_mode);
+                    init_outputs();
+                }
+
+                device_driver->block_on_device_func();
+
+                plugins.handle_device_disconnect();
+                deinit_outputs();
+            } else if (block_on_device_ready) {
+                // device is physically connected, but driver wasn't able to connect, pause before trying again
+                printf("Device driver connection attempt failed, retrying in 1 second\n");
+                sleep(1);
             }
-
-            device_driver->block_on_device_func();
-
-            plugins.handle_device_disconnect();
-            deinit_outputs();
         }
 
         if (ipc_enabled) *ipc_values->disabled = true;
@@ -458,6 +469,7 @@ void handle_device_update(connected_device_type* usb_device) {
         // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
         device_checkin(connected_device);
         connected_device = NULL;
+        block_on_device_ready = false;
     }
 
     if (usb_device != NULL) {

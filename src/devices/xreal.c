@@ -124,7 +124,7 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 *device = xreal_air_properties;
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
-                device->model = strdup(xreal_supported_models[i]);
+                device->model = (char *)xreal_supported_models[i];
 
                 return device;
             }
@@ -165,21 +165,21 @@ void *poll_controller_func(void *arg) {
 void xreal_block_on_device() {
     // we'll hold onto our device refcount until we're done blocking and cleaning up
     device_properties_type* device = device_checkout();
-    pthread_t imu_thread;
-    pthread_create(&imu_thread, NULL, poll_imu_func, NULL);
+    if (device != NULL) {
+        pthread_t imu_thread;
+        pthread_create(&imu_thread, NULL, poll_imu_func, NULL);
 
-    pthread_t controller_thread;
-    pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
+        pthread_t controller_thread;
+        pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
 
-    while (connected) {
-        sleep(1);
-        connected &= glasses_imu != NULL && glasses_controller != NULL;
+        while (connected) {
+            sleep(1);
+            connected &= glasses_imu != NULL && glasses_controller != NULL;
+        }
+
+        pthread_join(imu_thread, NULL);
+        pthread_join(controller_thread, NULL);
     }
-
-    pthread_join(imu_thread, NULL);
-    pthread_join(controller_thread, NULL);
-
-    free(device->model);
     device_checkin(device);
 };
 

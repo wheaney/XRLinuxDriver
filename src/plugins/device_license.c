@@ -137,6 +137,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
             json_object_object_get_ex(license_root, "hardwareId", &hardwareId);
             if (strcmp(json_object_get_string(hardwareId), get_hardware_id()) == 0) {
                 valid_license = true;
+                free_and_clear(&state()->device_license);
                 state()->device_license = strdup(json_object_get_string(license));
 
                 json_object *features_root;
@@ -198,7 +199,6 @@ pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
     int features_count = 0;
     char** features = NULL;
-    free_and_clear(&state()->device_license);
 
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
         if (get_hardware_id()) {
@@ -311,6 +311,8 @@ void refresh_license(bool force) {
                 attempt++;
             }
             pthread_mutex_unlock(&refresh_license_lock);
+        } else {
+            fprintf(stderr, "No hardwareId found, not retrieving license\n");
         }
     #endif
 

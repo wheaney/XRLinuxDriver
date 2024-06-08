@@ -4,6 +4,7 @@
 #include "imu.h"
 #include "runtime_context.h"
 #include "sdks/rayneo.h"
+#include "strings.h"
 
 #include <math.h>
 #include <pthread.h>
@@ -73,7 +74,6 @@ const device_properties_type rayneo_properties = {
 
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
-static bool retrieve_device_name = true;
 static bool is_sbs_mode = false;
 void rayneo_imu_callback(const float acc[3], const float gyro[3], const float mag[3], uint64_t timestamp){
     if (!connected || driver_disabled()) return;
@@ -103,12 +103,12 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
     if (!connected) return;
     if (state == STATE_EVENT_DEVICE_INFO) {
         pthread_mutex_lock(&device_name_mutex);
-        if (retrieve_device_name) {
+        if (device_brand == NULL && device_model == NULL) {
             char device_type[64];
             GetDeviceType(device_type);
-            device_properties_type* device = device_checkout();
-            for (int i = 0; i < RAYNEO_BRAND_COUNT; i++) {
-                for (int j = 0; j < model_counts[i]; j++) {
+            bool device_found = false;
+            for (int i = 0; i < RAYNEO_BRAND_COUNT && !device_found; i++) {
+                for (int j = 0; j < model_counts[i] && !device_found; j++) {
                     const char* brand = brands[i];
                     const char* model = models[i][j];
                     char * device_name = malloc(strlen(brand) + strlen(model) + 2);
@@ -117,15 +117,13 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
                     strcat(device_name, model);
 
                     if (strcmp(device_type, device_name) == 0) {
-                        device_brand = strdup(brand);
-                        device_model = strdup(model);
-                        break;
+                        device_brand = (char *)brand;
+                        device_model = (char *)model;
+                        device_found = true;
                     }
                 }
             }
-            device_checkin(device);
-            retrieve_device_name = false;
-            pthread_cond_signal(&device_name_cond);
+            if (device_found) pthread_cond_signal(&device_name_cond);
         }
         pthread_mutex_unlock(&device_name_mutex);
 
@@ -146,7 +144,8 @@ bool rayneo_device_connect() {
             AcquireDeviceInfo();
 
             connected = true;
-            retrieve_device_name = true;
+        } else {
+            printf("RayNeo driver, failed to establish a connection\n");
         }
     }
 
@@ -162,6 +161,8 @@ void rayneo_device_disconnect() {
         UnregisterIMUEventCallback(rayneo_imu_callback);
         UnregisterStateEventCallback(rayneo_mcu_callback);
         connected = false;
+        device_brand = NULL;
+        device_model = NULL;
     }
 };
 
@@ -175,7 +176,7 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
         // only after establishing a connection.
         if (rayneo_device_connect()) {
             pthread_mutex_lock(&device_name_mutex);
-            while (retrieve_device_name) {
+            while (device_brand == NULL && device_model == NULL) {
                 pthread_cond_wait(&device_name_cond, &device_name_mutex);
             }
             pthread_mutex_unlock(&device_name_mutex);
@@ -193,11 +194,13 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
 };
 
 void rayneo_block_on_device() {
-    while (connected) {
+    device_properties_type* device = device_checkout();
+    while (connected && device != NULL) {
         sleep(1);
     }
 
     rayneo_device_disconnect();
+    device_checkin(device);
 };
 
 bool rayneo_device_is_sbs_mode() {
@@ -220,7 +223,7 @@ bool rayneo_is_connected() {
 };
 
 void rayneo_disconnect() {
-    connected = false;
+    rayneo_device_disconnect();
 };
 
 const device_driver_type rayneo_driver = {
