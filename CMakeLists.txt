@@ -114,7 +114,7 @@ target_include_directories(xrealAirLinuxDriver
 )
 
 if(DEFINED SYSTEM_INSTALL)
-  set(CURL_LIB ${LIBCURL_LIBRARIES})
+  set(CURL_LIB ${CURL_LIBRARIES})
 else()
   set(CURL_LIB libcurl)
 endif()
