@@ -17,12 +17,12 @@ build() {
     cd ${_pkgbase}
 
     # init submpdules
-    git submodule update --init --recursive
+    git submodule update --init --recursive modules/xrealInterfaceLibrary
 
     # build xr driver
     mkdir build/
     cd build
-    cmake ..
+    BREEZY_DESKTOP=1 cmake -DSYSTEM_INSTALL=1 ..
     make
 }
 

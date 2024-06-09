@@ -35,12 +35,19 @@ pkg_check_modules(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
 
+if(DEFINED SYSTEM_INSTALL)
+  pkg_check_modules(CURL REQUIRED libcurl)
+endif()
+
 set(VITURE_LIB_NAME viture_sdk)
 
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
-add_subdirectory(modules/curl)
+
+if(NOT DEFINED SYSTEM_INSTALL)
+  add_subdirectory(modules/curl)
+endif()
 
 add_library (
 	${VITURE_LIB_NAME}
@@ -106,13 +113,19 @@ target_include_directories(xrealAirLinuxDriver
 		${OPENSSL_INCLUDE_DIRS}
 )
 
+if(DEFINED SYSTEM_INSTALL)
+  set(CURL_LIB ${LIBCURL_LIBRARIES})
+else()
+  set(CURL_LIB libcurl)
+endif()
+
 target_link_libraries(xrealAirLinuxDriver
 		PRIVATE ${LIBEVDEV_LIBRARIES}
 		        ${JSONC_LIBRARIES}
 		        nrealAirLibrary
 		        Threads::Threads
 		        m
-		        libcurl
+            ${CURL_LIB}
 		        ${OPENSSL_LIBRARIES}
 		        ${VITURE_LIB_NAME}
 		        ${LIBUSB_LIBRARIES}
