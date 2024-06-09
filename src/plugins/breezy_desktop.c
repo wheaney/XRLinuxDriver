@@ -122,7 +122,7 @@ void do_write_config_data(int fd) {
             device->look_ahead_scanline_adjust, 
             device->look_ahead_ms_cap
         };
-        float display_res[2] = {
+        int display_res[2] = {
             device->resolution_w,
             device->resolution_h
         };
