@@ -74,6 +74,7 @@ const device_properties_type rayneo_properties = {
 
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
+static bool initialized = false;
 static bool is_sbs_mode = false;
 void rayneo_imu_callback(const float acc[3], const float gyro[3], const float mag[3], uint64_t timestamp){
     if (!connected || driver_disabled()) return;
@@ -133,10 +134,15 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
 
 bool rayneo_device_connect() {
     if (!connected) {
-        RegisterIMUEventCallback(rayneo_imu_callback);
-        RegisterStateEventCallback(rayneo_mcu_callback);
-        if (EstablishUsbConnection(0x1bbb, 0xaf50) == 0) {
-            NotifyDeviceConnected();
+        if (!initialized) {
+            RegisterIMUEventCallback(rayneo_imu_callback);
+            RegisterStateEventCallback(rayneo_mcu_callback);
+            if (EstablishUsbConnection(0x1bbb, 0xaf50) == 0) {
+                NotifyDeviceConnected();
+                initialized = true;
+            }
+        }
+        if (initialized) {
             StartXR();
             OpenIMU();
 
@@ -152,14 +158,17 @@ bool rayneo_device_connect() {
     return connected;
 };
 
-void rayneo_device_disconnect() {
+void rayneo_device_disconnect(bool forced) {
     if (connected) {
         CloseIMU();
         StopXR();
-        NotifyDeviceDisconnected();
-        ResetUsbConnection();
-        UnregisterIMUEventCallback(rayneo_imu_callback);
-        UnregisterStateEventCallback(rayneo_mcu_callback);
+        if (!forced || !device_present()) {
+            NotifyDeviceDisconnected();
+            ResetUsbConnection();
+            UnregisterIMUEventCallback(rayneo_imu_callback);
+            UnregisterStateEventCallback(rayneo_mcu_callback);
+            initialized = false;
+        }
         connected = false;
         device_brand = NULL;
         device_model = NULL;
@@ -184,7 +193,7 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
             device->model = device_model;
 
             // Leave the connection open if we think it'll be used, but if the driver is disabled, disconnect now
-            if (driver_disabled()) rayneo_device_disconnect();
+            if (driver_disabled()) rayneo_device_disconnect(true);
 
             return device;
         }
@@ -199,7 +208,7 @@ void rayneo_block_on_device() {
         sleep(1);
     }
 
-    rayneo_device_disconnect();
+    rayneo_device_disconnect(false);
     device_checkin(device);
 };
 
@@ -222,8 +231,8 @@ bool rayneo_is_connected() {
     return connected;
 };
 
-void rayneo_disconnect() {
-    rayneo_device_disconnect();
+void rayneo_disconnect(bool forced) {
+    rayneo_device_disconnect(forced);
 };
 
 const device_driver_type rayneo_driver = {

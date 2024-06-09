@@ -117,6 +117,7 @@ imu_quat_type zxy_euler_to_quaternion(imu_euler_type euler) {
 
 static bool old_firmware_version = true;
 static bool connected = false;
+static bool initialized = false;
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     if (!connected || driver_disabled()) return;
 
@@ -171,16 +172,23 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
     return NULL;
 };
 
-static void disconnect(device_properties_type* device) {
-    connected = false;
-    set_imu(false);
-    deinit();
+static void disconnect(bool forced) {
+    if (connected) {
+        set_imu(false);
+
+        // VITURE SDK freezes if we attempt deinit() while it's still physically connected, so only do this if the device is no longer present
+        if (!forced || !device_present()) {
+            deinit();
+            initialized = false;
+        }
+        connected = false;
+    }
 }
 
 bool viture_device_connect() {
     if (!connected || get_imu_state() != STATE_ON) {
-        connected = init(handle_viture_event, viture_mcu_callback) &&
-                    set_imu(true) == ERR_SUCCESS;
+        if (!initialized) initialized = init(handle_viture_event, viture_mcu_callback);
+        connected = initialized && set_imu(true) == ERR_SUCCESS;
     }
 
     if (connected) {
@@ -205,7 +213,7 @@ bool viture_device_connect() {
 
             sbs_mode_enabled = get_3d_state() == STATE_ON;
         } else {
-            disconnect(device);
+            disconnect(false);
         }
         device_checkin(device);
     }
@@ -222,7 +230,7 @@ void viture_block_on_device() {
             imu_state = get_imu_state();
         }
     }
-    disconnect(device);
+    disconnect(false);
     device_checkin(device);
 };
 
@@ -239,8 +247,8 @@ bool viture_is_connected() {
     return connected;
 };
 
-void viture_disconnect() {
-    connected = false;
+void viture_disconnect(bool forced) {
+    disconnect(forced);
 };
 
 const device_driver_type viture_driver = {

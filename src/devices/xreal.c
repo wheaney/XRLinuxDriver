@@ -233,7 +233,7 @@ bool xreal_is_connected() {
     return connected;
 };
 
-void xreal_disconnect() {
+void xreal_disconnect(bool forced) {
     connected = false;
 };
 

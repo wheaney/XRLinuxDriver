@@ -65,7 +65,7 @@ void reset_calibration(bool reset_device) {
     state()->calibration_state = CALIBRATING;
 
     if (reset_device && is_driver_connected()) {
-        device_driver->disconnect_func();
+        device_driver->disconnect_func(true);
     } else if (ipc_enabled) printf("Waiting on device calibration\n");
 }
 
@@ -284,7 +284,7 @@ void update_config_from_file(FILE *fp) {
     update_config(config(), new_config);
 
     if (driver_newly_disabled && is_driver_connected())
-        device_driver->disconnect_func();
+        device_driver->disconnect_func(true);
 
     if (output_mode_changed && is_driver_connected()) reinit_outputs();
 
@@ -464,7 +464,7 @@ void handle_device_update(connected_device_type* usb_device) {
     static device_properties_type* connected_device = NULL;
 
     if (connected_device != NULL) {
-        if (is_driver_connected()) device_driver->disconnect_func();
+        if (is_driver_connected()) device_driver->disconnect_func(false);
 
         // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
         device_checkin(connected_device);
