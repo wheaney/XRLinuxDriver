@@ -126,7 +126,7 @@ void do_write_config_data(int fd) {
             device->resolution_w,
             device->resolution_h
         };
-        uint8_t sbs_enabled = state()->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t sbs_enabled = state()->sbs_mode_enabled ? BOOL_TRUE : BOOL_FALSE;
         uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled && *custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
 
         write(fd, &enabled, sizeof(uint8_t));
