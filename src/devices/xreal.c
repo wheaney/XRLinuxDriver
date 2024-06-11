@@ -113,6 +113,21 @@ bool xreal_device_connect() {
         device4_clear(glasses_controller);
     }
 
+
+    if (!connected) {
+        if (glasses_imu) {
+            device3_close(glasses_imu);
+            free(glasses_imu);
+            glasses_imu = NULL;
+        }
+
+        if (glasses_controller) {
+            device4_close(glasses_controller);
+            free(glasses_controller);
+            glasses_controller = NULL;
+        }
+    }
+
     return connected;
 };
 
