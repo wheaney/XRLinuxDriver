@@ -98,7 +98,6 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
     state->calibration_setup = CALIBRATION_SETUP_AUTOMATIC;
     state->sbs_mode_supported = false;
     state->sbs_mode_enabled = false;
-    state->breezy_desktop_smooth_follow_enabled = false;
     state->firmware_update_recommended = false;
     if (device == NULL) {
         // not connected
