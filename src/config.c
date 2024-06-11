@@ -1,10 +1,11 @@
 #include "config.h"
 #include "plugins.h"
-#include "string.h"
+#include "strings.h"
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 const char *joystick_output_mode = "joystick";
 const char *mouse_output_mode = "mouse";
@@ -35,10 +36,6 @@ void update_config(driver_config_type *config, driver_config_type *new_config) {
     free(config->output_mode);
     *config = *new_config;
     free(new_config);
-}
-
-bool equal(char *key, const char *desired_key) {
-    return strcmp(key, desired_key) == 0;
 }
 
 void boolean_config(char* key, char *value, bool *config_value) {

@@ -14,7 +14,7 @@ const int target_device_product_id = CUSTOM_BANNER_TARGET_DEVICE_PRODUCT_ID;
 custom_banner_ipc_values_type *custom_banner_ipc_values;
 void evaluate_banner_conditions() {
     device_properties_type* device = device_checkout();
-    if (custom_banner_ipc_values && device) {
+    if (custom_banner_ipc_values && device != NULL) {
         bool any_conditions_set = false;
         bool banner_device_conditions_met = true;
         if (target_device_vendor_id != 0) {

@@ -142,11 +142,6 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
 // that we've crossed the +/-180 threshold.
 float degree_delta(float prev, float next) {
     float delta = fmod(next - prev, 360);
-    if (isnan(delta)) {
-        printf("nan value");
-        exit(1);
-    }
-
     if (delta > 180) {
         return delta - 360;
     } else if (delta < -180) {
@@ -156,15 +151,13 @@ float degree_delta(float prev, float next) {
     return delta;
 }
 
-imu_euler_type get_euler_velocities(imu_euler_type euler) {
-    device_properties_type* device = device_checkout();
-    static imu_euler_type prev_euler;
+imu_euler_type get_euler_velocities(imu_euler_type euler, int imu_cycles_per_sec) {
+    static imu_euler_type prev_euler = {0.0f, 0.0f, 0.0f};
     imu_euler_type velocities = {
-        .roll=degree_delta(prev_euler.roll, euler.roll) * device->imu_cycles_per_s,
-        .pitch=degree_delta(prev_euler.pitch, euler.pitch) * device->imu_cycles_per_s,
-        .yaw=degree_delta(prev_euler.yaw, euler.yaw) * device->imu_cycles_per_s
+        .roll=degree_delta(prev_euler.roll, euler.roll) * imu_cycles_per_sec,
+        .pitch=degree_delta(prev_euler.pitch, euler.pitch) * imu_cycles_per_sec,
+        .yaw=degree_delta(prev_euler.yaw, euler.yaw) * imu_cycles_per_sec
     };
-    device_checkin(device);
 
     prev_euler = euler;
 
@@ -254,7 +247,7 @@ void reinit_outputs() {
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
     device_properties_type* device = device_checkout();
-    if (device) {
+    if (device != NULL) {
         pthread_mutex_lock(&outputs_mutex);
         if (ipc_enabled) {
             // send keepalive every counter period

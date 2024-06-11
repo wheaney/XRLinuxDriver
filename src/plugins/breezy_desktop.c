@@ -109,7 +109,7 @@ void do_write_config_data(int fd) {
     uint8_t enabled = BOOL_FALSE;
     write(fd, &DATA_LAYOUT_VERSION, sizeof(uint8_t));
     device_properties_type* device = device_checkout();
-    if (device) {
+    if (device != NULL) {
         enabled = !config()->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
         const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
                                                 device->look_ahead_constant :
@@ -122,11 +122,11 @@ void do_write_config_data(int fd) {
             device->look_ahead_scanline_adjust, 
             device->look_ahead_ms_cap
         };
-        float display_res[2] = {
+        int display_res[2] = {
             device->resolution_w,
             device->resolution_h
         };
-        uint8_t sbs_enabled = state()->sbs_mode_enabled && is_sbs_granted() ? BOOL_TRUE : BOOL_FALSE;
+        uint8_t sbs_enabled = state()->sbs_mode_enabled ? BOOL_TRUE : BOOL_FALSE;
         uint8_t custom_banner_enabled = custom_banner_ipc_values && custom_banner_ipc_values->enabled && *custom_banner_ipc_values->enabled ? BOOL_TRUE : BOOL_FALSE;
 
         write(fd, &enabled, sizeof(uint8_t));
@@ -232,7 +232,7 @@ void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type qu
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
         device_properties_type* device = device_checkout();
-        if (imu_calibrated && device) {
+        if (imu_calibrated && device != NULL) {
             if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
                 bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
