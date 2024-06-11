@@ -198,7 +198,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/xr_driver/device_license.tmp";
 
 const char* concat(const char* path, const char* extension) {
     char* s = malloc((strlen(path) + strlen(extension)) * sizeof(char));
-    strcat(s, path);
+    strcpy(s, path);
     strcat(s, extension);
 
     return s;
