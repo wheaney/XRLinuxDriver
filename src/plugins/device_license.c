@@ -17,8 +17,9 @@
 
 #define SECONDS_PER_DAY 86400
 
-const char* DEVICE_LICENSE_FILE_PATH = "/var/lib/xr_driver/device_license";
-const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.tmp";
+const char* DEVICE_LICENSE_DIR = "xr_driver";
+const char* DEVICE_LICENSE_FILE_PATH = "xr_driver/device_license";
+const char* DEVICE_LICENSE_TEMP_FILE_PATH = "xr_driver/device_license.tmp";
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
@@ -205,8 +206,19 @@ void refresh_license(bool force) {
             pthread_mutex_lock(&refresh_license_lock);
             struct stat st = {0};
 
-            if (stat("/var/lib/xr_driver", &st) == -1) {
-                mkdir("/var/lib/xr_driver", 0700);
+            const char* xdg_state_home = getenv("XDG_STATE_HOME");
+
+            char* device_license_dir = strdup(xdg_state_home);
+            strcat(device_license_dir, DEVICE_LICENSE_DIR);
+
+            char* device_license_path = strdup(xdg_state_home);
+            strcat(device_license_path, DEVICE_LICENSE_FILE_PATH);
+
+            char* device_license_path_tmp = strdup(xdg_state_home);
+            strcat(device_license_path_tmp, DEVICE_LICENSE_TEMP_FILE_PATH);
+
+            if (stat(device_license_dir, &st) == -1) {
+                mkdir(device_license_dir, 0700);
             }
 
             int attempt = 0;
@@ -214,13 +226,13 @@ void refresh_license(bool force) {
             bool debug_license = config() && config()->debug_license;
             while (!valid_license && attempt < 2) {
                 if (debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
-                char* file_path = strdup(DEVICE_LICENSE_FILE_PATH);
+                char* file_path = strdup(device_license_path);
                 FILE *file = force ? NULL : fopen(file_path, "r");
                 if (file) {
                     if (debug_license) printf("\tdebug: License file already exists\n");
                     // remove the file if it hasn't been touched in over a day
                     struct stat attr;
-                    stat(DEVICE_LICENSE_FILE_PATH, &attr);
+                    stat(device_license_path, &attr);
                     struct timeval tv;
                     gettimeofday(&tv, NULL);
                     if (tv.tv_sec - attr.st_mtime > SECONDS_PER_DAY) {
@@ -233,7 +245,7 @@ void refresh_license(bool force) {
 
                 if (file == NULL) {
                     free(file_path);
-                    file_path = strdup(DEVICE_LICENSE_TEMP_FILE_PATH);
+                    file_path = strdup(device_license_path_tmp);
 
                     CURL *curl;
                     CURLcode res;
@@ -279,7 +291,7 @@ void refresh_license(bool force) {
                         if(failed) {
                             remove(file_path);
                             free(file_path);
-                            file_path = strdup(DEVICE_LICENSE_FILE_PATH);
+                            file_path = strdup(device_license_path);
                         }
 
                         free(postbody_string);
@@ -300,8 +312,8 @@ void refresh_license(bool force) {
                 fclose(file);
                 if (features_count != -1) {
                     valid_license = true;
-                    if (strcmp(file_path, DEVICE_LICENSE_TEMP_FILE_PATH) == 0) {
-                        rename(file_path, DEVICE_LICENSE_FILE_PATH);
+                    if (strcmp(file_path, device_license_path_tmp) == 0) {
+                        rename(file_path, device_license_path);
                     }
                 } else {
                     features_count = 0;
