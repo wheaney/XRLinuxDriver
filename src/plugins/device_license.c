@@ -197,7 +197,8 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/xr_driver/device_license.tmp";
 #endif
 
 const char* concat(const char* path, const char* extension) {
-    char* s = strdup(path);
+    char* s = malloc((strlen(path) + strlen(extension)) * sizeof(char));
+    strcat(s, path);
     strcat(s, extension);
 
     return s;
@@ -331,6 +332,10 @@ void refresh_license(bool force) {
                 attempt++;
             }
             pthread_mutex_unlock(&refresh_license_lock);
+
+            free(device_license_dir);
+            free(device_license_path);
+            free(device_license_path_tmp);
         }
     #endif
 
