@@ -17,9 +17,9 @@
 
 #define SECONDS_PER_DAY 86400
 
-const char* DEVICE_LICENSE_DIR = "xr_driver";
-const char* DEVICE_LICENSE_FILE_PATH = "xr_driver/device_license";
-const char* DEVICE_LICENSE_TEMP_FILE_PATH = "xr_driver/device_license.tmp";
+const char* DEVICE_LICENSE_DIR = "/xr_driver";
+const char* DEVICE_LICENSE_FILE_PATH = "/xr_driver/device_license";
+const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/xr_driver/device_license.tmp";
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
@@ -206,7 +206,12 @@ void refresh_license(bool force) {
             pthread_mutex_lock(&refresh_license_lock);
             struct stat st = {0};
 
-            const char* xdg_state_home = getenv("XDG_STATE_HOME");
+            char* xdg_state_home = getenv("XDG_STATE_HOME");
+
+            if (xdg_state_home == NULL) {
+                char* home = getenv("HOME");
+                xdg_state_home = strcat(home, "/state");
+            }
 
             char* device_license_dir = strdup(xdg_state_home);
             strcat(device_license_dir, DEVICE_LICENSE_DIR);
