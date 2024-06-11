@@ -90,7 +90,7 @@ char *get_hardware_id() {
             }
 
             if (!found && ++attempts <= RETRY_ATTEMPTS) {
-                printf(stderr, "Failed to get hardwareId, retrying in %d seconds\n", RETRY_DELAY_SEC);
+                fprintf(stderr, "Failed to get hardwareId, retrying in %d seconds\n", RETRY_DELAY_SEC);
                 sleep(RETRY_DELAY_SEC);
             }
         }
