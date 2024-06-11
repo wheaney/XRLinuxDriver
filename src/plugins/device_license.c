@@ -210,7 +210,7 @@ void refresh_license(bool force) {
 
             if (xdg_state_home == NULL) {
                 char* home = getenv("HOME");
-                xdg_state_home = strcat(home, "/state");
+                xdg_state_home = strcat(home, "/.local/state");
             }
 
             char* device_license_dir = strdup(xdg_state_home);
