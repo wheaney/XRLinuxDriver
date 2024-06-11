@@ -17,6 +17,7 @@
 
 #define SECONDS_PER_DAY 86400
 
+const char* BACKUP_DIR = "/.local/state";
 const char* DEVICE_LICENSE_DIR = "/xr_driver";
 const char* DEVICE_LICENSE_FILE_PATH = "/xr_driver/device_license";
 const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/xr_driver/device_license.tmp";
@@ -195,6 +196,13 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/xr_driver/device_license.tmp";
     }
 #endif
 
+const char* concat(const char* path, const char* extension) {
+    char* s = strdup(path);
+    strcat(s, extension);
+
+    return s;
+}
+
 pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
     int features_count = 0;
@@ -210,17 +218,12 @@ void refresh_license(bool force) {
 
             if (xdg_state_home == NULL) {
                 char* home = getenv("HOME");
-                xdg_state_home = strcat(home, "/.local/state");
+                xdg_state_home = strcat(home, BACKUP_DIR);
             }
 
-            char* device_license_dir = strdup(xdg_state_home);
-            strcat(device_license_dir, DEVICE_LICENSE_DIR);
-
-            char* device_license_path = strdup(xdg_state_home);
-            strcat(device_license_path, DEVICE_LICENSE_FILE_PATH);
-
-            char* device_license_path_tmp = strdup(xdg_state_home);
-            strcat(device_license_path_tmp, DEVICE_LICENSE_TEMP_FILE_PATH);
+            const char* device_license_dir = concat(xdg_state_home, DEVICE_LICENSE_DIR);
+            const char* device_license_path = concat(xdg_state_home, DEVICE_LICENSE_FILE_PATH);
+            const char* device_license_path_tmp = concat(xdg_state_home, DEVICE_LICENSE_TEMP_FILE_PATH);
 
             if (stat(device_license_dir, &st) == -1) {
                 mkdir(device_license_dir, 0700);
