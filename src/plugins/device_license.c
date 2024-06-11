@@ -222,14 +222,12 @@ void refresh_license(bool force) {
             }
 
             const char* device_license_dir = concat(xdg_state_home, DEVICE_LICENSE_DIR);
+            const char* device_license_path = concat(xdg_state_home, DEVICE_LICENSE_FILE_PATH);
+            const char* device_license_path_tmp = concat(xdg_state_home, DEVICE_LICENSE_TEMP_FILE_PATH);
 
             if (stat(device_license_dir, &st) == -1) {
                 mkdir(device_license_dir, 0700);
-                free((char*)device_license_dir);
             }
-
-            const char* device_license_path = concat(xdg_state_home, DEVICE_LICENSE_FILE_PATH);
-            const char* device_license_path_tmp = concat(xdg_state_home, DEVICE_LICENSE_TEMP_FILE_PATH);
 
             int attempt = 0;
             bool valid_license = false;
