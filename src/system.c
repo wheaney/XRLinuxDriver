@@ -59,6 +59,9 @@ bool get_mac_address_hash(char **mac_address_hash, const char *interface) {
     return found;
 }
 
+#define RETRY_ATTEMPTS 6
+#define RETRY_DELAY_SEC 5 // with 6 retries: 30 seconds of total attempts
+
 pthread_mutex_t get_hardware_id_lock = PTHREAD_MUTEX_INITIALIZER;
 char *get_hardware_id() {
     static char *mac_address_hash = NULL;
@@ -66,23 +69,30 @@ char *get_hardware_id() {
 
     pthread_mutex_lock(&get_hardware_id_lock);
     if (!mac_address_hash && !no_mac_address) {
+        int attempts = 0;
         bool found = false;
-
-        // check these first so that hardwareIds don't change from the old logic here
-        for (int i = 0; i < NET_INTERFACE_COUNT && !found; i++) {
-            found = get_mac_address_hash(&mac_address_hash, network_interfaces[i]);
-        }
-
-        struct ifaddrs *ifaddr, *ifa;
-        if (!found && getifaddrs(&ifaddr) != -1) {
-            for (ifa = ifaddr; ifa != NULL && !found; ifa = ifa->ifa_next) {
-                if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET ||
-                    in_array(ifa->ifa_name, network_interfaces, NET_INTERFACE_COUNT))
-                    continue;
-
-                found = get_mac_address_hash(&mac_address_hash, ifa->ifa_name);
+        while (!found && attempts <= RETRY_ATTEMPTS) {
+            // check these first so that hardwareIds don't change from the old logic here
+            for (int i = 0; i < NET_INTERFACE_COUNT && !found; i++) {
+                found = get_mac_address_hash(&mac_address_hash, network_interfaces[i]);
             }
-            freeifaddrs(ifaddr);
+
+            struct ifaddrs *ifaddr, *ifa;
+            if (!found && getifaddrs(&ifaddr) != -1) {
+                for (ifa = ifaddr; ifa != NULL && !found; ifa = ifa->ifa_next) {
+                    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET ||
+                        in_array(ifa->ifa_name, network_interfaces, NET_INTERFACE_COUNT))
+                        continue;
+
+                    found = get_mac_address_hash(&mac_address_hash, ifa->ifa_name);
+                }
+                freeifaddrs(ifaddr);
+            }
+
+            if (!found && ++attempts <= RETRY_ATTEMPTS) {
+                printf(stderr, "Failed to get hardwareId, retrying in %d seconds\n", RETRY_DELAY_SEC);
+                sleep(RETRY_DELAY_SEC);
+            }
         }
 
         no_mac_address = !found;
