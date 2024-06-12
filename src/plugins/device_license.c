@@ -11,6 +11,7 @@
 #include <openssl/err.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -265,7 +266,7 @@ void refresh_license(bool force) {
                     if(curl) {
                         file = fopen(file_path, "w");
                         if (file == NULL) {
-                            fprintf(stderr, "Error opening file\n");
+                            fprintf(stderr, "Error opening file (%s): %d\n", file_path, errno);
                             break;
                         }
 
@@ -311,7 +312,7 @@ void refresh_license(bool force) {
                     file = fopen(file_path, "r");
                     if (file == NULL) {
                         free(file_path);
-                        fprintf(stderr, "Error opening file\n");
+                        fprintf(stderr, "Error opening file (%s): %d\n", file_path, errno);
                         break;
                     }
                 }
