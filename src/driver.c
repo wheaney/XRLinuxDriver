@@ -65,23 +65,14 @@ void reset_calibration(bool reset_device) {
     state()->calibration_state = CALIBRATING;
 
     if (reset_device && is_driver_connected()) {
-        device_driver->disconnect_func();
+        device_driver->disconnect_func(true);
     } else if (ipc_enabled) printf("Waiting on device calibration\n");
 }
 
-void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler) {
+void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
+    static int multi_tap = 0;
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
-        imu_euler_type euler_velocities = get_euler_velocities(euler);
-
-        int multi_tap = detect_multi_tap(euler_velocities,
-                                         timestamp_ms,
-                                         config()->debug_multi_tap);
-        if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
-            if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
-            printf("Kicking off calibration\n");
-            reset_calibration(true);
-        }
         if (glasses_calibrated) {
             if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
                 if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
@@ -94,15 +85,17 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
             } else {
                 screen_center = plugins.modify_screen_center(timestamp_ms, quat, screen_center);
                 screen_center_conjugate = conjugate(screen_center);
-
-                // adjust the current rotation by the conjugate of the screen placement quat
-                quat = multiply_quaternions(screen_center_conjugate, quat);
             }
         } else {
             struct timeval tv;
             gettimeofday(&tv, NULL);
 
             if (glasses_calibration_started_sec == 0) {
+                // defaults used for mouse/joystick while waiting on calibration
+                imu_quat_type tmp_screen_center = { .w = 1.0, .x = 0.0, .y = 0.0, .z = 0.0 };
+                screen_center = tmp_screen_center;
+                screen_center_conjugate = conjugate(screen_center);
+
                 glasses_calibration_started_sec=tv.tv_sec;
                 if (ipc_enabled) plugins.reset_imu_data();
             } else {
@@ -114,7 +107,25 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat, imu_eule
             }
         }
 
-        handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
+        // be resilient to bad values that may come from device drivers
+        if (!isnan(quat.w)) {
+            // adjust the current rotation by the conjugate of the screen placement quat
+            quat = multiply_quaternions(screen_center_conjugate, quat);
+
+
+            imu_euler_type euler = quaternion_to_euler(quat);
+            imu_euler_type euler_velocities = get_euler_velocities(euler, device->imu_cycles_per_s);
+            multi_tap = detect_multi_tap(euler_velocities,
+                                        timestamp_ms,
+                                        config()->debug_multi_tap);
+            if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
+                if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
+                printf("Kicking off calibration\n");
+                reset_calibration(true);
+            }
+
+            handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
+        }
     }
     device_checkin(device);
 }
@@ -181,7 +192,7 @@ static bool block_on_device_ready = false;
 // we should call this whenever a condition changes that may effect the evaluation of block_on_device_ready
 void evaluate_block_on_device_ready() {
     pthread_mutex_lock(&block_on_device_mutex);
-    block_on_device_ready = !force_quit && !driver_disabled() && device() != NULL;
+    block_on_device_ready = !force_quit && !driver_disabled() && device_present();
     if (block_on_device_ready) pthread_cond_signal(&block_on_device_cond);
     pthread_mutex_unlock(&block_on_device_mutex);
 }
@@ -201,28 +212,34 @@ void *block_on_device_thread_func(void *arg) {
         }
         pthread_mutex_unlock(&block_on_device_mutex);
 
-        if (!force_quit && device_driver->device_connect_func()) {
-            setup_ipc();
-            reset_calibration(false);
-            if (ipc_enabled) *ipc_values->disabled = false;
+        if (!force_quit) {
+            if (device_driver->device_connect_func()) {
+                setup_ipc();
+                reset_calibration(false);
+                if (ipc_enabled) *ipc_values->disabled = false;
 
-            plugins.handle_device_connect();
-            if (!driver_disabled()) {
-                printf("Device connected, redirecting input to %s...\n", config()->output_mode);
-                init_outputs();
+                plugins.handle_device_connect();
+                if (!driver_disabled()) {
+                    printf("Device connected, redirecting input to %s...\n", config()->output_mode);
+                    init_outputs();
+                }
+
+                device_driver->block_on_device_func();
+
+                plugins.handle_device_disconnect();
+                deinit_outputs();
+            } else if (block_on_device_ready) {
+                // device is physically connected, but driver wasn't able to connect, pause before trying again
+                printf("Device driver connection attempt failed, retrying in 1 second\n");
+                sleep(1);
             }
-
-            device_driver->block_on_device_func();
-
-            plugins.handle_device_disconnect();
-            deinit_outputs();
         }
 
         if (ipc_enabled) *ipc_values->disabled = true;
     }
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting block_on_device thread; driver_disabled %d\n", driver_disabled());
+        printf("\tdebug: Exiting block_on_device thread; force_quit %d\n", force_quit);
 }
 
 void update_config_from_file(FILE *fp) {
@@ -267,7 +284,7 @@ void update_config_from_file(FILE *fp) {
     update_config(config(), new_config);
 
     if (driver_newly_disabled && is_driver_connected())
-        device_driver->disconnect_func();
+        device_driver->disconnect_func(true);
 
     if (output_mode_changed && is_driver_connected()) reinit_outputs();
 
@@ -356,27 +373,12 @@ void *monitor_config_file_thread_func(void *arg) {
 
 // pthread function to update the state and read control flags
 void *manage_state_thread_func(void *arg) {
-    struct timeval tv;
     while (!force_quit) {
-        bool was_sbs_mode_enabled = state()->sbs_mode_enabled;
-        gettimeofday(&tv, NULL);
-        state()->heartbeat = tv.tv_sec;
         device_properties_type* device = device_checkout();
-        if (is_driver_connected() && device != NULL) {
-            state()->sbs_mode_enabled = device->sbs_mode_supported ? device_driver->device_is_sbs_mode_func() : false;
-            state()->firmware_update_recommended = device->firmware_update_recommended;
-        }
+        update_state_from_device(state(), device, device_driver);
         device_checkin(device);
         write_state(state());
         plugins.handle_state();
-
-        if (was_sbs_mode_enabled != state()->sbs_mode_enabled) {
-            if (state()->sbs_mode_enabled) {
-                printf("SBS mode has been enabled\n");
-            } else {
-                printf("SBS mode has been disabled\n");
-            }
-        }
 
         sleep(1);
     }
@@ -462,32 +464,26 @@ void handle_device_update(connected_device_type* usb_device) {
     static device_properties_type* connected_device = NULL;
 
     if (connected_device != NULL) {
-        if (is_driver_connected()) device_driver->disconnect_func();
+        if (is_driver_connected()) device_driver->disconnect_func(false);
 
         // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
         device_checkin(connected_device);
         connected_device = NULL;
-
-        free_and_clear(&state()->connected_device_brand);
-        free_and_clear(&state()->connected_device_model);
+        block_on_device_ready = false;
     }
 
     if (usb_device != NULL) {
         if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
         *device_driver = *usb_device->driver;
         connected_device = usb_device->device;
+        state()->calibration_state = NOT_CALIBRATED;
         set_device_and_checkout(connected_device);
         init_multi_tap(connected_device->imu_cycles_per_s);
-        state()->connected_device_brand = strdup(connected_device->brand);
-        state()->connected_device_model = strdup(connected_device->model);
-        state()->calibration_setup = connected_device->calibration_setup;
-        state()->calibration_state = NOT_CALIBRATED;
-        state()->sbs_mode_supported = connected_device->sbs_mode_supported;
-        state()->sbs_mode_enabled = false;
-        state()->firmware_update_recommended = false;
 
         free(usb_device);
     }
+
+    update_state_from_device(state(), connected_device, device_driver);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {

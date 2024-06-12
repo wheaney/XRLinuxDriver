@@ -26,7 +26,6 @@ driver_config_type *default_config();
 void update_config(driver_config_type *config, driver_config_type *new_config);
 driver_config_type* parse_config_file(FILE *fp);
 
-bool equal(char *key, const char *desired_key);
 void boolean_config(char* key, char *value, bool *config_value);
 void float_config(char* key, char *value, float *config_value);
 void int_config(char* key, char *value, int *config_value);

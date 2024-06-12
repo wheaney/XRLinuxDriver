@@ -6,9 +6,23 @@
 
 ## What is this?
 
-This driver allows your Linux device (including Steam Deck) to automatically recognize supported XR glasses -- currently XREAL Air 1, 2, Pro and VITURE One, One Lite, and Pro -- when they're plugged in, and convert the movements of the glasses into mouse movements and an external broadcast that games or any application can utilize.
+This driver allows your Linux device (including Steam Deck) to automatically recognize supported XR glasses (see [Supported Devices](#supported-devices)) when they're plugged in, and convert the movements of the glasses into mouse movements and an external broadcast that games or any application can utilize.
 
 If you're looking for a 3dof virtual display, this driver by itself does not provide that functionality; instead, see [Breezy](https://github.com/wheaney/breezy-desktop) or [use the Steam Deck plugin](#steam-deck-via-decky-loader) which installs Breezy under the hood.
+
+## Supported Devices
+Check below to see if your device is supported. **Note: be sure you're on the latest firmware for your device.**
+
+| Brand    | Model             | Status            | Recommended?       | Firmware updates                                                                         | Notes                                                                                                                                   |
+| -------- | ----------------- | ----------------- | ------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| VITURE   | One               | **Live** | :heavy_check_mark: | [Official update site](https://static.viture.com/dfu-util/). Requires Chrome on Windows/Mac.      | Official collaboration. [Closed source SDK available](https://www.viture.com/developer/viture-one-sdk-for-linux).                       |
+| VITURE   | One Lite, Pro     | **Live** (v0.8.10 and up) | :heavy_check_mark: | same as above                                                                    | same as above                                                                                                                           |
+| TCL/RayNeo | NXTWEAR S/S+; Air 2 | **Ready** (v0.9 and up) | :heavy_check_mark: |                                                                                | Official collaboration, closed source SDK                                                                                               |
+| XREAL    | Air 1, 2, 2 Pro   | **Live**          | :x:                | [Officlal update site](https://www.xreal.com/support/update/). Requires Chrome.          | Unwilling to collaborate. [Unofficial, open-source SDK](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver). Exhibits drift, noise. |
+| Rokid    | Max               | *In development*  |                    |                                                                                          | Official collaboration. SDK situation unknown.                                                                                          |
+| Lenovo   | Legion Glasses    | Need POC**        |                    |                                                                                          |                                                                                                                                         |
+
+** If you're a rep from this company or know one, please reach out via any of [these channels](#stay-in-touch).
 
 ## Usage
 

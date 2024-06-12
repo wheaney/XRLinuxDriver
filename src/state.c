@@ -1,6 +1,7 @@
 #include "devices.h"
 #include "plugins.h"
 #include "state.h"
+#include "strings.h"
 #include "system.h"
 
 #include <inttypes.h>
@@ -10,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/inotify.h>
+#include <sys/time.h>
 
 const char *calibration_setup_strings[2] = {
     "AUTOMATIC",
@@ -31,9 +33,9 @@ FILE* get_state_file(const char *filename, char *mode, char *full_path) {
     return fopen(full_path, mode ? mode : "r");
 }
 
-pthread_mutex_t write_state_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 void write_state(driver_state_type *state) {
-    pthread_mutex_lock(&write_state_mutex);
+    pthread_mutex_lock(&state_mutex);
     char file_path[1024];
     FILE* fp = get_state_file(state_filename, "w", &file_path[0]);
 
@@ -53,7 +55,7 @@ void write_state(driver_state_type *state) {
     }
 
     fclose(fp);
-    pthread_mutex_unlock(&write_state_mutex);
+    pthread_mutex_unlock(&state_mutex);
 }
 
 void read_control_flags(FILE *fp, control_flags_type *flags) {
@@ -84,4 +86,48 @@ void read_control_flags(FILE *fp, control_flags_type *flags) {
             plugins.handle_control_flag_line(key, value);
         }
     }
+}
+
+void update_state_from_device(driver_state_type *state, device_properties_type *device, device_driver_type *device_driver) {
+    pthread_mutex_lock(&state_mutex);
+
+    bool was_sbs_mode_enabled = state->sbs_mode_enabled;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    state->heartbeat = tv.tv_sec;
+    state->calibration_setup = CALIBRATION_SETUP_AUTOMATIC;
+    state->sbs_mode_supported = false;
+    state->sbs_mode_enabled = false;
+    state->firmware_update_recommended = false;
+    if (device == NULL) {
+        // not connected
+        free_and_clear(&state->connected_device_brand);
+        free_and_clear(&state->connected_device_model);
+    } else {
+        state->sbs_mode_enabled = false;
+        if (device->sbs_mode_supported && device_driver != NULL && device_driver->is_connected_func()) {
+            state->sbs_mode_enabled = device_driver->device_is_sbs_mode_func();
+        }
+        state->firmware_update_recommended = device->firmware_update_recommended;
+        if (state->connected_device_brand == NULL || !equal(state->connected_device_brand, device->brand)) {
+            free_and_clear(&state->connected_device_brand);
+            state->connected_device_brand = strdup(device->brand);
+        }
+        if (state->connected_device_model == NULL || !equal(state->connected_device_model, device->model)) {
+            free_and_clear(&state->connected_device_model);
+            state->connected_device_model = strdup(device->model);
+        }
+        state->calibration_setup = device->calibration_setup;
+        state->sbs_mode_supported = device->sbs_mode_supported;
+    }
+
+    if (was_sbs_mode_enabled != state->sbs_mode_enabled) {
+        if (state->sbs_mode_enabled) {
+            printf("SBS mode has been enabled\n");
+        } else {
+            printf("SBS mode has been disabled\n");
+        }
+    }
+
+    pthread_mutex_unlock(&state_mutex);
 }

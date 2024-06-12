@@ -3,6 +3,7 @@
 #include "imu.h"
 #include "runtime_context.h"
 #include "sdks/viture_one.h"
+#include "strings.h"
 
 #include <math.h>
 #include <unistd.h>
@@ -116,18 +117,9 @@ imu_quat_type zxy_euler_to_quaternion(imu_euler_type euler) {
 
 static bool old_firmware_version = true;
 static bool connected = false;
+static bool initialized = false;
 void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     if (!connected || driver_disabled()) return;
-
-    float euler_roll = float_from_imu_data(data);
-    float euler_pitch = float_from_imu_data(data + 4);
-    float euler_yaw = float_from_imu_data(data + 8);
-
-    imu_euler_type euler = {
-        .roll = euler_roll,
-        .pitch = euler_pitch,
-        .yaw = euler_yaw
-    };
 
     imu_quat_type quat;
     if (len >= 36 && !old_firmware_version) {
@@ -136,12 +128,21 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
         quat.y = float_from_imu_data(data + 28);
         quat.z = float_from_imu_data(data + 32);
     } else {
+        float euler_roll = float_from_imu_data(data);
+        float euler_pitch = float_from_imu_data(data + 4);
+        float euler_yaw = float_from_imu_data(data + 8);
+
+        imu_euler_type euler = {
+            .roll = euler_roll,
+            .pitch = euler_pitch,
+            .yaw = euler_yaw
+        };
         quat = zxy_euler_to_quaternion(euler);
     }
 
     quat = multiply_quaternions(quat, adjustment_quat);
 
-    driver_handle_imu_event(timestamp, quat, euler);
+    driver_handle_imu_event(timestamp, quat);
 }
 
 bool sbs_mode_enabled = false;
@@ -159,7 +160,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 *device = viture_one_properties;
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
-                device->model = strdup(viture_supported_models[i]);
+                device->model = (char *)viture_supported_models[i];
 
                 if (equal(VITURE_PRO_MODEL_NAME, device->model)) device->fov = 43.0;
 
@@ -171,47 +172,66 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
     return NULL;
 };
 
+static void disconnect(bool forced) {
+    if (connected) {
+        set_imu(false);
+
+        // VITURE SDK freezes if we attempt deinit() while it's still physically connected, so only do this if the device is no longer present
+        if (!forced || !device_present()) {
+            deinit();
+            initialized = false;
+        }
+        connected = false;
+    }
+}
+
 bool viture_device_connect() {
     if (!connected || get_imu_state() != STATE_ON) {
-        connected = init(handle_viture_event, viture_mcu_callback) &&
-                    set_imu(true) == ERR_SUCCESS;
+        if (!initialized) initialized = init(handle_viture_event, viture_mcu_callback);
+        connected = initialized && set_imu(true) == ERR_SUCCESS;
     }
 
     if (connected) {
-        set_imu_fq(IMU_FREQUENCE_240);
-        int imu_freq = get_imu_fq();
-        if (imu_freq < IMU_FREQUENCE_60 || imu_freq > IMU_FREQUENCE_240) {
-            imu_freq = IMU_FREQUENCE_60;
-        }
-
-        // use the current value in case the frequency we requested isn't supported
         device_properties_type* device = device_checkout();
-        device->imu_cycles_per_s = frequency_enum_to_value[imu_freq];
-        device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
+        if (device != NULL) {
+            set_imu_fq(IMU_FREQUENCE_240);
+            int imu_freq = get_imu_fq();
+            if (imu_freq < IMU_FREQUENCE_60 || imu_freq > IMU_FREQUENCE_240) {
+                imu_freq = IMU_FREQUENCE_60;
+            }
 
-        // not a great way to check the firmware version but it's all we have
-        old_firmware_version = equal(VITURE_PRO_MODEL_NAME, device->model) ? false : (device->imu_cycles_per_s == 60);
+            // use the current value in case the frequency we requested isn't supported
+            device->imu_cycles_per_s = frequency_enum_to_value[imu_freq];
+            device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
 
-        device->sbs_mode_supported = !old_firmware_version;
-        device->firmware_update_recommended = old_firmware_version;
+            // not a great way to check the firmware version but it's all we have
+            old_firmware_version = equal(VITURE_PRO_MODEL_NAME, device->model) ? false : (device->imu_cycles_per_s == 60);
+            if (old_firmware_version) printf("VITURE: Detected old firmware version\n");
+
+            device->sbs_mode_supported = !old_firmware_version;
+            device->firmware_update_recommended = old_firmware_version;
+
+            sbs_mode_enabled = get_3d_state() == STATE_ON;
+        } else {
+            disconnect(false);
+        }
         device_checkin(device);
-
-        sbs_mode_enabled = get_3d_state() == STATE_ON;
     }
 
     return connected;
 }
 
 void viture_block_on_device() {
-    int imu_state = get_imu_state();
-    while (connected && imu_state == STATE_ON) {
-        sleep(1);
-        imu_state = get_imu_state();
+    device_properties_type* device = device_checkout();
+    if (device != NULL) {
+        int imu_state = get_imu_state();
+        while (connected && imu_state == STATE_ON) {
+            sleep(1);
+            imu_state = get_imu_state();
+        }
     }
-
-    connected = false;
-    set_imu(false);
-    deinit();
+    disconnect(false);
+    device_checkin(device);
 };
 
 bool viture_device_is_sbs_mode() {
@@ -227,8 +247,8 @@ bool viture_is_connected() {
     return connected;
 };
 
-void viture_disconnect() {
-    connected = false;
+void viture_disconnect(bool forced) {
+    disconnect(forced);
 };
 
 const device_driver_type viture_driver = {

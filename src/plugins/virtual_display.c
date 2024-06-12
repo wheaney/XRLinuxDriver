@@ -75,7 +75,7 @@ void set_virtual_display_ipc_values() {
     if (!vd_config) vd_config = virtual_display_default_config_func();
 
     device_properties_type* device = device_checkout();
-    if (device) {
+    if (device != NULL) {
         *virtual_display_ipc_values->enabled               = !config()->disabled &&
                                                                 (vd_config->enabled ||
                                                                  vd_config->follow_mode_enabled &&
@@ -211,7 +211,7 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
                                           bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (vd_config && ipc_enabled && virtual_display_ipc_values) {
         device_properties_type* device = device_checkout();
-        if (imu_calibrated && device) {
+        if (imu_calibrated && device != NULL) {
             if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
                 quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
                 quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));

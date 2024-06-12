@@ -40,6 +40,7 @@ if(DEFINED SYSTEM_INSTALL)
 endif()
 
 set(VITURE_LIB_NAME viture_sdk)
+set(RAYNEO_LIB_NAME rayneo_sdk)
 
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -59,10 +60,19 @@ set_target_properties(
     IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libviture_one_sdk.a
 )
 
+add_library (${RAYNEO_LIB_NAME} SHARED IMPORTED)
+
+set_target_properties(
+    ${RAYNEO_LIB_NAME} PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libRayNeoXRMiniSDK.so
+	IMPORTED_SONAME "libRayNeoXRMiniSDK.so"
+)
+
 set(SOURCES
     src/buffer.c
     src/config.c
     src/curl.c
+    src/devices/rayneo.c
     src/devices/viture.c
     src/devices/xreal.c
     src/devices.c
@@ -107,6 +117,7 @@ target_include_directories(xrealAirLinuxDriver
 		${LIBEVDEV_INCLUDE_DIRS}
 		${JSONC_INCLUDE_DIRS}
 		${CMAKE_CURRENT_SOURCE_DIR}/include
+		${CMAKE_CURRENT_SOURCE_DIR}/modules/rayneoSDKHeaders
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary/interface_lib/include
 		${LIBUSB_INCLUDE_DIRS}
 		${LIBCURL_INCLUDE_DIRS}
@@ -129,5 +140,6 @@ target_link_libraries(xrealAirLinuxDriver
 		        ${OPENSSL_LIBRARIES}
 		        ${VITURE_LIB_NAME}
 		        ${LIBUSB_LIBRARIES}
+		        ${RAYNEO_LIB_NAME}
 )
 add_dependencies(xrealAirLinuxDriver run_python_script)

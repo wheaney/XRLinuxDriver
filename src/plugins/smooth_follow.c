@@ -23,7 +23,7 @@ const smooth_follow_params loose_follow_params = {
     .lower_angle_threshold = 20.0,
     .upper_angle_threshold = 40.0,
     .delay_ms = 2000,
-    .return_to_angle = 1.0,
+    .return_to_angle = 5.0,
 
     // moves 99% of the way to the center in 1.5 seconds
     .interpolation_ratio_ms = 1-pow(1 - 0.99, 1.0/1500.0)
@@ -103,7 +103,7 @@ void handle_config_and_state_update() {
     if (virtual_display_follow) {
         *sf_params = loose_follow_params;
         device_properties_type* device = device_checkout();
-        if (device) {
+        if (device != NULL) {
             float device_fov_threshold = device->fov * 0.9;
             sf_params->lower_angle_threshold = device_fov_threshold / 2.0 * sf_config->virtual_display_size;
             sf_params->upper_angle_threshold = device_fov_threshold * sf_config->virtual_display_size;
