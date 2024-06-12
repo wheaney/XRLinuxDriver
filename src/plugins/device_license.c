@@ -333,9 +333,9 @@ void refresh_license(bool force) {
             }
             pthread_mutex_unlock(&refresh_license_lock);
 
-            free(device_license_dir);
-            free(device_license_path);
-            free(device_license_path_tmp);
+            free((void*)device_license_dir);
+            free((void*)device_license_path);
+            free((void*)device_license_path_tmp);
         } else {
             fprintf(stderr, "No hardwareId found, not retrieving license\n");
         }
