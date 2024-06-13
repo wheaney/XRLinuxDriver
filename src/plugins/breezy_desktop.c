@@ -91,7 +91,7 @@ const uint8_t DATA_LAYOUT_VERSION = 2;
 #define BOOL_FALSE 0
 
 // IMU data is written more frequently, so we need to know the offset in the file
-const int CONFIG_DATA_END_OFFSET = 
+const int CONFIG_DATA_END_OFFSET =
     sizeof(uint8_t) + // version
     sizeof(uint8_t) + // enabled
     sizeof(float) * 4 + // look_ahead_cfg
@@ -119,7 +119,7 @@ void do_write_config_data(int fd) {
         float look_ahead_cfg[4] = {
             look_ahead_constant,
             look_ahead_frametime_multiplier,
-            device->look_ahead_scanline_adjust, 
+            device->look_ahead_scanline_adjust,
             device->look_ahead_ms_cap
         };
         int display_res[2] = {
@@ -303,7 +303,7 @@ int breezy_desktop_register_features_func(char*** features) {
     return breezy_desktop_feature_count;
 }
 
-void breezy_desktop_start_func() {
+void breezy_desktop_device_connect_func() {
     // delete this first, in case it's left over from a previous run
     remove(get_shared_mem_file_path());
     pthread_mutex_init(&file_mutex, NULL);
@@ -314,7 +314,6 @@ void breezy_desktop_start_func() {
 
 const plugin_type breezy_desktop_plugin = {
     .id = "breezy_desktop",
-    .start = breezy_desktop_start_func,
     .default_config = breezy_desktop_default_config_func,
     .handle_config_line = breezy_desktop_handle_config_line_func,
     .set_config = breezy_desktop_set_config_func,
@@ -324,5 +323,6 @@ const plugin_type breezy_desktop_plugin = {
 
     // just rewrite the config values whenever anything changes
     .handle_state = write_config_data,
-    .handle_device_disconnect = write_config_data
+    .handle_device_disconnect = write_config_data,
+    .handle_device_connect = breezy_desktop_device_connect_func
 };
