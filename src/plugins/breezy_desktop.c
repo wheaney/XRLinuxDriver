@@ -162,8 +162,18 @@ char* get_shared_mem_file_path() {
     return shared_mem_file_path;
 }
 
+static int fd = -2;
+
+// https://stackoverflow.com/a/12340725
+int fd_is_valid(int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
 int get_shared_mem_fd() {
-    static int fd = -2;
+    if (!fd_is_valid) {
+        fd = -2;
+    }
 
     if (fd == -2) {
         char* file_path = get_shared_mem_file_path();
@@ -310,6 +320,7 @@ void breezy_desktop_start_func() {
 void breezy_desktop_device_connect_func() {
     // delete this first, in case it's left over from a previous run
     remove(get_shared_mem_file_path());
+    fd = -2;
 
     has_started = true;
     breezy_desktop_write_imu_data(IMU_RESET);
