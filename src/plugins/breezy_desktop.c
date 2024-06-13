@@ -317,7 +317,7 @@ void breezy_desktop_device_connect_func() {
 
 const plugin_type breezy_desktop_plugin = {
     .id = "breezy_desktop",
-    .start_func = breezy_desktop_start_func,
+    .start = breezy_desktop_start_func,
     .default_config = breezy_desktop_default_config_func,
     .handle_config_line = breezy_desktop_handle_config_line_func,
     .set_config = breezy_desktop_set_config_func,
