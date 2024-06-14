@@ -220,7 +220,7 @@ void refresh_license(bool force) {
 
             if (xdg_state_home == NULL) {
                 char* home = getenv("HOME");
-                xdg_state_home = strcat(home, BACKUP_DIR);
+                xdg_state_home = concat(home, BACKUP_DIR);
             }
 
             const char* device_license_dir = concat(xdg_state_home, DEVICE_LICENSE_DIR);
