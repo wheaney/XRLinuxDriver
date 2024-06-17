@@ -136,7 +136,7 @@ target_link_libraries(xrealAirLinuxDriver
 		        nrealAirLibrary
 		        Threads::Threads
 		        m
-            ${CURL_LIB}
+            		${CURL_LIB}
 		        ${OPENSSL_LIBRARIES}
 		        ${VITURE_LIB_NAME}
 		        ${LIBUSB_LIBRARIES}
