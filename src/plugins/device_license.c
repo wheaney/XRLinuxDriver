@@ -18,7 +18,7 @@
 
 #define SECONDS_PER_DAY 86400
 
-const char* BACKUP_DIR = "/.local/state";
+const char* XDG_FALLBACK_DIR = "/.local/state";
 const char* DEVICE_LICENSE_DIR = "/xr_driver";
 const char* DEVICE_LICENSE_FILE_PATH = "/device_license";
 const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/device_license.tmp";
@@ -220,7 +220,7 @@ void refresh_license(bool force) {
 
             if (xdg_state_home == NULL) {
                 char* home = getenv("HOME");
-                xdg_state_home = (char*)concat(home, BACKUP_DIR);
+                xdg_state_home = (char*)concat(home, XDG_FALLBACK_DIR);
             }
 
             const char* device_license_dir = concat(xdg_state_home, DEVICE_LICENSE_DIR);
