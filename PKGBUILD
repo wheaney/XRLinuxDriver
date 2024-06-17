@@ -1,5 +1,5 @@
 # Maintainer: hodasemi <michaelh.95 at t-online dot de>
-_pkgbase=XRLinuxDriver
+_pkgbase=XRLinuxDriver-BreezyGNOME
 pkgname="${_pkgbase}"
 pkgver=0.1
 pkgrel=1
