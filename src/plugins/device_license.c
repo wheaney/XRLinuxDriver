@@ -20,8 +20,8 @@
 
 const char* BACKUP_DIR = "/.local/state";
 const char* DEVICE_LICENSE_DIR = "/xr_driver";
-const char* DEVICE_LICENSE_FILE_PATH = "/xr_driver/device_license";
-const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/xr_driver/device_license.tmp";
+const char* DEVICE_LICENSE_FILE_PATH = "/device_license";
+const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/device_license.tmp";
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
@@ -220,12 +220,12 @@ void refresh_license(bool force) {
 
             if (xdg_state_home == NULL) {
                 char* home = getenv("HOME");
-                xdg_state_home = concat(home, BACKUP_DIR);
+                xdg_state_home = (char*)concat(home, BACKUP_DIR);
             }
 
             const char* device_license_dir = concat(xdg_state_home, DEVICE_LICENSE_DIR);
-            const char* device_license_path = concat(xdg_state_home, DEVICE_LICENSE_FILE_PATH);
-            const char* device_license_path_tmp = concat(xdg_state_home, DEVICE_LICENSE_TEMP_FILE_PATH);
+            const char* device_license_path = concat(device_license_dir, DEVICE_LICENSE_FILE_PATH);
+            const char* device_license_path_tmp = concat(device_license_dir, DEVICE_LICENSE_TEMP_FILE_PATH);
 
             if (stat(device_license_dir, &st) == -1) {
                 mkdir(device_license_dir, 0700);
