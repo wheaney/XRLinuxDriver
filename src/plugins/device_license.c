@@ -198,13 +198,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/device_license.tmp";
     }
 #endif
 
-const char* concat(const char* path, const char* extension) {
-    char* s = malloc((strlen(path) + strlen(extension) + 1) * sizeof(char));
-    strcpy(s, path);
-    strcat(s, extension);
 
-    return s;
-}
 
 pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
