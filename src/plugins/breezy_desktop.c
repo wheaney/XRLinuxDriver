@@ -19,11 +19,15 @@
 #include <unistd.h>
 
 
+#define BREEZY_DESKTOP_FD_RESET = -2;
+
 const char* shared_mem_directory = "/dev/shm";
 const char* shared_mem_filename = "breezy_desktop_imu";
 const int breezy_desktop_feature_count = 1;
 static bool has_started = false;
 static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int fd = BREEZY_DESKTOP_FD_RESET;
 
 #define NUM_IMU_VALUES 16
 float IMU_RESET[NUM_IMU_VALUES] = {
@@ -162,8 +166,6 @@ char* get_shared_mem_file_path() {
     return shared_mem_file_path;
 }
 
-static int fd = -2;
-
 // https://stackoverflow.com/a/12340725
 int fd_is_valid(int fd)
 {
@@ -172,10 +174,10 @@ int fd_is_valid(int fd)
 
 int get_shared_mem_fd() {
     if (!fd_is_valid) {
-        fd = -2;
+        fd = BREEZY_DESKTOP_FD_RESET;
     }
 
-    if (fd == -2) {
+    if (fd == BREEZY_DESKTOP_FD_RESET) {
         char* file_path = get_shared_mem_file_path();
 
         fd = open(file_path, O_WRONLY);
@@ -320,7 +322,7 @@ void breezy_desktop_start_func() {
 void breezy_desktop_device_connect_func() {
     // delete this first, in case it's left over from a previous run
     remove(get_shared_mem_file_path());
-    fd = -2;
+    fd = BREEZY_DESKTOP_FD_RESET;
 
     has_started = true;
     breezy_desktop_write_imu_data(IMU_RESET);
