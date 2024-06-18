@@ -336,8 +336,5 @@ const plugin_type breezy_desktop_plugin = {
     .register_features = breezy_desktop_register_features_func,
     .handle_imu_data = breezy_desktop_handle_imu_data_func,
     .reset_imu_data = breezy_desktop_reset_imu_data_func,
-
-    // just rewrite the config values whenever anything changes
-    .handle_state = write_config_data,
     .handle_device_disconnect = write_config_data
 };
