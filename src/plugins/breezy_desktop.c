@@ -90,9 +90,6 @@ const uint8_t DATA_LAYOUT_VERSION = 3;
 #define BOOL_TRUE 1
 #define BOOL_FALSE 0
 
-// scanline wiggle is worse with GNOME extension than Vulkan layer
-#define BREEZY_DESKTOP_SCANLINE_LOOKAHEAD_MULTIPLIER 1.5
-
 // IMU data is written more frequently, so we need to know the offset in the file
 const int CONFIG_DATA_END_OFFSET = 
     sizeof(uint8_t) + // version
@@ -122,7 +119,7 @@ void do_write_config_data(int fd) {
         float look_ahead_cfg[4] = {
             look_ahead_constant,
             look_ahead_frametime_multiplier,
-            device->look_ahead_scanline_adjust * BREEZY_DESKTOP_SCANLINE_LOOKAHEAD_MULTIPLIER, 
+            device->look_ahead_scanline_adjust, 
             device->look_ahead_ms_cap
         };
         int display_res[2] = {
