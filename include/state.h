@@ -46,6 +46,7 @@ typedef enum sbs_control_t sbs_control_type;
 struct control_flags_t {
     bool recenter_screen;
     bool recalibrate;
+    bool force_quit;
     sbs_control_type sbs_mode;
 };
 typedef struct control_flags_t control_flags_type;
