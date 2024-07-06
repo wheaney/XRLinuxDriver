@@ -19,7 +19,7 @@
 #include <unistd.h>
 
 
-#define BREEZY_DESKTOP_FD_RESET = -2;
+#define BREEZY_DESKTOP_FD_RESET -2
 
 const char* shared_mem_directory = "/dev/shm";
 const char* shared_mem_filename = "breezy_desktop_imu";
