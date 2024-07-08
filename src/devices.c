@@ -7,6 +7,7 @@
 #include <libusb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 #define DEVICE_DRIVER_COUNT 3
 const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
@@ -89,7 +90,8 @@ void init_devices(handle_device_update_func callback) {
 }
 
 void handle_device_connection_events() {
-    libusb_handle_events_completed(ctx, NULL);
+    struct timeval tv = {5, 0};
+    libusb_handle_events_timeout_completed(ctx, &tv, NULL);
 }
 
 void deinit_devices() {

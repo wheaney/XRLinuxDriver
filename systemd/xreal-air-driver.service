@@ -7,7 +7,7 @@ Type=simple
 Environment=HOME={user_home}
 Environment=LD_LIBRARY_PATH={ld_library_path}
 ExecStart=/bin/bash -c {user_home}/bin/xrealAirLinuxDriver
-Restart=on-failure
+Restart=always
 
 [Install]
 WantedBy=multi-user.target

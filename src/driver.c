@@ -364,11 +364,11 @@ void *monitor_config_file_thread_func(void *arg) {
         }
     }
 
-    if (config()->debug_threads)
-        printf("\tdebug: Exiting monitor_config_file thread; force_quit: %d\n", force_quit);
-
     inotify_rm_watch(fd, wd);
     close(fd);
+
+    if (config()->debug_threads)
+        printf("\tdebug: Exiting monitor_config_file thread; force_quit: %d\n", force_quit);
 }
 
 // pthread function to update the state and read control flags
@@ -392,10 +392,16 @@ void *manage_state_thread_func(void *arg) {
 
 void handle_control_flags_update() {
     device_properties_type* device = device_checkout();
-    if (is_driver_connected() && device != NULL && device->sbs_mode_supported && 
-        control_flags->sbs_mode != SBS_CONTROL_UNSET) {
-        if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
-            fprintf(stderr, "Error setting requested SBS mode\n");
+    if (is_driver_connected()) {
+        if (device != NULL && device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
+            if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
+                fprintf(stderr, "Error setting requested SBS mode\n");
+            }
+        }
+        if (control_flags->force_quit) {
+            printf("Force quit requested, exiting\n");
+            force_quit = true;
+            device_driver->disconnect_func(true);
         }
     }
     device_checkin(device);
@@ -428,7 +434,7 @@ void *monitor_control_flags_file_thread_func(void *arg) {
     }
 
     char inotify_event_buffer[INOTIFY_EVENT_BUFFER_SIZE];
-    while (true) {
+    while (!force_quit) {
         int length = read(fd, inotify_event_buffer, INOTIFY_EVENT_BUFFER_SIZE);
         if (length < 0) {
             perror("read");
@@ -454,7 +460,9 @@ void *monitor_control_flags_file_thread_func(void *arg) {
     }
 
     close(fd);
-    return NULL;
+
+    if (config()->debug_threads)
+        printf("\tdebug: Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
 }
 
 void handle_device_update(connected_device_type* usb_device) {
@@ -492,6 +500,9 @@ void *monitor_usb_devices_thread_func(void *arg) {
         handle_device_connection_events();
         sleep(1);
     }
+
+    if (config()->debug_threads)
+        printf("\tdebug: Exiting monitor_usb_devices_thread_func thread; force_quit: %d\n", force_quit);
 }
 
 void segfault_handler(int signal, siginfo_t *si, void *arg) {
