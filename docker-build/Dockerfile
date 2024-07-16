@@ -24,7 +24,6 @@ RUN apt-get update && apt-get install -y \
 VOLUME /out
 WORKDIR /source
 
-# ARG BREEZY_DESKTOP # make this default to 0
 ARG BREEZY_DESKTOP=0
 ENV BREEZY_DESKTOP=$BREEZY_DESKTOP
 
