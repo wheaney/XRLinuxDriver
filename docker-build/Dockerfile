@@ -23,6 +23,9 @@ RUN apt-get update && apt-get install -y \
 
 VOLUME /out
 WORKDIR /source
-ENV UA_API_SECRET_INTENTIONALLY_EMPTY=1
+
+# ARG BREEZY_DESKTOP # make this default to 0
+ARG BREEZY_DESKTOP=0
+ENV BREEZY_DESKTOP=$BREEZY_DESKTOP
 
 CMD bin/package && cp build/*.tar.gz /out/

@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__arm__)
     #define DEVICE_DRIVER_COUNT 1
     const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
         &xreal_driver
