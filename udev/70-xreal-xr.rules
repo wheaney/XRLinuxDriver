@@ -13,6 +13,3 @@ SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="3318", ATTRS{idPr
 
 # Rule for HID Devices (hiddev)
 SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
-
-# Mouse output
-KERNEL=="uinput", SUBSYSTEM=="misc", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"

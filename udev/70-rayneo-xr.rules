@@ -1,5 +1,2 @@
 # RayNeo
 SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="1bbb", ATTRS{idProduct}=="af50", MODE="0660", TAG+="uaccess"
-
-# Mouse output
-KERNEL=="uinput", SUBSYSTEM=="misc", ATTRS{idVendor}=="1bbb", ATTRS{idProduct}=="af50", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"

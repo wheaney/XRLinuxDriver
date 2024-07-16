@@ -1,0 +1,2 @@
+# Mouse output
+KERNEL=="uinput", SUBSYSTEM=="misc" MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
