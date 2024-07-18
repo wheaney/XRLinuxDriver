@@ -19,11 +19,15 @@
 #include <unistd.h>
 
 
+#define BREEZY_DESKTOP_FD_RESET -2
+
 const char* shared_mem_directory = "/dev/shm";
 const char* shared_mem_filename = "breezy_desktop_imu";
 const int breezy_desktop_feature_count = 1;
 static bool has_started = false;
 static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int fd = BREEZY_DESKTOP_FD_RESET;
 
 #define NUM_IMU_VALUES 16
 float IMU_RESET[NUM_IMU_VALUES] = {
@@ -91,7 +95,7 @@ const uint8_t DATA_LAYOUT_VERSION = 3;
 #define BOOL_FALSE 0
 
 // IMU data is written more frequently, so we need to know the offset in the file
-const int CONFIG_DATA_END_OFFSET = 
+const int CONFIG_DATA_END_OFFSET =
     sizeof(uint8_t) + // version
     sizeof(uint8_t) + // enabled
     sizeof(float) * 4 + // look_ahead_cfg
@@ -119,7 +123,7 @@ void do_write_config_data(int fd) {
         float look_ahead_cfg[4] = {
             look_ahead_constant,
             look_ahead_frametime_multiplier,
-            device->look_ahead_scanline_adjust, 
+            device->look_ahead_scanline_adjust,
             device->look_ahead_ms_cap
         };
         int display_res[2] = {
@@ -162,10 +166,18 @@ char* get_shared_mem_file_path() {
     return shared_mem_file_path;
 }
 
-int get_shared_mem_fd() {
-    static int fd = -2;
+// https://stackoverflow.com/a/12340725
+int fd_is_valid(int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
 
-    if (fd == -2) {
+int get_shared_mem_fd() {
+    if (!fd_is_valid) {
+        fd = BREEZY_DESKTOP_FD_RESET;
+    }
+
+    if (fd == BREEZY_DESKTOP_FD_RESET) {
         char* file_path = get_shared_mem_file_path();
 
         fd = open(file_path, O_WRONLY);
@@ -316,9 +328,13 @@ int breezy_desktop_register_features_func(char*** features) {
 }
 
 void breezy_desktop_start_func() {
+    pthread_mutex_init(&file_mutex, NULL);
+}
+
+void breezy_desktop_device_connect_func() {
     // delete this first, in case it's left over from a previous run
     remove(get_shared_mem_file_path());
-    pthread_mutex_init(&file_mutex, NULL);
+    fd = BREEZY_DESKTOP_FD_RESET;
 
     has_started = true;
     breezy_desktop_write_imu_data(IMU_RESET);
@@ -333,5 +349,6 @@ const plugin_type breezy_desktop_plugin = {
     .register_features = breezy_desktop_register_features_func,
     .handle_imu_data = breezy_desktop_handle_imu_data_func,
     .reset_imu_data = breezy_desktop_reset_imu_data_func,
-    .handle_device_disconnect = write_config_data
+    .handle_device_disconnect = write_config_data,
+    .handle_device_connect = breezy_desktop_device_connect_func
 };

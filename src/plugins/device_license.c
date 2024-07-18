@@ -11,14 +11,17 @@
 #include <openssl/err.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 
 #define SECONDS_PER_DAY 86400
 
-const char* DEVICE_LICENSE_FILE_PATH = "/var/lib/xr_driver/device_license";
-const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.tmp";
+const char* XDG_FALLBACK_DIR = "/.local/state";
+const char* DEVICE_LICENSE_DIR = "/xr_driver";
+const char* DEVICE_LICENSE_FILE_PATH = "/device_license";
+const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/device_license.tmp";
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
@@ -195,6 +198,8 @@ const char* DEVICE_LICENSE_TEMP_FILE_PATH = "/var/lib/xr_driver/device_license.t
     }
 #endif
 
+
+
 pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
 void refresh_license(bool force) {
     int features_count = 0;
@@ -205,8 +210,19 @@ void refresh_license(bool force) {
             pthread_mutex_lock(&refresh_license_lock);
             struct stat st = {0};
 
-            if (stat("/var/lib/xr_driver", &st) == -1) {
-                mkdir("/var/lib/xr_driver", 0700);
+            char* xdg_state_home = getenv("XDG_STATE_HOME");
+
+            if (xdg_state_home == NULL) {
+                char* home = getenv("HOME");
+                xdg_state_home = (char*)concat(home, XDG_FALLBACK_DIR);
+            }
+
+            const char* device_license_dir = concat(xdg_state_home, DEVICE_LICENSE_DIR);
+            const char* device_license_path = concat(device_license_dir, DEVICE_LICENSE_FILE_PATH);
+            const char* device_license_path_tmp = concat(device_license_dir, DEVICE_LICENSE_TEMP_FILE_PATH);
+
+            if (stat(device_license_dir, &st) == -1) {
+                mkdir(device_license_dir, 0700);
             }
 
             int attempt = 0;
@@ -214,13 +230,13 @@ void refresh_license(bool force) {
             bool debug_license = config() && config()->debug_license;
             while (!valid_license && attempt < 2) {
                 if (debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
-                char* file_path = strdup(DEVICE_LICENSE_FILE_PATH);
+                char* file_path = strdup(device_license_path);
                 FILE *file = force ? NULL : fopen(file_path, "r");
                 if (file) {
                     if (debug_license) printf("\tdebug: License file already exists\n");
                     // remove the file if it hasn't been touched in over a day
                     struct stat attr;
-                    stat(DEVICE_LICENSE_FILE_PATH, &attr);
+                    stat(device_license_path, &attr);
                     struct timeval tv;
                     gettimeofday(&tv, NULL);
                     if (tv.tv_sec - attr.st_mtime > SECONDS_PER_DAY) {
@@ -233,7 +249,7 @@ void refresh_license(bool force) {
 
                 if (file == NULL) {
                     free(file_path);
-                    file_path = strdup(DEVICE_LICENSE_TEMP_FILE_PATH);
+                    file_path = strdup(device_license_path_tmp);
 
                     CURL *curl;
                     CURLcode res;
@@ -244,7 +260,7 @@ void refresh_license(bool force) {
                     if(curl) {
                         file = fopen(file_path, "w");
                         if (file == NULL) {
-                            fprintf(stderr, "Error opening file\n");
+                            fprintf(stderr, "Error opening file (%s): %d\n", file_path, errno);
                             break;
                         }
 
@@ -279,7 +295,7 @@ void refresh_license(bool force) {
                         if(failed) {
                             remove(file_path);
                             free(file_path);
-                            file_path = strdup(DEVICE_LICENSE_FILE_PATH);
+                            file_path = strdup(device_license_path);
                         }
 
                         free(postbody_string);
@@ -290,7 +306,7 @@ void refresh_license(bool force) {
                     file = fopen(file_path, "r");
                     if (file == NULL) {
                         free(file_path);
-                        fprintf(stderr, "Error opening file\n");
+                        fprintf(stderr, "Error opening file (%s): %d\n", file_path, errno);
                         break;
                     }
                 }
@@ -300,8 +316,8 @@ void refresh_license(bool force) {
                 fclose(file);
                 if (features_count != -1) {
                     valid_license = true;
-                    if (strcmp(file_path, DEVICE_LICENSE_TEMP_FILE_PATH) == 0) {
-                        rename(file_path, DEVICE_LICENSE_FILE_PATH);
+                    if (strcmp(file_path, device_license_path_tmp) == 0) {
+                        rename(file_path, device_license_path);
                     }
                 } else {
                     features_count = 0;
@@ -311,6 +327,10 @@ void refresh_license(bool force) {
                 attempt++;
             }
             pthread_mutex_unlock(&refresh_license_lock);
+
+            free((void*)device_license_dir);
+            free((void*)device_license_path);
+            free((void*)device_license_path_tmp);
         } else {
             fprintf(stderr, "No hardwareId found, not retrieving license\n");
         }
