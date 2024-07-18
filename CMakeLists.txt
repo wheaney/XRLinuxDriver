@@ -39,9 +39,6 @@ if(DEFINED SYSTEM_INSTALL)
   pkg_check_modules(CURL REQUIRED libcurl)
 endif()
 
-set(VITURE_LIB_NAME viture_sdk)
-set(RAYNEO_LIB_NAME rayneo_sdk)
-
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
@@ -50,30 +47,51 @@ if(NOT DEFINED SYSTEM_INSTALL)
   add_subdirectory(modules/curl)
 endif()
 
-add_library (
-	${VITURE_LIB_NAME}
-        STATIC
-	IMPORTED)
+# Set the library directory based on architecture
+set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR})
+message(STATUS "LIB_DIR: ${LIB_DIR}")
 
-set_target_properties(
-    ${VITURE_LIB_NAME} PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libviture_one_sdk.a
-)
+# Find all .a files in the library directory
+file(GLOB STATIC_LIBS ${LIB_DIR}/*.a)
+message(STATUS "STATIC_LIBS: ${STATIC_LIBS}")
 
-add_library (${RAYNEO_LIB_NAME} SHARED IMPORTED)
+# Add all static libraries
+foreach(LIB ${STATIC_LIBS})
+    get_filename_component(LIB_NAME ${LIB} NAME_WE)
+    string(REPLACE "lib" "" LIB_NAME ${LIB_NAME})
+    
+    add_library(${LIB_NAME} STATIC IMPORTED)
+    set_target_properties(${LIB_NAME} PROPERTIES
+        IMPORTED_LOCATION ${LIB}
+    )
+endforeach()
 
-set_target_properties(
-    ${RAYNEO_LIB_NAME} PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libRayNeoXRMiniSDK.so
-	IMPORTED_SONAME "libRayNeoXRMiniSDK.so"
+# Find all .so files in the library directory
+file(GLOB SHARED_LIBS ${LIB_DIR}/*.so)
+message(STATUS "SHARED_LIBS: ${SHARED_LIBS}")
+
+# Add all shared libraries
+foreach(LIB ${SHARED_LIBS})
+    get_filename_component(LIB_NAME ${LIB} NAME_WE)
+    string(REPLACE "lib" "" LIB_NAME ${LIB_NAME})
+    
+    add_library(${LIB_NAME} SHARED IMPORTED)
+    set_target_properties(${LIB_NAME} PROPERTIES
+        IMPORTED_LOCATION ${LIB}
+        IMPORTED_SONAME ${LIB_NAME}.so
+    )
+endforeach()
+
+# Define the mapping of binary names to source files
+set(DEVICE_MAPPINGS
+    "libviture_one_sdk.a:src/devices/viture.c"
+    "libRayNeoXRMiniSDK.so:src/devices/rayneo.c"
 )
 
 set(SOURCES
     src/buffer.c
     src/config.c
     src/curl.c
-    src/devices/rayneo.c
-    src/devices/viture.c
     src/devices/xreal.c
     src/devices.c
     src/driver.c
@@ -95,6 +113,41 @@ set(SOURCES
     src/strings.c
     src/system.c
 )
+
+# Function to get the source file from a mapping
+function(get_source_file BINARY_NAME RESULT_VAR)
+    foreach(MAPPING ${DEVICE_MAPPINGS})
+        string(REPLACE ":" ";" MAPPING_LIST ${MAPPING})
+        list(GET MAPPING_LIST 0 MAPPED_BINARY)
+        list(GET MAPPING_LIST 1 MAPPED_SOURCE)
+        if(${BINARY_NAME} STREQUAL ${MAPPED_BINARY})
+            set(${RESULT_VAR} ${MAPPED_SOURCE} PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+    set(${RESULT_VAR} "" PARENT_SCOPE)
+endfunction()
+
+# Get all targets in the current directory
+get_property(ALL_TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY IMPORTED_TARGETS)
+
+# Iterate over all targets
+foreach(TARGET ${ALL_TARGETS})
+    get_target_property(LIB_TYPE ${TARGET} TYPE)
+    if(LIB_TYPE STREQUAL "STATIC_LIBRARY" OR LIB_TYPE STREQUAL "SHARED_LIBRARY")
+        get_target_property(LIB_LOCATION ${TARGET} IMPORTED_LOCATION)
+        if(LIB_LOCATION)
+            get_filename_component(LIB_NAME ${LIB_LOCATION} NAME)
+            get_source_file(${LIB_NAME} SOURCE_FILE)
+            if(SOURCE_FILE)
+                list(APPEND SOURCES ${SOURCE_FILE})
+                string(TOUPPER ${TARGET} TARGET_UPPER)
+                add_definitions(-D${TARGET_UPPER}_SUPPORTED)
+                message(STATUS "${TARGET} support enabled, added ${SOURCE_FILE}")
+            endif()
+        endif()
+    endif()
+endforeach()
 
 if(DEFINED ENV{BREEZY_DESKTOP})
   message(STATUS "Breezy Desktop build")
@@ -130,16 +183,25 @@ else()
   set(CURL_LIB libcurl)
 endif()
 
+set(ALL_IMPORTED_LIBS)
+get_property(ALL_TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY IMPORTED_TARGETS)
+foreach(TARGET ${ALL_TARGETS})
+    get_target_property(LIB_TYPE ${TARGET} TYPE)
+    if(LIB_TYPE STREQUAL "STATIC_LIBRARY" OR LIB_TYPE STREQUAL "SHARED_LIBRARY")
+        list(APPEND ALL_IMPORTED_LIBS ${TARGET})
+    endif()
+endforeach()
+
 target_link_libraries(xrealAirLinuxDriver
-		PRIVATE ${LIBEVDEV_LIBRARIES}
-		        ${JSONC_LIBRARIES}
-		        nrealAirLibrary
-		        Threads::Threads
-		        m
-            		${CURL_LIB}
-		        ${OPENSSL_LIBRARIES}
-		        ${VITURE_LIB_NAME}
-		        ${LIBUSB_LIBRARIES}
-		        ${RAYNEO_LIB_NAME}
+    PRIVATE
+        ${LIBEVDEV_LIBRARIES}
+        ${JSONC_LIBRARIES}
+        xrealAirLibrary
+        Threads::Threads
+        m
+        ${CURL_LIB}
+        ${OPENSSL_LIBRARIES}
+        ${ALL_IMPORTED_LIBS}
+        ${LIBUSB_LIBRARIES}
 )
 add_dependencies(xrealAirLinuxDriver run_python_script)

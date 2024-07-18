@@ -7,13 +7,23 @@
 #include <libusb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
-#define DEVICE_DRIVER_COUNT 3
-const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
-    &rayneo_driver,
-    &xreal_driver,
-    &viture_driver
-};
+#if defined(__aarch64__) || defined(__arm__)
+    #define DEVICE_DRIVER_COUNT 1
+    const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
+        &xreal_driver
+    };
+#elif defined(__x86_64__)
+    #define DEVICE_DRIVER_COUNT 3
+    const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
+        &rayneo_driver,
+        &xreal_driver,
+        &viture_driver
+    };
+#else
+    #error "Unsupported architecture"
+#endif
 
 static connected_device_type* _find_connected_device(struct libusb_device_descriptor descriptor) {
     for (int j = 0; j < DEVICE_DRIVER_COUNT; j++) {
@@ -89,7 +99,8 @@ void init_devices(handle_device_update_func callback) {
 }
 
 void handle_device_connection_events() {
-    libusb_handle_events_completed(ctx, NULL);
+    struct timeval tv = {5, 0};
+    libusb_handle_events_timeout_completed(ctx, &tv, NULL);
 }
 
 void deinit_devices() {

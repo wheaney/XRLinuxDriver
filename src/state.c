@@ -61,6 +61,7 @@ void write_state(driver_state_type *state) {
 void read_control_flags(FILE *fp, control_flags_type *flags) {
     flags->recenter_screen = false;
     flags->recalibrate = false;
+    flags->force_quit = false;
     flags->sbs_mode = SBS_CONTROL_UNSET;
 
     if (fp) {
@@ -82,6 +83,8 @@ void read_control_flags(FILE *fp, control_flags_type *flags) {
                 } else {
                     printf("Invalid sbs_mode value: %s\n", value);
                 }
+            } else if (strcmp(key, "force_quit") == 0) {
+                flags->force_quit = strcmp(value, "true") == 0;
             }
             plugins.handle_control_flag_line(key, value);
         }

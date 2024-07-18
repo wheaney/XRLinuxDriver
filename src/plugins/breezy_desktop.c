@@ -90,7 +90,7 @@ uint64_t getEpochTimestampMS() {
     return (uint64_t)(sec_ms + nsec_ms);
 }
 
-const uint8_t DATA_LAYOUT_VERSION = 2;
+const uint8_t DATA_LAYOUT_VERSION = 3;
 #define BOOL_TRUE 1
 #define BOOL_FALSE 0
 
@@ -231,6 +231,18 @@ void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
         lseek(fd, CONFIG_DATA_END_OFFSET, SEEK_SET);
         write(fd, &epoch_ms, sizeof(uint64_t));
         write(fd, values, sizeof(float) * NUM_IMU_VALUES);
+
+        // Calculate and write parity byte
+        uint8_t parity = 0;
+        uint8_t* data = (uint8_t*)&epoch_ms;
+        for (size_t i = 0; i < sizeof(uint64_t); i++) {
+            parity ^= data[i];
+        }
+        data = (uint8_t*)values;
+        for (size_t i = 0; i < sizeof(float) * NUM_IMU_VALUES; i++) {
+            parity ^= data[i];
+        }
+        write(fd, &parity, sizeof(uint8_t));
     }
     pthread_mutex_unlock(&file_mutex);
 }
@@ -337,9 +349,6 @@ const plugin_type breezy_desktop_plugin = {
     .register_features = breezy_desktop_register_features_func,
     .handle_imu_data = breezy_desktop_handle_imu_data_func,
     .reset_imu_data = breezy_desktop_reset_imu_data_func,
-
-    // just rewrite the config values whenever anything changes
-    .handle_state = write_config_data,
     .handle_device_disconnect = write_config_data,
     .handle_device_connect = breezy_desktop_device_connect_func
 };

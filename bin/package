@@ -10,6 +10,9 @@ if [ -z "$UA_API_SECRET" ] && [ -z "$UA_API_SECRET_INTENTIONALLY_EMPTY" ]; then
   exit 1
 fi
 
+ARCH=$(uname -m)
+echo "Building for $ARCH"
+
 # build the driver
 BUILD_PATH=build
 if [ ! -d "$BUILD_PATH" ]; then
@@ -39,7 +42,7 @@ cp -r ../systemd $PACKAGE_DIR
 if [ ! -d "$PACKAGE_DIR/lib" ]; then
   mkdir $PACKAGE_DIR/lib
 fi
-cp ../lib/*.so $PACKAGE_DIR/lib
+cp ../lib/$ARCH/*.so $PACKAGE_DIR/lib || true
 
 # create manifest file for verifying installed file checksums against the originally packaged versions
 # include any file that doesn't get modified during setup (e.g. the systemd service file)
@@ -48,6 +51,6 @@ sha256sum xrealAirLinuxDriver xreal_driver_config xreal_driver_uninstall > manif
 popd
 
 # bundle up the driver directory
-tar -zcvf xrealAirLinuxDriver.tar.gz $PACKAGE_DIR
+tar -zcvf xrealAirLinuxDriver-$ARCH.tar.gz $PACKAGE_DIR
 
 popd

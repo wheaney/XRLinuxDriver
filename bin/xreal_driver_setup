@@ -34,6 +34,7 @@ then
   # download and unzip the latest driver
   echo "Downloading latest release to: ${tmp_dir}/xrealAirLinuxDriver.tar.gz"
   curl -L -O https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrealAirLinuxDriver.tar.gz
+  binary_path_arg="xrealAirLinuxDriver.tar.gz"
 else
   if [[ "$binary_path_arg" = /* ]]; then
     abs_path="$binary_path_arg"
@@ -45,7 +46,7 @@ else
 fi
 
 echo "Extracting to: ${tmp_dir}/driver_air_glasses"
-tar -xf xrealAirLinuxDriver.tar.gz
+tar -xf $(basename $binary_path_arg)
 
 pushd driver_air_glasses > /dev/null
 
