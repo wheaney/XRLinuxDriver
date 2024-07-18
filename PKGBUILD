@@ -1,9 +1,10 @@
 # Maintainer: hodasemi <michaelh.95 at t-online dot de>
+# Maintainer: wheaney <wayne at xronlinux dot com>
 _pkgbase=XRLinuxDriver
-pkgname="${_pkgbase}"-BreezyGNOME
+pkgname="${_pkgbase}"-BreezyGNOME-git
 pkgver=0.1
 pkgrel=1
-pkgdesc="XR Linux Driver"
+pkgdesc="XR Linux Driver for Breezy GNOME"
 arch=('x86_64', 'aarch64')
 url="https://github.com/wheaney/XRLinuxDriver"
 license=('GPL-3.0')
