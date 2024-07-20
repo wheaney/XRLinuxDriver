@@ -2,6 +2,18 @@
 
 set -e
 
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+
+if [ -z "$XDG_DATA_HOME" ]; then
+  XDG_DATA_HOME="$USER_HOME/.local/share"
+fi
+DATA_DIR="$XDG_DATA_HOME/xr_driver"
+if [ ! -e "$DATA_DIR/manifest" ]; then
+  echo "Verification failed" >&2
+  exit 1
+fi
+
 # Get the directory of the current script
 script_dir=$(dirname "$0")
 
@@ -30,6 +42,6 @@ do
     echo "Verification failed" >&2
     exit 1
   fi
-done < "$script_dir/xr_driver/manifest"
+done < "$DATA_DIR/manifest"
 
 echo "Verification succeeded"

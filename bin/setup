@@ -105,16 +105,13 @@ cp xr_driver_cli $BIN_DIR
 cp xr_driver_uninstall $BIN_DIR
 sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
 cp xr_driver_verify $BIN_DIR
-
-if [ ! -d "$BIN_DIR/xr_driver" ]; then
-  mkdir -p $BIN_DIR/xr_driver
-fi
-cp manifest $BIN_DIR/xr_driver
+cp manifest $DATA_DIR
 
 chown -R $USER:$GROUP $DATA_DIR
 chown -R $USER:$GROUP $CONFIG_DIR
 chown -R $USER:$GROUP $STATE_DIR
-chown -R $USER:$GROUP $BIN_DIR/xr_driver*
+chown $USER:$GROUP $BIN_DIR/xrDriver
+chown $USER:$GROUP $BIN_DIR/xr_driver_*
 
 echo "Setting up the systemd service"
 # check if the systemd service is already running from a previous install

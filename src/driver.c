@@ -541,7 +541,7 @@ int main(int argc, const char** argv) {
 
     // set a lock so only one instance of the driver can be running at a time
     char *lock_file_path = NULL;
-    FILE *lock_file = get_or_create_runtime_file("lock", "r", &lock_file_path, NULL);
+    FILE *lock_file = get_or_create_runtime_file("lock.pid", "r", &lock_file_path, NULL);
     int rc = flock(fileno(lock_file), LOCK_EX | LOCK_NB);
     if(rc) {
         if(EWOULDBLOCK == errno)

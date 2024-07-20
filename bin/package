@@ -3,6 +3,9 @@
 # exit when any command fails
 set -e
 
+USER=${SUDO_USER:-$USER}
+GROUP=$(id -gn $USER)
+
 source bin/inject_ua
 
 if [ -z "$UA_API_SECRET" ] && [ -z "$UA_API_SECRET_INTENTIONALLY_EMPTY" ]; then
@@ -54,3 +57,7 @@ popd
 tar -zcvf xrDriver-$ARCH.tar.gz $PACKAGE_DIR
 
 popd
+
+mkdir -p out
+cp $BUILD_PATH/xrDriver-$ARCH.tar.gz out/
+chown $USER:$GROUP out/xrDriver-$ARCH.tar.gz
