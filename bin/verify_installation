@@ -8,9 +8,9 @@ script_dir=$(dirname "$0")
 # create a string to string mapping, file name to expected file location
 declare -A file_paths
 file_paths=(
-  ["xrealAirLinuxDriver"]="{user_home}/bin/xrealAirLinuxDriver"
-  ["xreal_driver_config"]="{user_home}/bin/xreal_driver_config"
-  ["xreal_driver_uninstall"]="{user_home}/bin/xreal_driver_uninstall"
+  ["xrDriver"]="{bin_dir}/xrDriver"
+  ["xr_driver_cli"]="{bin_dir}/xr_driver_cli"
+  ["xr_driver_uninstall"]="{bin_dir}/xr_driver_uninstall"
 )
 
 # verify the file hashes in ./manifest

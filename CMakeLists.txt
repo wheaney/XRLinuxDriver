@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrealAirLinuxDriver C)
+project(xrDriver C)
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_STANDARD 17)
@@ -163,9 +163,9 @@ else()
   )
 endif()
 
-add_executable(xrealAirLinuxDriver ${SOURCES})
+add_executable(xrDriver ${SOURCES})
 
-target_include_directories(xrealAirLinuxDriver
+target_include_directories(xrDriver
 		SYSTEM BEFORE PRIVATE
 		${LIBEVDEV_INCLUDE_DIRS}
 		${JSONC_INCLUDE_DIRS}
@@ -192,7 +192,7 @@ foreach(TARGET ${ALL_TARGETS})
     endif()
 endforeach()
 
-target_link_libraries(xrealAirLinuxDriver
+target_link_libraries(xrDriver
     PRIVATE
         ${LIBEVDEV_LIBRARIES}
         ${JSONC_LIBRARIES}
@@ -204,4 +204,4 @@ target_link_libraries(xrealAirLinuxDriver
         ${ALL_IMPORTED_LIBS}
         ${LIBUSB_LIBRARIES}
 )
-add_dependencies(xrealAirLinuxDriver run_python_script)
+add_dependencies(xrDriver run_python_script)

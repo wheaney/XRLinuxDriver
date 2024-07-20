@@ -24,16 +24,16 @@ cmake ..
 make
 
 # create package
-PACKAGE_DIR=driver_air_glasses
+PACKAGE_DIR=xr_driver
 if [ ! -d "$PACKAGE_DIR" ]; then
   mkdir $PACKAGE_DIR
 fi
 
 # move and rename the compiled driver to the driver directory
-mv xrealAirLinuxDriver $PACKAGE_DIR
+mv xrDriver $PACKAGE_DIR
 
 # copy setup and user-relevant scripts
-copy_and_inject_ua "../bin/ua.sh" "$PACKAGE_DIR" "../bin/setup" "../bin/verify_installation" "../bin/xreal_driver_config" "../bin/xreal_driver_uninstall"
+copy_and_inject_ua "../bin/ua.sh" "$PACKAGE_DIR" "../bin/setup" "../bin/verify_installation" "../bin/xr_driver_cli" "../bin/xr_driver_uninstall"
 
 # copy the systemd files needed to run our service
 cp -r ../systemd $PACKAGE_DIR
@@ -47,10 +47,10 @@ cp ../lib/$ARCH/*.so $PACKAGE_DIR/lib || true
 # create manifest file for verifying installed file checksums against the originally packaged versions
 # include any file that doesn't get modified during setup (e.g. the systemd service file)
 pushd $PACKAGE_DIR
-sha256sum xrealAirLinuxDriver xreal_driver_config xreal_driver_uninstall > manifest
+sha256sum xrDriver xr_driver_cli xr_driver_uninstall > manifest
 popd
 
 # bundle up the driver directory
-tar -zcvf xrealAirLinuxDriver-$ARCH.tar.gz $PACKAGE_DIR
+tar -zcvf xrDriver-$ARCH.tar.gz $PACKAGE_DIR
 
 popd

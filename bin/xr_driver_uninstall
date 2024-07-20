@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+for_install=0
+if [[ -n "$1" ]] && [[ "$1" == "--for-install" ]]; then
+    for_install=1
+fi
+
+# we don't want the uninstall script to be able to cause a failure if being triggered by the setup script
+[ "$for_install" -eq 0 ] && set -e
+
+# Make sure only root can run our script
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+if [ -z "$XDG_STATE_HOME" ]; then
+  XDG_STATE_HOME="$USER_HOME/.local/state"
+fi
+STATE_DIR="$XDG_STATE_HOME/xr_driver"
+
+if [ -z "$XDG_DATA_HOME" ]; then
+  XDG_DATA_HOME="$USER_HOME/.local/share"
+fi
+DATA_DIR="$XDG_DATA_HOME/xr_driver"
+
+if [ -z "$XDG_CONFIG_HOME" ]; then
+  XDG_CONFIG_HOME="$USER_HOME/.config"
+fi
+CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
+
+if [ -z "$XDG_BIN_HOME" ]; then
+  XDG_BIN_HOME="$USER_HOME/.local/bin"
+fi
+BIN_DIR="$XDG_BIN_HOME"
+
+[ "$for_install" -eq 0 ] && echo "Removing the systemd service"
+if systemctl is-active --quiet xr-driver; then
+    systemctl stop xr-driver
+fi
+rm -f /etc/systemd/system/xr-driver.service
+
+if [ "$for_install" -eq 0 ]; then
+    echo "Removing installed files from $STATE_DIR, $CONFIG_DIR, $DATA_DIR, and $BIN_DIR"
+
+    UA_EVENT_NAME="uninstall"
+    UA_CLIENT_ID="ARLinuxDriver"
+    #INJECT_UA_CALL
+
+    rm -rf $STATE_DIR
+    rm -rf $CONFIG_DIR
+fi
+rm -rf $DATA_DIR
+rm -f $BIN_DIR/xr_driver_cli
+rm -f $BIN_DIR/xr_driver_cli
+rm -f $BIN_DIR/xrDriver
+
+# this script is self-deleting, leave this as the last command
+rm -f $BIN_DIR/xr_driver_uninstall
