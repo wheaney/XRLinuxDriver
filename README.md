@@ -27,7 +27,7 @@ Check below to see if your device is supported. **Note: be sure you're on the la
 
 ### Steam Deck via Decky Loader
 
-For Steam Deck users, the driver is now available via the [Decky plugin loader](https://github.com/SteamDeckHomebrew/decky-loader). Just search "xreal" in the Decky store to install and use without leaving Gaming Mode. You can now enable or disable the driver and manage other driver settings via the Decky sidebar menu.
+For Steam Deck users, the driver is available via the [Decky plugin loader](https://github.com/SteamDeckHomebrew/decky-loader). Just search "xr" in the Decky store to install and use without leaving Gaming Mode. You can now enable or disable the driver and manage other driver settings via the Decky sidebar menu.
 
 You may still opt to do a manual installation using the instructions below if you enter Desktop Mode.
 
@@ -35,20 +35,20 @@ You may still opt to do a manual installation using the instructions below if yo
 
 *Note: this installation is for just the base driver with mouse/joystick support. If you're looking for virtual display mode, check out the [breezy-desktop setup](https://github.com/wheaney/breezy-desktop#setup).*
 
-1. [Download the setup script](https://github.com/wheaney/xrealAirLinuxDriver/releases/latest/download/xreal_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xreal_driver_setup`)
-2. Run the setup script as root (e.g. `sudo ~/Downloads/xreal_driver_setup`)
+1. [Download the setup script](https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xr_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xr_driver_setup`)
+2. Run the setup script as root (e.g. `sudo ~/Downloads/xr_driver_setup`)
   
-Your device should now automatically recognize when your glasses are plugged in and translate their movements to mouse movements. If you're not seeing this, check the log at `~/.xreal_driver_log` and report an Issue here with its contents.
+Your device should now automatically recognize when your glasses are plugged in and translate their movements to mouse movements. If you're not seeing this, check the log at `$XDG_STATE_HOME/xr_driver/driver.log` and report an Issue here with its contents.
 
 #### Turning automatic driver usage on or off
 
-To disable the driver and turn off mouse movements without completely removing it, you can use the config script (e.g. `~/bin/xreal_driver_config -d` to disable, and `-e` to re-enable). Run this script without arguments to see its usage. Configs are stored in the file `~/.xreal_driver_config`.
+To disable the driver and turn off mouse movements without completely removing it, you can use the config script (e.g. `xr_driver_cli -d` to disable, and `-e` to re-enable). Run this script without arguments to see its usage. Configs are stored in the file `$XDG_CONFIG_HOME/xr_driver/config.ini`.
 
 ### Practical Usage
 
 Since the device movements are converted to mouse movements, they should be recognized by any PC game that supports keyboard/mouse input. This will work most naturally for games where mouse movements is used to control "look"/camera movements. For point-and-click style games, you may want to disable the driver so your glasses act as just a simple display.
 
-To adjust the sensitivity of mapping head movements to mouse movements, use the Decky UI on Steam Deck, or `~/bin/xreal_driver_config --mouse-sensitivity 20` via the terminal.
+To adjust the sensitivity of mapping head movements to mouse movements, use the Decky UI on Steam Deck, or `xr_driver_cli --mouse-sensitivity 20` via the terminal.
 
 If you're using keyboard and mouse to control your games, then the mouse movements from this driver will simply add to your own mouse movements and they should work naturally together.
 
@@ -68,17 +68,17 @@ You'll probably want to use a utility that does what Steam's controller layouts 
 
 #### Enable joystick mode
 
-One last alternative if mouse input just won't work is to enable the driver's joystick mode, using the Decky UI on Steam Deck, or `~/bin/xreal_driver_config --use-joystick` via the terminal (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
+One last alternative if mouse input just won't work is to enable the driver's joystick mode, using the Decky UI on Steam Deck, or `xr_driver_cli --use-joystick` via the terminal (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
 
 ### Updating
 
 If using Decky, updates are installed through Decky.
 
-Otherwise, just rerun the `xreal_driver_setup` file. No need to redownload this script, as it will automatically download the latest installation binary for you.
+Otherwise, just rerun the `xr_driver_setup` file. No need to redownload this script, as it will automatically download the latest installation binary for you.
 
 ### Uninstalling
 
-If you wish to completely remove the installation, run the following script as root: `~/bin/xreal_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
+If you wish to completely remove the installation, run the following script as root: `xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
 
 ## Development
 
@@ -94,11 +94,11 @@ Fusion and hidapi source are included as Git submodules that you'll need to chec
 
 ### Build & Testing
 
-For local testing, you'll want to use the same package as for deployment: run `bin/package` to create the gzip, then run `sudo bin/xreal_driver_setup $(pwd)/build/xrealAirLinuxDriver.tar.gz` to install and test it.
+For local testing, you'll want to use the same package as for deployment: run `bin/package` to create the gzip, then run `sudo bin/xr_driver_setup $(pwd)/build/xrDriver.tar.gz` to install and test it.
 
 ### Deployment
 
-To create the deployment gzip file, run `bin/package`. Upload the resulting gzip file and the `bin/xreal_driver_setup` file to a new Release.
+To create the deployment gzip file, run `bin/package`. Upload the resulting gzip file and the `bin/xr_driver_setup` file to a new Release.
 
 ## Data Privacy Notice
 

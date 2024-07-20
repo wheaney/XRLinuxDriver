@@ -1,7 +1,7 @@
 # To run the build from the package root:
 #    docker buildx build --platform linux/amd64,linux/arm64 -f ./docker-build/Dockerfile -t "xr-driver" .
-#    docker run --rm -t -v ./:/source -v ./out/amd64:/out --platform linux/amd64 "xr-driver:amd64"
-#    docker run --rm -t -v ./:/source -v ./out/arm64:/out --platform linux/arm64 "xr-driver:arm64"
+#    docker run --rm -t -v ./:/source -v --platform linux/amd64 "xr-driver:amd64"
+#    docker run --rm -t -v ./:/source -v --platform linux/arm64 "xr-driver:arm64"
 
 FROM --platform=$TARGETPLATFORM debian:latest
 
@@ -21,8 +21,6 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-yaml
 
-VOLUME /out
 WORKDIR /source
 
-
-CMD bin/package && cp build/*.tar.gz /out/
+CMD bin/package

@@ -95,7 +95,7 @@ void write_character_to_joystick_debug_file(FILE *fp, int col, int row, char new
     }
 }
 
-// debug visual joystick from bash: watch -n 0.1 cat ~/.xreal_joystick_debug
+// debug visual joystick from bash: watch -n 0.1 cat $XDG_RUNTIME_DIR/xr_driver/joystick_debug
 void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, int new_joystick_y) {
     int old_x = joystick_debug_val_to_line(old_joystick_x);
     int old_y = joystick_debug_val_to_line(old_joystick_y);
@@ -105,7 +105,7 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
     if (old_x != new_x || old_y != new_y) {
         char full_path[1024];
         bool file_created = false;
-        FILE *fp = get_or_create_home_file(".xreal_joystick_debug", "r+", &full_path[0], &file_created);
+        FILE *fp = get_or_create_runtime_file("joystick_debug", "r+", &full_path[0], &file_created);
         if (file_created) {
             for (int i = 0; i < JOYSTICK_DEBUG_LINES; i++) {
                 for (int j = 0; j < JOYSTICK_DEBUG_LINES; j++) {

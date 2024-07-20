@@ -2,15 +2,27 @@
 
 set -e
 
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+
+if [ -z "$XDG_DATA_HOME" ]; then
+  XDG_DATA_HOME="$USER_HOME/.local/share"
+fi
+DATA_DIR="$XDG_DATA_HOME/xr_driver"
+if [ ! -e "$DATA_DIR/manifest" ]; then
+  echo "Verification failed" >&2
+  exit 1
+fi
+
 # Get the directory of the current script
 script_dir=$(dirname "$0")
 
 # create a string to string mapping, file name to expected file location
 declare -A file_paths
 file_paths=(
-  ["xrealAirLinuxDriver"]="{user_home}/bin/xrealAirLinuxDriver"
-  ["xreal_driver_config"]="{user_home}/bin/xreal_driver_config"
-  ["xreal_driver_uninstall"]="{user_home}/bin/xreal_driver_uninstall"
+  ["xrDriver"]="{bin_dir}/xrDriver"
+  ["xr_driver_cli"]="{bin_dir}/xr_driver_cli"
+  ["xr_driver_uninstall"]="{bin_dir}/xr_driver_uninstall"
 )
 
 # verify the file hashes in ./manifest
@@ -30,6 +42,6 @@ do
     echo "Verification failed" >&2
     exit 1
   fi
-done < "$script_dir/manifest"
+done < "$DATA_DIR/manifest"
 
 echo "Verification succeeded"

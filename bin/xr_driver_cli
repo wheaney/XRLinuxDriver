@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+if [ -z "$XDG_CONFIG_HOME" ]; then
+  XDG_CONFIG_HOME="$USER_HOME/.config"
+fi
+CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
+if [ ! -d "$CONFIG_DIR" ]; then
+  mkdir -p $CONFIG_DIR
+fi
+
 if [ -n "$1" ]
 then
-    config_file=~/.xreal_driver_config
+    config_file="$CONFIG_DIR/config.ini"
     config_value=""
     if [ "$1" == "--disable" ] || [ "$1" == "-d" ]; then
         config_key="disabled"
@@ -162,7 +172,7 @@ then
     fi
 fi
 
-echo "Usage: xreal_driver_config [options]
+echo "Usage: $0 [options]
 Options:
   -d, --disable
   -e, --enable

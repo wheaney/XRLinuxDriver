@@ -12,20 +12,9 @@ if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
 fi
 
 USER=${SUDO_USER:-$USER}
+GROUP=$(id -gn $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 UA_EVENT_NAME="install"
-if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
-  echo "Cleaning up the previous installation"
-
-  # ` || true` will ensure that this can't cause a failure, even with `set -e`
-  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
-
-  UA_EVENT_NAME="update"
-fi
-
-UA_CLIENT_ID="ARLinuxDriver"
-UA_EVENT_VERSION="$1"
-#INJECT_UA_CALL
 
 if [ -z "$XDG_DATA_HOME" ]; then
   XDG_DATA_HOME="$USER_HOME/.local/share"
@@ -35,13 +24,69 @@ if [ ! -d "$DATA_DIR" ]; then
   mkdir -p $DATA_DIR
 fi
 
-echo "Copying shared libraries to ${DATA_DIR}"
-cp -r lib $DATA_DIR
+if [ -z "$XDG_CONFIG_HOME" ]; then
+  XDG_CONFIG_HOME="$USER_HOME/.config"
+fi
+CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
+if [ ! -d "$CONFIG_DIR" ]; then
+  mkdir -p $CONFIG_DIR
+fi
+
+if [ -z "$XDG_BIN_HOME" ]; then
+  XDG_BIN_HOME="$USER_HOME/.local/bin"
+fi
+BIN_DIR="$XDG_BIN_HOME"
+if [ ! -d "$BIN_DIR" ]; then
+  mkdir -p $BIN_DIR
+fi
+
+if [ -z "$XDG_STATE_HOME" ]; then
+  XDG_STATE_HOME="$USER_HOME/.local/state"
+fi
+STATE_DIR="$XDG_STATE_HOME/xr_driver"
+if [ ! -d "$STATE_DIR" ]; then
+  mkdir -p $STATE_DIR
+fi
+
+if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
+  echo "Cleaning up the previous installation"
+
+  # ` || true` will ensure that this can't cause a failure, even with `set -e`
+  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
+
+  UA_EVENT_NAME="update"
+fi
+
+if [ -e "$BIN_DIR/xr_driver_uninstall" ]; then
+  echo "Cleaning up the previous installation"
+
+  # ` || true` will ensure that this can't cause a failure, even with `set -e`
+  $BIN_DIR/xr_driver_uninstall --for-install || true
+
+  UA_EVENT_NAME="update"
+fi
+
+UA_CLIENT_ID="ARLinuxDriver"
+UA_EVENT_VERSION="$1"
+#INJECT_UA_CALL
+
+echo "Copying shared libraries to ${DATA_DIR}/lib"
+mkdir -p $DATA_DIR/lib
+cp lib/* "$DATA_DIR/lib"
 
 if [ -e "$USER_HOME/.xreal_driver_config" ]; then
-  # replace the legacy "use_joystick" config
-  sed -i 's/use_joystick=true/output_mode=joystick/g' "$USER_HOME/.xreal_driver_config"
-  sed -i 's/use_joystick=false/output_mode=mouse/g' "$USER_HOME/.xreal_driver_config"
+  echo "Migrating config file to ${CONFIG_DIR}/config.ini"
+  mv $USER_HOME/.xreal_driver_config $CONFIG_DIR/config.ini
+fi
+
+if [ -e "$USER_HOME/.xreal_driver_log" ]; then
+  echo "Migrating log file to ${STATE_DIR}/driver.log"
+  mv $USER_HOME/.xreal_driver_log ${STATE_DIR}/driver.log
+fi
+
+if [ -e "/var/lib/xr_driver/device_license" ]; then
+  echo "Migrating device license to ${STATE_DIR}/license.json"
+  mv /var/lib/xr_driver/device_license ${STATE_DIR}/license.json
 fi
 
 if ! lsmod | grep -q uinput; then
@@ -49,43 +94,46 @@ if ! lsmod | grep -q uinput; then
   modprobe uinput
 fi
 
-echo "Copying driver binary and scripts to ${USER_HOME}/bin"
-if [ ! -d "$USER_HOME/bin" ]; then
-  mkdir $USER_HOME/bin
-fi
-cp xrealAirLinuxDriver $USER_HOME/bin
-cp xreal_driver_config $USER_HOME/bin
-cp xreal_driver_uninstall $USER_HOME/bin
-
 # escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
 ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
+ESCAPED_LD_LIBRARY_PATH=$(printf '%s\n' "$DATA_DIR/lib" | sed -e 's/[\/&]/\\&/g')
+ESCAPED_BIN_DIR=$(printf '%s\n' "$BIN_DIR" | sed -e 's/[\/&]/\\&/g')
 
-echo "Copying the verification script and manifest to ${USER_HOME}/.local/bin/xr_driver"
-sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" verify_installation
-if [ ! -d "$USER_HOME/.local/bin/xr_driver" ]; then
-  mkdir -p $USER_HOME/.local/bin/xr_driver
-fi
-cp -p verify_installation $USER_HOME/.local/bin/xr_driver
-cp manifest $USER_HOME/.local/bin/xr_driver
+echo "Copying driver binary and scripts to ${BIN_DIR} and ${DATA_DIR}"
+cp xrDriver $BIN_DIR
+cp xr_driver_cli $BIN_DIR
+cp xr_driver_uninstall $BIN_DIR
+sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
+cp xr_driver_verify $BIN_DIR
+cp manifest $DATA_DIR
+
+echo "Fixing file and directory ownership"
+chown -R $USER:$GROUP $DATA_DIR
+chown -R $USER:$GROUP $CONFIG_DIR
+chown -R $USER:$GROUP $STATE_DIR
+chown $USER:$GROUP $BIN_DIR/xrDriver
+chown $USER:$GROUP $BIN_DIR/xr_driver_*
 
 echo "Setting up the systemd service"
 # check if the systemd service is already running from a previous install
-if systemctl is-active --quiet xreal-air-driver; then
-  systemctl stop xreal-air-driver
+if systemctl is-active --quiet xr-driver; then
+  systemctl stop xr-driver
 fi
 
-ESCAPED_LD_LIBRARY_PATH=$(printf '%s\n' "$DATA_DIR/lib" | sed -e 's/[\/&]/\\&/g')
-sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" -e "s/{user}/$USER/g" -e "s/{ld_library_path}/$ESCAPED_LD_LIBRARY_PATH/g" systemd/xreal-air-driver.service
-cp systemd/xreal-air-driver.service /etc/systemd/system
-chmod 644 /etc/systemd/system/xreal-air-driver.service
+sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" \
+  -e "s/{user}/$USER/g" \
+  -e "s/{ld_library_path}/$ESCAPED_LD_LIBRARY_PATH/g" \
+  -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" systemd/xr-driver.service
+cp systemd/xr-driver.service /etc/systemd/system
+chmod 644 /etc/systemd/system/xr-driver.service
 systemctl daemon-reload
-systemctl start xreal-air-driver
+systemctl start xr-driver
 
 # check if systemd startup was successful
-if ! systemctl is-active --quiet xreal-air-driver; then
+if ! systemctl is-active --quiet xr-driver; then
   echo "systemd startup failed"
   exit 1
 fi
 
 # set it to run on startup
-systemctl enable xreal-air-driver
+systemctl enable xr-driver

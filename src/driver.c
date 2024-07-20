@@ -265,7 +265,7 @@ void update_config_from_file(FILE *fp) {
         printf("Output mode has been changed to '%s'\n", new_config->output_mode);
 
     if (!config()->debug_joystick && new_config->debug_joystick)
-        printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat ~/.xreal_joystick_debug' in bash\n");
+        printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat $XDG_RUNTIME_DIR/xr_driver/joystick_debug' in bash\n");
     if (config()->debug_joystick && !new_config->debug_joystick)
         printf("Joystick debugging has been disabled\n");
 
@@ -294,7 +294,7 @@ void update_config_from_file(FILE *fp) {
 }
 
 // pthread function to monitor the config file for changes
-char config_filename[1024];
+char *config_filename = NULL;
 FILE *config_fp;
 void *monitor_config_file_thread_func(void *arg) {
     config_fp = freopen(config_filename, "r", config_fp);
@@ -528,8 +528,8 @@ int main(int argc, const char** argv) {
     sigaction(SIGSEGV, &sa, NULL);
 
     // ensure the log file exists, reroute stdout and stderr there
-    char log_file_path[1024];
-    FILE *log_file = get_or_create_home_file(".xreal_driver_log", NULL, &log_file_path[0], NULL);
+    char *log_file_path = NULL;
+    FILE *log_file = get_or_create_state_file("driver.log", NULL, &log_file_path, NULL);
     fclose(log_file);
     freopen(log_file_path, "a", stdout);
     freopen(log_file_path, "a", stderr);
@@ -540,8 +540,8 @@ int main(int argc, const char** argv) {
     setbuf(stderr, NULL);
 
     // set a lock so only one instance of the driver can be running at a time
-    char lock_file_path[1024];
-    FILE *lock_file = get_or_create_home_file(".xreal_driver_lock", "r", &lock_file_path[0], NULL);
+    char *lock_file_path = NULL;
+    FILE *lock_file = get_or_create_runtime_file("lock.pid", "r", &lock_file_path, NULL);
     int rc = flock(fileno(lock_file), LOCK_EX | LOCK_NB);
     if(rc) {
         if(EWOULDBLOCK == errno)
@@ -551,7 +551,7 @@ int main(int argc, const char** argv) {
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
-    config_fp = get_or_create_home_file(".xreal_driver_config", "r", &config_filename[0], NULL);
+    config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
 
     if (driver_disabled()) printf("Driver is disabled\n");
