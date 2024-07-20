@@ -53,9 +53,9 @@ if [ "$for_install" -eq 0 ]; then
     rm -rf $CONFIG_DIR
 fi
 rm -rf $DATA_DIR
-rm -f $BIN_DIR/xr_driver_cli
-rm -f $BIN_DIR/xr_driver_cli
 rm -f $BIN_DIR/xrDriver
+rm -f $BIN_DIR/xr_driver_cli
+rm -f $BIN_DIR/xr_driver_verify
 
 # this script is self-deleting, leave this as the last command
 rm -f $BIN_DIR/xr_driver_uninstall
