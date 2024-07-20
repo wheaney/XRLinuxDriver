@@ -60,4 +60,3 @@ popd
 
 mkdir -p out
 cp $BUILD_PATH/xrDriver-$ARCH.tar.gz out/
-chown -R $USER:$GROUP out/
