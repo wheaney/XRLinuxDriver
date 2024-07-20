@@ -12,6 +12,7 @@ if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
 fi
 
 USER=${SUDO_USER:-$USER}
+GROUP=$(id -gn $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 UA_EVENT_NAME="install"
 
@@ -83,29 +84,37 @@ if [ -e "$USER_HOME/.xreal_driver_log" ]; then
   mv $USER_HOME/.xreal_driver_log ${STATE_DIR}/driver.log
 fi
 
+if [ -e "/var/lib/xr_driver/device_license" ]; then
+  echo "Migrating device license to ${STATE_DIR}/license.json"
+  mv /var/lib/xr_driver/device_license ${STATE_DIR}/license.json
+fi
+
 if ! lsmod | grep -q uinput; then
   echo "Setting up uinput kernel module"
   modprobe uinput
 fi
 
+# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
+ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
+ESCAPED_LD_LIBRARY_PATH=$(printf '%s\n' "$DATA_DIR/lib" | sed -e 's/[\/&]/\\&/g')
+ESCAPED_BIN_DIR=$(printf '%s\n' "$BIN_DIR" | sed -e 's/[\/&]/\\&/g')
+
 echo "Copying driver binary and scripts to ${BIN_DIR}"
-if [ ! -d "$BIN_DIR" ]; then
-  mkdir $BIN_DIR
-fi
 cp xrDriver $BIN_DIR
 cp xr_driver_cli $BIN_DIR
 cp xr_driver_uninstall $BIN_DIR
+sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
+cp xr_driver_verify $BIN_DIR
 
-# escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
-ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
-
-echo "Copying the verification script and manifest to ${USER_HOME}/.local/bin/xr_driver"
-sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" verify_installation
-if [ ! -d "$USER_HOME/.local/bin/xr_driver" ]; then
-  mkdir -p $USER_HOME/.local/bin/xr_driver
+if [ ! -d "$BIN_DIR/xr_driver" ]; then
+  mkdir -p $BIN_DIR/xr_driver
 fi
-cp -p verify_installation $USER_HOME/.local/bin/xr_driver
-cp manifest $USER_HOME/.local/bin/xr_driver
+cp manifest $BIN_DIR/xr_driver
+
+chown -R $USER:$GROUP $DATA_DIR
+chown -R $USER:$GROUP $CONFIG_DIR
+chown -R $USER:$GROUP $STATE_DIR
+chown -R $USER:$GROUP $BIN_DIR/xr_driver*
 
 echo "Setting up the systemd service"
 # check if the systemd service is already running from a previous install
@@ -113,8 +122,6 @@ if systemctl is-active --quiet xr-driver; then
   systemctl stop xr-driver
 fi
 
-ESCAPED_LD_LIBRARY_PATH=$(printf '%s\n' "$DATA_DIR/lib" | sed -e 's/[\/&]/\\&/g')
-ESCAPED_BIN_DIR=$(printf '%s\n' "$BIN_DIR" | sed -e 's/[\/&]/\\&/g')
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" \
   -e "s/{user}/$USER/g" \
   -e "s/{ld_library_path}/$ESCAPED_LD_LIBRARY_PATH/g" \

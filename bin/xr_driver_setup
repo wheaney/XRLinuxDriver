@@ -13,7 +13,6 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 ARCH=$(uname -m)
-echo "Building for $ARCH"
 
 start_dir=$(pwd)
 
@@ -28,6 +27,9 @@ if [ "$1" = "-v" ]
 then
   metrics_version="$2"
   binary_path_arg="$3"
+elif [ "$1" = "--tag" ] && [ -n "$2" ]
+then
+  binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-$ARCH.tar.gz"
 else
   binary_path_arg="$1"
 fi
@@ -35,9 +37,9 @@ fi
 if [ -z "$binary_path_arg" ]
 then
   # download and unzip the latest driver
-  echo "Downloading latest release to: ${tmp_dir}/xrDriver.tar.gz"
-  curl -L -O https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-$ARCH.tar.gz
   binary_path_arg="xrDriver-$ARCH.tar.gz"
+  echo "Downloading to: ${tmp_dir}/$binary_path_arg"
+  curl -L -O $binary_download_url
 else
   if [[ "$binary_path_arg" = /* ]]; then
     abs_path="$binary_path_arg"

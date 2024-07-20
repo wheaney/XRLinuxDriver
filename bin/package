@@ -33,7 +33,7 @@ fi
 mv xrDriver $PACKAGE_DIR
 
 # copy setup and user-relevant scripts
-copy_and_inject_ua "../bin/ua.sh" "$PACKAGE_DIR" "../bin/setup" "../bin/verify_installation" "../bin/xr_driver_cli" "../bin/xr_driver_uninstall"
+copy_and_inject_ua "../bin/ua.sh" "$PACKAGE_DIR" "../bin/setup" "../bin/xr_driver_verify" "../bin/xr_driver_cli" "../bin/xr_driver_uninstall"
 
 # copy the systemd files needed to run our service
 cp -r ../systemd $PACKAGE_DIR

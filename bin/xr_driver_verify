@@ -30,6 +30,6 @@ do
     echo "Verification failed" >&2
     exit 1
   fi
-done < "$script_dir/manifest"
+done < "$script_dir/xr_driver/manifest"
 
 echo "Verification succeeded"
