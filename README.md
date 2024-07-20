@@ -42,13 +42,13 @@ Your device should now automatically recognize when your glasses are plugged in 
 
 #### Turning automatic driver usage on or off
 
-To disable the driver and turn off mouse movements without completely removing it, you can use the config script (e.g. `~/.local/bin/xr_driver_cli -d` to disable, and `-e` to re-enable). Run this script without arguments to see its usage. Configs are stored in the file `$XDG_CONFIG_HOME/xr_driver/config.ini`.
+To disable the driver and turn off mouse movements without completely removing it, you can use the config script (e.g. `xr_driver_cli -d` to disable, and `-e` to re-enable). Run this script without arguments to see its usage. Configs are stored in the file `$XDG_CONFIG_HOME/xr_driver/config.ini`.
 
 ### Practical Usage
 
 Since the device movements are converted to mouse movements, they should be recognized by any PC game that supports keyboard/mouse input. This will work most naturally for games where mouse movements is used to control "look"/camera movements. For point-and-click style games, you may want to disable the driver so your glasses act as just a simple display.
 
-To adjust the sensitivity of mapping head movements to mouse movements, use the Decky UI on Steam Deck, or `~/bin/xr_driver_cli --mouse-sensitivity 20` via the terminal.
+To adjust the sensitivity of mapping head movements to mouse movements, use the Decky UI on Steam Deck, or `xr_driver_cli --mouse-sensitivity 20` via the terminal.
 
 If you're using keyboard and mouse to control your games, then the mouse movements from this driver will simply add to your own mouse movements and they should work naturally together.
 
@@ -68,7 +68,7 @@ You'll probably want to use a utility that does what Steam's controller layouts 
 
 #### Enable joystick mode
 
-One last alternative if mouse input just won't work is to enable the driver's joystick mode, using the Decky UI on Steam Deck, or `~/bin/xr_driver_cli --use-joystick` via the terminal (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
+One last alternative if mouse input just won't work is to enable the driver's joystick mode, using the Decky UI on Steam Deck, or `xr_driver_cli --use-joystick` via the terminal (you can revert this with `--use-mouse`). This will create a virtual gamepad whose right joystick is driven by movements from the glasses. This is less ideal because joystick movements are technically capped (you can only move a joystick so far...) and because it's a *second* controller on your PC. If the game you're trying to play is okay being driven by two controllers, then this may work, but if your game interprets another controller as a second player then its movements won't get combined with your real controller's movements.
 
 ### Updating
 
@@ -78,7 +78,7 @@ Otherwise, just rerun the `xr_driver_setup` file. No need to redownload this scr
 
 ### Uninstalling
 
-If you wish to completely remove the installation, run the following script as root: `~/.local/bin/xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
+If you wish to completely remove the installation, run the following script as root: `xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
 
 ## Development
 
