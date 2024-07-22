@@ -78,7 +78,7 @@ Otherwise, just rerun the `xr_driver_setup` file. No need to redownload this scr
 
 ### Uninstalling
 
-If you wish to completely remove the installation, run the following script as root: `xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
+If you wish to completely remove the installation, run the following script as root: `~/.local/bin/xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
 
 ## Development
 

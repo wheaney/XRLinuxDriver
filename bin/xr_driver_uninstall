@@ -14,6 +14,9 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
+# Get the directory of the current script
+script_dir=$(dirname "$0")
+
 USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 if [ -z "$XDG_STATE_HOME" ]; then
@@ -34,6 +37,7 @@ CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
 if [ -z "$XDG_BIN_HOME" ]; then
   XDG_BIN_HOME="$USER_HOME/.local/bin"
 fi
+OLD_BIN_DIR="$USER_HOME/bin"
 BIN_DIR="$XDG_BIN_HOME"
 
 [ "$for_install" -eq 0 ] && echo "Removing the systemd service"
@@ -57,5 +61,17 @@ rm -f $BIN_DIR/xrDriver
 rm -f $BIN_DIR/xr_driver_cli
 rm -f $BIN_DIR/xr_driver_verify
 
+# while these files aren't permanent, they are owned by root and we want to clean them up in case the driver
+# is re-run as a user service
+rm -f /tmp/shader_runtime_*
+rm -f /dev/shm/xr_*
+
 # this script is self-deleting, leave this as the last command
-rm -f $BIN_DIR/xr_driver_uninstall
+# remove the one we're not using first
+if [ "$script_dir" = "$OLD_BIN_DIR" ]; then
+    rm -f "$BIN_DIR/xr_driver_uninstall"
+    rm -f "$OLD_BIN_DIR/xreal_driver_uninstall"
+else
+    rm -f "$OLD_BIN_DIR/xreal_driver_uninstall"
+    rm -f "$BIN_DIR/xr_driver_uninstall"
+fi

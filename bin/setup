@@ -35,6 +35,7 @@ fi
 if [ -z "$XDG_BIN_HOME" ]; then
   XDG_BIN_HOME="$USER_HOME/.local/bin"
 fi
+OLD_BIN_DIR="$USER_HOME/bin"
 BIN_DIR="$XDG_BIN_HOME"
 if [ ! -d "$BIN_DIR" ]; then
   mkdir -p $BIN_DIR
@@ -107,12 +108,18 @@ sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
 cp xr_driver_verify $BIN_DIR
 cp manifest $DATA_DIR
 
+# keep putting this in the old location in case an older version of the script tries to find it
+cp xr_driver_uninstall $OLD_BIN_DIR/xreal_driver_uninstall
+
 echo "Fixing file and directory ownership"
 chown -R $USER:$GROUP $DATA_DIR
 chown -R $USER:$GROUP $CONFIG_DIR
 chown -R $USER:$GROUP $STATE_DIR
 chown $USER:$GROUP $BIN_DIR/xrDriver
 chown $USER:$GROUP $BIN_DIR/xr_driver_*
+
+# clear bash's cache of executable locations, so it can find the newly installed scripts
+hash -r
 
 echo "Setting up the systemd service"
 # check if the systemd service is already running from a previous install
