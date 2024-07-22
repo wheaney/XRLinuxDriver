@@ -73,7 +73,7 @@ UA_EVENT_VERSION="$1"
 
 echo "Copying shared libraries to ${DATA_DIR}/lib"
 mkdir -p $DATA_DIR/lib
-cp lib/* "$DATA_DIR/lib"
+cp lib/* "$DATA_DIR/lib" 2>/dev/null || true
 
 if [ -e "$USER_HOME/.xreal_driver_config" ]; then
   echo "Migrating config file to ${CONFIG_DIR}/config.ini"
