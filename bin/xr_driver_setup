@@ -21,8 +21,7 @@ tmp_dir=$(mktemp -d -t xr-driver-XXXXXXXXXX)
 pushd $tmp_dir > /dev/null
 echo "Created temp directory: ${tmp_dir}"
 
-# if the first argument is "-v" then the second argument is metrics version, and the third argument is binary path
-# otherwise, if the first argument is present, it's the binary path
+binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-$ARCH.tar.gz"
 if [ "$1" = "-v" ]
 then
   metrics_version="$2"
