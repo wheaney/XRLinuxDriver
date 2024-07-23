@@ -409,8 +409,8 @@ void handle_control_flags_update() {
 
 // pthread function for watching control flags file
 void *monitor_control_flags_file_thread_func(void *arg) {
-    char control_file_path[1024];
-    FILE* fp = get_state_file(control_flags_filename, "r", &control_file_path[0]);
+    char *control_file_path = NULL;
+    FILE* fp = get_driver_state_file(control_flags_filename, "r", &control_file_path);
     if (fp) {
         read_control_flags(fp, control_flags);
         write_state(state());
@@ -460,6 +460,7 @@ void *monitor_control_flags_file_thread_func(void *arg) {
     }
 
     close(fd);
+    free_and_clear(&control_file_path);
 
     if (config()->debug_threads)
         printf("\tdebug: Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
@@ -533,6 +534,7 @@ int main(int argc, const char** argv) {
     fclose(log_file);
     freopen(log_file_path, "a", stdout);
     freopen(log_file_path, "a", stderr);
+    free_and_clear(&log_file_path);
 
     // when redirecting stdout/stderr to a file, it becomes fully buffered, requiring lots of manual flushing of the
     // stream, this makes them unbuffered, which is fine since we log so little
@@ -548,6 +550,7 @@ int main(int argc, const char** argv) {
             fprintf(stderr, "Another instance of this program is already running.\n");
         exit(1);
     }
+    free_and_clear(&lock_file_path);
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));

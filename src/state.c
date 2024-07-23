@@ -28,16 +28,18 @@ const char* state_files_directory = "/dev/shm";
 const char* state_filename = "xr_driver_state";
 const char* control_flags_filename = "xr_driver_control";
 
-FILE* get_state_file(const char *filename, char *mode, char *full_path) {
-    snprintf(full_path, strlen(state_files_directory) + strlen(filename) + 2, "%s/%s", state_files_directory, filename);
-    return fopen(full_path, mode ? mode : "r");
+FILE* get_driver_state_file(const char *filename, char *mode, char **full_path) {
+    int full_path_length = strlen(state_files_directory) + strlen(filename) + 2;
+    *full_path = malloc(full_path_length);
+    snprintf(*full_path, full_path_length, "%s/%s", state_files_directory, filename);
+    return fopen(*full_path, mode ? mode : "r");
 }
 
 pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 void write_state(driver_state_type *state) {
     pthread_mutex_lock(&state_mutex);
-    char file_path[1024];
-    FILE* fp = get_state_file(state_filename, "w", &file_path[0]);
+    char *full_path = NULL;
+    FILE* fp = get_driver_state_file(state_filename, "w", &full_path);
 
     fprintf(fp, "heartbeat=%d\n", state->heartbeat);
     if (get_hardware_id()) fprintf(fp, "hardware_id=%s\n", get_hardware_id());

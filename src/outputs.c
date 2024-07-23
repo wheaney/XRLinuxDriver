@@ -103,9 +103,9 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
     int new_y = joystick_debug_val_to_line(new_joystick_y);
 
     if (old_x != new_x || old_y != new_y) {
-        char full_path[1024];
+        char *full_path = NULL;
         bool file_created = false;
-        FILE *fp = get_or_create_runtime_file("joystick_debug", "r+", &full_path[0], &file_created);
+        FILE *fp = get_or_create_runtime_file("joystick_debug", "r+", &full_path, &file_created);
         if (file_created) {
             for (int i = 0; i < JOYSTICK_DEBUG_LINES; i++) {
                 for (int j = 0; j < JOYSTICK_DEBUG_LINES; j++) {
@@ -119,21 +119,20 @@ void joystick_debug(int old_joystick_x, int old_joystick_y, int new_joystick_x, 
             fclose(fp);
 
             fp = fopen(full_path, "r+");
-            if (fp == NULL) {
-                return;
-            }
+        }
+        free_and_clear(&full_path);
+        if (fp == NULL) {
+            return;
         }
 
-        if (fp != NULL) {
-            char reset_char = ' ';
-            if (old_x == JOYSTICK_DEBUG_LINES_MIDDLE && old_y == JOYSTICK_DEBUG_LINES_MIDDLE)
-                reset_char = 'X';
+        char reset_char = ' ';
+        if (old_x == JOYSTICK_DEBUG_LINES_MIDDLE && old_y == JOYSTICK_DEBUG_LINES_MIDDLE)
+            reset_char = 'X';
 
-            write_character_to_joystick_debug_file(fp, old_x, old_y, reset_char);
-            rewind(fp);
-            write_character_to_joystick_debug_file(fp, new_x, new_y, 'O');
-            fclose(fp);
-        }
+        write_character_to_joystick_debug_file(fp, old_x, old_y, reset_char);
+        rewind(fp);
+        write_character_to_joystick_debug_file(fp, new_x, new_y, 'O');
+        fclose(fp);
     }
 }
 

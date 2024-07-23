@@ -55,7 +55,7 @@ extern const char* state_files_directory;
 extern const char* state_filename;
 extern const char* control_flags_filename;
 
-FILE* get_state_file(const char *filename, char *mode, char *full_path);
+FILE* get_driver_state_file(const char *filename, char *mode, char **full_path);
 void write_state(driver_state_type *state);
 void read_control_flags(FILE *fp, control_flags_type *flags);
 void update_state_from_device(driver_state_type *state, device_properties_type *device, device_driver_type *device_driver);

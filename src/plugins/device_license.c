@@ -216,7 +216,7 @@ void refresh_license(bool force) {
             while (!valid_license && attempt < 2) {
                 if (debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
                 char* file_path = strdup(device_license_path);
-                FILE *file = force ? NULL : get_or_create_file(file_path, 0777, "r", NULL);
+                FILE *file = force ? NULL : fopen(file_path, "r");
                 if (file) {
                     if (debug_license) printf("\tdebug: License file already exists\n");
                     // remove the file if it hasn't been touched in over a day
