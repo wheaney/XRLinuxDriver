@@ -127,6 +127,10 @@ if systemctl is-active --quiet xr-driver; then
   systemctl stop xr-driver
 fi
 
+# remove temporary files that may be left behind, sometimes they cause problems
+rm -f /tmp/shader_runtime_*
+rm -f /dev/shm/xr_*
+
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" \
   -e "s/{user}/$USER/g" \
   -e "s/{ld_library_path}/$ESCAPED_LD_LIBRARY_PATH/g" \
