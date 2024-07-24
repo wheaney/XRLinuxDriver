@@ -394,7 +394,11 @@ void handle_control_flags_update() {
     device_properties_type* device = device_checkout();
     if (is_driver_connected()) {
         if (device != NULL && device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
-            if (!device_driver->device_set_sbs_mode_func(control_flags->sbs_mode == SBS_CONTROL_ENABLE)) {
+            // glasses can be sensitive to rapid mode changes, so only request a change if necessary
+            bool requesting_enabled = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
+            bool is_already_enabled = device_driver->device_is_sbs_mode_func();
+            bool change_requested = is_already_enabled != requesting_enabled;
+            if (change_requested && !device_driver->device_set_sbs_mode_func(requesting_enabled)) {
                 fprintf(stderr, "Error setting requested SBS mode\n");
             }
         }
