@@ -87,7 +87,13 @@ fi
 
 if [ -e "/var/lib/xr_driver/device_license" ]; then
   echo "Migrating device license to ${STATE_DIR}/license.json"
-  mv /var/lib/xr_driver/device_license ${STATE_DIR}/license.json
+  pushd /var/lib/xr_driver
+
+  # since the file has root ownership, rename it before moving to a user directory
+  mv "device_license" "license.json"
+  mv "license.json" "${STATE_DIR}/license.json"
+
+  popd
 fi
 
 if ! lsmod | grep -q uinput; then
