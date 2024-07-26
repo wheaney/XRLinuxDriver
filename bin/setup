@@ -36,6 +36,9 @@ if [ -z "$XDG_BIN_HOME" ]; then
   XDG_BIN_HOME="$USER_HOME/.local/bin"
 fi
 OLD_BIN_DIR="$USER_HOME/bin"
+if [ ! -d "$OLD_BIN_DIR" ]; then
+  mkdir -p $OLD_BIN_DIR
+fi
 BIN_DIR="$XDG_BIN_HOME"
 if [ ! -d "$BIN_DIR" ]; then
   mkdir -p $BIN_DIR
@@ -118,11 +121,11 @@ cp manifest $DATA_DIR
 cp xr_driver_uninstall $OLD_BIN_DIR/xreal_driver_uninstall
 
 echo "Fixing file and directory ownership"
-chown -R $USER:$GROUP $DATA_DIR
-chown -R $USER:$GROUP $CONFIG_DIR
-chown -R $USER:$GROUP $STATE_DIR
-chown $USER:$GROUP $BIN_DIR/xrDriver
-chown $USER:$GROUP $BIN_DIR/xr_driver_*
+chown -R $USER:$GROUP $XDG_DATA_HOME
+chown -R $USER:$GROUP $XDG_CONFIG_HOME
+chown -R $USER:$GROUP $XDG_STATE_HOME
+chown -R $USER:$GROUP $XDG_BIN_HOME
+chown -R $USER:$GROUP $OLD_BIN_DIR
 
 # clear bash's cache of executable locations, so it can find the newly installed scripts
 hash -r
