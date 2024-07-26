@@ -181,10 +181,16 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
         device_properties_type* device = calloc(1, sizeof(device_properties_type));
         *device = rayneo_properties;
 
+        int attempts = 0;
+        while (!connected && attempts++ < 3) {
+            rayneo_device_connect();
+            if (!connected) sleep(1);
+        }
+
         // device_connect is actually out-of-turn here, the driver would normally call connect after we return the device 
         // properties, but we kick this off now so we can acquire the device name, which unfortunately comes from the SDK 
         // only after establishing a connection.
-        if (rayneo_device_connect()) {
+        if (connected) {
             pthread_mutex_lock(&device_name_mutex);
             while (device_brand == NULL && device_model == NULL) {
                 pthread_cond_wait(&device_name_cond, &device_name_mutex);

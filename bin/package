@@ -40,6 +40,7 @@ copy_and_inject_ua "../bin/ua.sh" "$PACKAGE_DIR" "../bin/setup" "../bin/xr_drive
 
 # copy the systemd files needed to run our service
 cp -r ../systemd $PACKAGE_DIR
+cp -r ../udev $PACKAGE_DIR
 
 # copy the shared library files
 if [ ! -d "$PACKAGE_DIR/lib" ]; then

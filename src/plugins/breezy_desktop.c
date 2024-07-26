@@ -1,7 +1,6 @@
 #include "buffer.h"
 #include "devices.h"
 #include "features/breezy_desktop.h"
-#include "features/sbs.h"
 #include "plugins.h"
 #include "plugins/breezy_desktop.h"
 #include "plugins/custom_banner.h"
