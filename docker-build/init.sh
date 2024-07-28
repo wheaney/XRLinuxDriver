@@ -1,10 +1,15 @@
 #!/bin/bash
 
+# might be needed on a fresh docker setup:
+#   install qemu and qemu-user-static packages
+#   docker run --privileged --rm tonistiigi/binfmt --install all
+#   sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
 if [[ "$1" == "--init" || ! $(docker buildx inspect xrdriverbuilder &>/dev/null; echo $?) -eq 0 ]]; then
     # start fresh
     echo "Creating new docker builder instance"
     docker buildx rm xrdriverbuilder 2>/dev/null || true
-    docker buildx create --name xrdriverbuilder --use
+    docker buildx create --use --name xrdriverbuilder --driver docker-container --driver-opt image=moby/buildkit:latest
 else
     echo "Using existing docker builder instance"
     docker buildx use xrdriverbuilder

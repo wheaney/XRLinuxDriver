@@ -34,18 +34,11 @@ pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 pkg_check_modules(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
-
-if(DEFINED SYSTEM_INSTALL)
-  pkg_check_modules(CURL REQUIRED libcurl)
-endif()
+pkg_check_modules(CURL REQUIRED libcurl)
 
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
-
-if(NOT DEFINED SYSTEM_INSTALL)
-  add_subdirectory(modules/curl)
-endif()
 
 # Set the library directory based on architecture
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR})
@@ -177,12 +170,6 @@ target_include_directories(xrDriver
 		${OPENSSL_INCLUDE_DIRS}
 )
 
-if(DEFINED SYSTEM_INSTALL)
-  set(CURL_LIB ${CURL_LIBRARIES})
-else()
-  set(CURL_LIB libcurl)
-endif()
-
 set(ALL_IMPORTED_LIBS)
 get_property(ALL_TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY IMPORTED_TARGETS)
 foreach(TARGET ${ALL_TARGETS})
@@ -199,7 +186,7 @@ target_link_libraries(xrDriver
         xrealAirLibrary
         Threads::Threads
         m
-        ${CURL_LIB}
+        ${CURL_LIBRARIES}
         ${OPENSSL_LIBRARIES}
         ${ALL_IMPORTED_LIBS}
         ${LIBUSB_LIBRARIES}
