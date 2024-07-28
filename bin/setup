@@ -7,7 +7,13 @@ set -e
 
 # some distros don't have systemd enabled by default, check this first
 if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
-  echo "systemd is required for this installation. Please enable it, then retry."
+  echo "systemd is required for this installation. Please enable it, then rerun the setup."
+  exit 1
+fi
+
+if ! ls /usr/lib*/libcurl.so* >/dev/null 2>&1; then
+  echo "The libcurl library is not found. It's typically provided by the package libcurl4 (Debian/Ubuntu), libcurl (Fedora), or curl (Arch). \
+        Please install it and rerun setup."
   exit 1
 fi
 
