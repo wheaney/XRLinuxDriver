@@ -3,6 +3,7 @@
 #include "device4.h"
 #include "driver.h"
 #include "imu.h"
+#include "outputs.h"
 #include "runtime_context.h"
 #include "strings.h"
 
@@ -159,7 +160,8 @@ void *poll_imu_func(void *arg) {
 
 bool sbs_mode_change_requested = false;
 void *poll_controller_func(void *arg) {
-    while (connected && glasses_imu && device4_read(glasses_controller, 100) == DEVICE4_ERROR_NO_ERROR) {
+    if (connected && glasses_imu) connected = wait_for_imu_start();
+    while (connected && glasses_imu && device4_read(glasses_controller, 100) == DEVICE4_ERROR_NO_ERROR && is_imu_alive()) {
         if (sbs_mode_change_requested) {
             device4_error_type error = device4_update_display_mode(glasses_controller);
             if (error == DEVICE4_ERROR_NO_ERROR) {

@@ -2,6 +2,7 @@
 #include "devices/rayneo.h"
 #include "driver.h"
 #include "imu.h"
+#include "outputs.h"
 #include "runtime_context.h"
 #include "sdks/rayneo.h"
 #include "strings.h"
@@ -204,7 +205,8 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
 
 void rayneo_block_on_device() {
     device_properties_type* device = device_checkout();
-    while (connected && device != NULL) {
+    if (connected && device != NULL) connected = wait_for_imu_start();
+    while (connected && device != NULL && is_imu_alive()) {
         sleep(1);
     }
 

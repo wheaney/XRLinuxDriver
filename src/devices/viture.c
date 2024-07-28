@@ -1,6 +1,7 @@
 #include "devices.h"
 #include "driver.h"
 #include "imu.h"
+#include "outputs.h"
 #include "runtime_context.h"
 #include "sdks/viture_one.h"
 #include "strings.h"
@@ -225,7 +226,8 @@ void viture_block_on_device() {
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         int imu_state = get_imu_state();
-        while (connected && imu_state == STATE_ON) {
+        if (connected && imu_state == STATE_ON) connected = wait_for_imu_start();
+        while (connected && imu_state == STATE_ON && is_imu_alive()) {
             sleep(1);
             imu_state = get_imu_state();
         }

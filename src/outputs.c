@@ -243,8 +243,28 @@ void reinit_outputs() {
     pthread_mutex_unlock(&outputs_mutex);
 }
 
+struct timespec ts;
+static uint32_t now_ms() {
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    return (uint32_t) (ts.tv_nsec / 1000000);
+}
+
+#define WAIT_FOR_IMU_ATTEMPTS 5
+bool wait_for_imu_start() {
+    int attempts = 0;
+    while (!is_imu_alive()) {
+        if (attempts++ == WAIT_FOR_IMU_ATTEMPTS) return false;
+        sleep(1);
+    }
+
+    return true;
+}
+
+static uint32_t last_imu_timestamp_ms;
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
+    last_imu_timestamp_ms = now_ms();
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         pthread_mutex_lock(&outputs_mutex);
@@ -325,4 +345,9 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
         pthread_mutex_unlock(&outputs_mutex);
     }
     device_checkin(device);
+}
+
+bool is_imu_alive() {
+    // reasonable to expect an IMU update every 100ms
+    return now_ms() - last_imu_timestamp_ms < 100;
 }
