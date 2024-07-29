@@ -88,6 +88,7 @@ set(SOURCES
     src/devices/xreal.c
     src/devices.c
     src/driver.c
+    src/epoch.c
     src/features/breezy_desktop.c
     src/features/smooth_follow.c
     src/features/sbs.c

@@ -8,6 +8,7 @@
 #include "runtime_context.h"
 #include "state.h"
 #include "system.h"
+#include "epoch.h"
 
 #include <inttypes.h>
 #include <errno.h>
@@ -80,16 +81,6 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     }
 };
 
-uint64_t getEpochTimestampMS() {
-    struct timespec ts;
-    timespec_get(&ts, TIME_UTC);
-
-    long int sec_ms = ts.tv_sec * 1000;
-    long int nsec_ms = ts.tv_nsec / 1000000;
-
-    return (uint64_t)(sec_ms + nsec_ms);
-}
-
 const uint8_t DATA_LAYOUT_VERSION = 3;
 #define BOOL_TRUE 1
 #define BOOL_FALSE 0
@@ -151,7 +142,7 @@ void do_write_config_data(int fd) {
         free(zero_data);
     }
     device_checkin(device);
-    last_config_write_ts = getEpochTimestampMS();
+    last_config_write_ts = get_epoch_time_ms();
 }
 
 char* get_shared_mem_file_path() {
@@ -223,7 +214,7 @@ void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
     pthread_mutex_lock(&file_mutex);
     int fd = get_shared_mem_fd();
     if (fd != -1) {
-        const uint64_t epoch_ms = getEpochTimestampMS();
+        const uint64_t epoch_ms = get_epoch_time_ms();
         if (last_config_write_ts == 0 || epoch_ms - last_config_write_ts > 250) {
             // write this periodically, to ensure a recent heartbeat at the very least
             do_write_config_data(fd);
