@@ -46,8 +46,8 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
 
 #define XREAL_ID_PRODUCT_COUNT 3
 #define XREAL_ID_VENDOR 0x3318
-const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {0x0424, 0x0428, 0x0432};
-const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {"Air", "Air 2", "Air 2 Pro"};
+const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {0x0424, 0x0428, 0x0432, 0x0426};
+const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {"Air", "Air 2", "Air 2 Pro", "Air 2 Ultra"};
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
