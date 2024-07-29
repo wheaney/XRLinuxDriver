@@ -44,7 +44,7 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE4_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
-#define XREAL_ID_PRODUCT_COUNT 3
+#define XREAL_ID_PRODUCT_COUNT 4
 #define XREAL_ID_VENDOR 0x3318
 const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {0x0424, 0x0428, 0x0432, 0x0426};
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {"Air", "Air 2", "Air 2 Pro", "Air 2 Ultra"};
