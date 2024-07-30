@@ -52,14 +52,15 @@ if [[ "$current_path" == /tmp/* ]]; then
 fi
 
 # this part of the setup should be run as the user, not root
-su -c $(realpath ./user_setup) $USER
+export XDG_RUNTIME_DIR=/run/user/$(id -u $USER)
+su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
+
+echo "here1"
 
 ###############################
 ### BEGIN sudo required section
 udevadm control --reload-rules
 udevadm trigger
-
-systemctl is-active --quiet xr-driver && sudo systemctl stop xr-driver
 
 # remove temporary files that may be left behind, sometimes they cause problems
 rm -f /tmp/shader_runtime_*
@@ -70,4 +71,13 @@ rm -f /dev/shm/breezy_desktop_imu
 ###############################
 
 # this part of the setup should be run as the user, not root
-su -c $(realpath ./user_systemd_start) $USER
+su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/systemd_start)" $USER
+
+###############################
+### BEGIN sudo required section
+
+# Ensure the user service persists after logout
+loginctl enable-linger $USER
+
+### END sudo required section
+###############################

@@ -11,6 +11,7 @@ fi
 # Get the directory of the current script
 script_dir=$(dirname "$0")
 
+USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 
 if [ -z "$XDG_DATA_HOME" ]; then
@@ -40,14 +41,15 @@ fi
 STATE_DIR="$XDG_STATE_HOME/xr_driver"
 
 [ "$for_install" -eq 0 ] && echo "Removing the systemd service"
-if systemctl --user is-active --quiet xr-driver; then
-    systemctl --user stop xr-driver
+export XDG_RUNTIME_DIR=/run/user/$(id -u $USER)
+if su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user is-active --quiet xr-driver" $USER; then
+    su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user stop xr-driver" $USER
 fi
 
-echo "Removing the systemd service from ${SYSTEMD_USER_DIR}"
+[ "$for_install" -eq 0 ] && echo "Removing the systemd service from ${SYSTEMD_USER_DIR}"
 rm -f $SYSTEMD_USER_DIR/xr-driver.service
 
-echo "Removing the udev rules from ${UDEV_RULES_DIR}"
+[ "$for_install" -eq 0 ] && echo "Removing the udev rules from ${UDEV_RULES_DIR}"
 rm $UDEV_RULES_DIR/70-*-xr.rules
 
 if [ "$for_install" -eq 0 ]; then

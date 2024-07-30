@@ -2,6 +2,7 @@
 
 # might be needed on a fresh docker setup:
 #   install qemu and qemu-user-static packages
+#   sudo docker context rm default
 #   docker run --privileged --rm tonistiigi/binfmt --install all
 #   sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 

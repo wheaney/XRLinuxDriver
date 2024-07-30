@@ -4,7 +4,7 @@ set -e
 
 # this part of the setup should be run as the user, not root
 if [ "$(id -u)" == "0" ]; then
-   echo "This script must be run as root" 1>&2
+   echo "This script must NOT be run as root" 1>&2
    exit 1
 fi
 
@@ -81,6 +81,9 @@ UA_CLIENT_ID="ARLinuxDriver"
 UA_EVENT_VERSION="$1"
 #INJECT_UA_CALL
 
+# make sure the systemd service isn't already running from a previous install
+systemctl --user is-active --quiet xr-driver && systemctl --user stop xr-driver
+
 echo "Copying shared libraries to ${DATA_DIR}/lib"
 mkdir -p $DATA_DIR/lib
 cp lib/* "$DATA_DIR/lib" 2>/dev/null || true
@@ -97,13 +100,13 @@ fi
 
 if [ -e "/var/lib/xr_driver/device_license" ]; then
   echo "Migrating device license to ${STATE_DIR}/license.json"
-  pushd /var/lib/xr_driver
+  pushd /var/lib/xr_driver > /dev/null
 
   # since the file has root ownership, rename it before moving to a user directory
   mv "device_license" "license.json"
   mv "license.json" "${STATE_DIR}/license.json"
 
-  popd
+  popd > /dev/null
 fi
 
 if ! lsmod | grep -q uinput; then
@@ -117,15 +120,18 @@ ESCAPED_LD_LIBRARY_PATH=$(printf '%s\n' "$DATA_DIR/lib" | sed -e 's/[\/&]/\\&/g'
 ESCAPED_BIN_DIR=$(printf '%s\n' "$BIN_DIR" | sed -e 's/[\/&]/\\&/g')
 
 echo "Copying driver binary and scripts to ${BIN_DIR} and ${DATA_DIR}"
+pushd bin > /dev/null
+sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
 cp xrDriver $BIN_DIR
 cp xr_driver_cli $BIN_DIR
 cp xr_driver_uninstall $BIN_DIR
-sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
 cp xr_driver_verify $BIN_DIR
-cp manifest $DATA_DIR
 
 # keep putting this in the old location in case an older version of the script tries to find it
 cp xr_driver_uninstall $OLD_BIN_DIR/xreal_driver_uninstall
+popd > /dev/null
+
+cp manifest $DATA_DIR
 
 echo "Copying the udev rules to ${UDEV_RULES_DIR}"
 cp udev/* $UDEV_RULES_DIR
@@ -139,7 +145,3 @@ cp systemd/xr-driver.service $SYSTEMD_USER_DIR
 
 # clear bash's cache of executable locations, so it can find the newly installed scripts
 hash -r
-
-echo "Setting up the systemd service"
-# check if the systemd service is already running from a previous install
-systemctl --user is-active --quiet xr-driver && systemctl --user stop xr-driver
