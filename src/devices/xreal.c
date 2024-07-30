@@ -1,6 +1,6 @@
 #include "devices.h"
-#include "device3.h"
-#include "device4.h"
+#include "device_imu.h"
+#include "device_mcu.h"
 #include "driver.h"
 #include "imu.h"
 #include "outputs.h"
@@ -29,19 +29,19 @@
 // map back and forth to one another (the index of a display mode in one array is used to find the corresponding
 // display mode in the other array). That's way they're ordered the way they are, and some modes are duplicated.
 const int sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
-    DEVICE4_DISPLAY_MODE_3840x1080_60_SBS,
-    DEVICE4_DISPLAY_MODE_3840x1080_72_SBS,
-    DEVICE4_DISPLAY_MODE_3840x1080_90_SBS,
-    DEVICE4_DISPLAY_MODE_3840x1080_90_SBS, // no 120Hz SBS mode, map from 120Hz to 90Hz
-    DEVICE4_DISPLAY_MODE_1920x1080_60_SBS  // put this last so no non-SBS mode will map to it
+    DEVICE_MCU_DISPLAY_MODE_3840x1080_60_SBS,
+    DEVICE_MCU_DISPLAY_MODE_3840x1080_72_SBS,
+    DEVICE_MCU_DISPLAY_MODE_3840x1080_90_SBS,
+    DEVICE_MCU_DISPLAY_MODE_3840x1080_90_SBS, // no 120Hz SBS mode, map from 120Hz to 90Hz
+    DEVICE_MCU_DISPLAY_MODE_1920x1080_60_SBS  // put this last so no non-SBS mode will map to it
 };
 
 const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
-    DEVICE4_DISPLAY_MODE_1920x1080_60,
-    DEVICE4_DISPLAY_MODE_1920x1080_72,
-    DEVICE4_DISPLAY_MODE_1920x1080_90,
-    DEVICE4_DISPLAY_MODE_1920x1080_120, // no SBS mode will be able to map to this
-    DEVICE4_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
+    DEVICE_MCU_DISPLAY_MODE_1920x1080_60,
+    DEVICE_MCU_DISPLAY_MODE_1920x1080_72,
+    DEVICE_MCU_DISPLAY_MODE_1920x1080_90,
+    DEVICE_MCU_DISPLAY_MODE_1920x1080_120, // no SBS mode will be able to map to this
+    DEVICE_MCU_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
 #define XREAL_ID_PRODUCT_COUNT 4
@@ -74,15 +74,16 @@ const device_properties_type xreal_air_properties = {
 
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
+static bool mcu_enabled = false;
 void handle_xreal_event(uint64_t timestamp,
-		   device3_event_type event,
-		   const device3_ahrs_type* ahrs) {
+                        device_imu_event_type event,
+                        const device_imu_ahrs_type* ahrs) {
     if (!connected || driver_disabled()) return;
 
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
     uint32_t elapsed_from_last_utilized = ts - last_utilized_event_ts;
-    if (event == DEVICE3_EVENT_UPDATE && elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
-        device3_quat_type quat = device3_get_orientation(ahrs);
+    if (event == DEVICE_IMU_EVENT_UPDATE && elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
+        device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, nwu_conversion_quat);
         driver_handle_imu_event(ts, nwu_quat);
@@ -93,40 +94,44 @@ void handle_xreal_event(uint64_t timestamp,
 
 void handle_xreal_controller_event(
 		uint64_t timestamp,
-		device4_event_type event,
+		device_mcu_event_type event,
 		uint8_t brightness,
 		const char* msg
 ) {
     // do nothing
 }
 
-device3_type* glasses_imu;
-device4_type* glasses_controller;
+device_imu_type* glasses_imu;
+device_mcu_type* glasses_controller;
 bool xreal_device_connect() {
-    glasses_imu = calloc(1, sizeof(device3_type));
-    connected = device3_open(glasses_imu, handle_xreal_event) == DEVICE3_ERROR_NO_ERROR;
+    glasses_imu = calloc(1, sizeof(device_imu_type));
+    connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
     if (connected) {
-        device3_clear(glasses_imu);
-        device3_calibrate(glasses_imu, 1000, true, true, false);
+        device_imu_clear(glasses_imu);
+        device_imu_calibrate(glasses_imu, 1000, true, true, false);
 
-        glasses_controller = calloc(1, sizeof(device4_type));
-        connected = device4_open(glasses_controller, handle_xreal_controller_event) == DEVICE4_ERROR_NO_ERROR;
-        device4_clear(glasses_controller);
+        glasses_controller = calloc(1, sizeof(device_mcu_type));
+        mcu_enabled = device_mcu_open(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
+        device_mcu_clear(glasses_controller);
     }
 
 
-    if (!connected) {
-        if (glasses_imu) {
-            device3_close(glasses_imu);
-            free(glasses_imu);
-            glasses_imu = NULL;
-        }
+    if (!connected && glasses_imu) {
+        device_imu_close(glasses_imu);
+        free(glasses_imu);
+        glasses_imu = NULL;
+    }
 
+    if (!mcu_enabled) {
         if (glasses_controller) {
-            device4_close(glasses_controller);
+            device_mcu_close(glasses_controller);
             free(glasses_controller);
             glasses_controller = NULL;
         }
+
+        device_properties_type* device = device_checkout();
+        device->sbs_mode_supported = false;
+        device_checkin(device);
     }
 
     return connected;
@@ -151,30 +156,30 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
 };
 
 void *poll_imu_func(void *arg) {
-    while (connected && glasses_controller && device3_read(glasses_imu, 1) == DEVICE3_ERROR_NO_ERROR);
+    while (connected && (!mcu_enabled || glasses_controller) && device_imu_read(glasses_imu, 1) == DEVICE_IMU_ERROR_NO_ERROR);
 
-    device3_close(glasses_imu);
+    device_imu_close(glasses_imu);
     if (glasses_imu) free(glasses_imu);
     glasses_imu = NULL;
 };
 
 bool sbs_mode_change_requested = false;
 void *poll_controller_func(void *arg) {
-    if (connected && glasses_imu) connected = wait_for_imu_start();
-    while (connected && glasses_imu && device4_read(glasses_controller, 100) == DEVICE4_ERROR_NO_ERROR && is_imu_alive()) {
+    if (connected && glasses_imu && mcu_enabled) mcu_enabled = wait_for_imu_start();
+    while (connected && glasses_imu && is_imu_alive() && mcu_enabled && device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR) {
         if (sbs_mode_change_requested) {
-            device4_error_type error = device4_update_display_mode(glasses_controller);
-            if (error == DEVICE4_ERROR_NO_ERROR) {
+            device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
+            if (error == DEVICE_MCU_ERROR_NO_ERROR) {
                 sbs_mode_change_requested = false;
             }
         } else {
-            device4_poll_display_mode(glasses_controller);
+            device_mcu_poll_display_mode(glasses_controller);
         }
 
         sleep(1);
     }
 
-    device4_close(glasses_controller);
+    device_mcu_close(glasses_controller);
     if (glasses_controller) free(glasses_controller);
     glasses_controller = NULL;
 };
@@ -191,7 +196,7 @@ void xreal_block_on_device() {
 
         while (connected) {
             sleep(1);
-            connected &= glasses_imu != NULL && glasses_controller != NULL;
+            connected &= glasses_imu && (!mcu_enabled || glasses_controller);
         }
 
         pthread_join(imu_thread, NULL);
@@ -211,7 +216,7 @@ int get_display_mode_index(int display_mode, const int* display_modes) {
 }
 
 bool xreal_device_is_sbs_mode() {
-    if (connected && glasses_controller) {
+    if (connected && mcu_enabled && glasses_controller) {
         if (get_display_mode_index(glasses_controller->disp_mode, sbs_display_modes) != -1) {
             return true;
         }
@@ -221,7 +226,7 @@ bool xreal_device_is_sbs_mode() {
 };
 
 bool xreal_device_set_sbs_mode(bool enable) {
-    if (!connected) return false;
+    if (!connected || !mcu_enabled || !glasses_controller) return false;
 
     // check what the current mode is
     int sbs_mode_index = get_display_mode_index(glasses_controller->disp_mode, sbs_display_modes);
