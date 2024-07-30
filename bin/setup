@@ -11,7 +11,7 @@ if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
   exit 1
 fi
 
-if ! ls /usr/lib*/libcurl.so* >/dev/null 2>&1; then
+if ! find /usr/lib* -name 'libcurl.so*' -print -quit | grep -q .; then
   echo "The libcurl library is not found. It's typically provided by the package libcurl4 (Debian/Ubuntu), libcurl (Fedora), or curl (Arch). \
         Please install it and rerun setup."
   exit 1
