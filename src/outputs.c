@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static pthread_mutex_t outputs_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct libevdev* evdev;
