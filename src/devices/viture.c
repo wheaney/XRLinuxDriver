@@ -226,8 +226,8 @@ void viture_block_on_device() {
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         int imu_state = get_imu_state();
-        if (connected && imu_state == STATE_ON) connected = wait_for_imu_start();
-        while (connected && imu_state == STATE_ON && is_imu_alive()) {
+        if (connected && imu_state != ERR_WRITE_FAIL) wait_for_imu_start();
+        while (connected && imu_state != ERR_WRITE_FAIL) {
             sleep(1);
             imu_state = get_imu_state();
         }
