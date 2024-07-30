@@ -3,6 +3,10 @@
 set -e
 
 # this part of the setup should be run as the user, not root
+if [ "$(id -u)" == "0" ]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
 
 GROUP=$(id -gn $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)

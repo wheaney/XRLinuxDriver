@@ -5,6 +5,12 @@ set -e
 # This script gets packaged with the release and should do the bulk of the setup work. This allows this setup to be tied
 # to a specific release of the code, and guarantees it will never run along-side newer or older binaries.
 
+# Make sure only root can run our script
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
 # some distros don't have systemd enabled by default, check this first
 if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
   echo "systemd is required for this installation. Please enable it, then rerun the setup."
@@ -16,10 +22,30 @@ if ! find /usr/lib* -name 'libcurl.so*' -print -quit | grep -q .; then
         Please install it and rerun setup."
   exit 1
 fi
+USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $USER | cut -d: -f6)
+if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
+  echo "Cleaning up the previous installation"
 
-# run user_setup as the user
+  # ` || true` will ensure that this can't cause a failure, even with `set -e`
+  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
+
+  UA_EVENT_NAME="update"
+fi
+
+if [ -e "$BIN_DIR/xr_driver_uninstall" ]; then
+  echo "Cleaning up the previous installation"
+
+  # ` || true` will ensure that this can't cause a failure, even with `set -e`
+  $BIN_DIR/xr_driver_uninstall --for-install || true
+
+  UA_EVENT_NAME="update"
+fi
+
+# this part of the setup should be run as the user, not root
 sudo -u $USER ./user_setup
 
+###############################
 ### BEGIN sudo required section
 udevadm control --reload-rules
 udevadm trigger
@@ -31,20 +57,8 @@ rm -f /tmp/shader_runtime_*
 rm -f /dev/shm/xr_*
 rm -f /dev/shm/breezy_desktop_imu
 
-
 ### END sudo required section
+###############################
 
-systemctl --user daemon-reload
-systemctl --user start xr-driver
-
-# check if systemd startup was successful
-if ! systemctl --user is-active --quiet xr-driver; then
-  echo "systemd startup failed"
-  exit 1
-fi
-
-# set it to run on startup
-systemctl --user enable xr-driver
-
-# Ensure the user service persists after logout
-loginctl enable-linger $USER
+# this part of the setup should be run as the user, not root
+sudo -u $USER ./user_systemd_start

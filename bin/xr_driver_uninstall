@@ -8,12 +8,6 @@ fi
 # we don't want the uninstall script to be able to cause a failure if being triggered by the setup script
 [ "$for_install" -eq 0 ] && set -e
 
-# Make sure only root can run our script
-if [ "$(id -u)" != "0" ]; then
-   echo "This script must be run as root" 1>&2
-   exit 1
-fi
-
 # Get the directory of the current script
 script_dir=$(dirname "$0")
 

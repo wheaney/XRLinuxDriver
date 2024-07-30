@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -e
+
+# this part of the setup should be run as the user, not root
+
+systemctl --user daemon-reload
+systemctl --user start xr-driver
+
+# check if systemd startup was successful
+if ! systemctl --user is-active --quiet xr-driver; then
+  echo "systemd startup failed"
+  exit 1
+fi
+
+# set it to run on startup
+systemctl --user enable xr-driver
+
+# Ensure the user service persists after logout
+loginctl enable-linger $USER
