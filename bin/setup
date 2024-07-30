@@ -22,7 +22,9 @@ if ! find /usr/lib* -name 'libcurl.so*' -print -quit | grep -q .; then
         Please install it and rerun setup."
   exit 1
 fi
+
 USER=${SUDO_USER:-$USER}
+GROUP=$(id -gn $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
   echo "Cleaning up the previous installation"
@@ -42,8 +44,10 @@ if [ -e "$BIN_DIR/xr_driver_uninstall" ]; then
   UA_EVENT_NAME="update"
 fi
 
+chown -R $USER:$GROUP *
+
 # this part of the setup should be run as the user, not root
-sudo -u $USER ./user_setup
+su - $USER -c $(realpath ./user_setup)
 
 ###############################
 ### BEGIN sudo required section
@@ -61,4 +65,4 @@ rm -f /dev/shm/breezy_desktop_imu
 ###############################
 
 # this part of the setup should be run as the user, not root
-sudo -u $USER ./user_systemd_start
+su - $USER -c $(realpath ./user_systemd_start)
