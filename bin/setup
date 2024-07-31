@@ -55,10 +55,14 @@ fi
 export XDG_RUNTIME_DIR=/run/user/$(id -u $USER)
 su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
 
-echo "here1"
-
 ###############################
 ### BEGIN sudo required section
+UDEV_RULES_DIR="/usr/lib/udev/rules.d"
+mkdir -p $UDEV_RULES_DIR
+
+echo "Copying the udev rules to ${UDEV_RULES_DIR}"
+cp udev/* $UDEV_RULES_DIR
+
 udevadm control --reload-rules
 udevadm trigger
 

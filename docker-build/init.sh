@@ -5,6 +5,7 @@
 #   sudo docker context rm default
 #   docker run --privileged --rm tonistiigi/binfmt --install all
 #   sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+#   ls -l /proc/sys/fs/binfmt_misc/ # should contain qemu-<arch> files
 
 if [[ "$1" == "--init" || ! $(docker buildx inspect xrdriverbuilder &>/dev/null; echo $?) -eq 0 ]]; then
     # start fresh

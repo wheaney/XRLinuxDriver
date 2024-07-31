@@ -28,11 +28,6 @@ fi
 if [ -z "$XDG_CONFIG_HOME" ]; then
   XDG_CONFIG_HOME="$USER_HOME/.config"
 fi
-UDEV_CONFIG_DIR=$XDG_CONFIG_HOME/udev
-UDEV_RULES_DIR=$UDEV_CONFIG_DIR/rules.d
-if [ ! -d "$UDEV_RULES_DIR" ]; then
-  mkdir -p $UDEV_RULES_DIR
-fi
 
 CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
 if [ ! -d "$CONFIG_DIR" ]; then
@@ -132,9 +127,6 @@ cp xr_driver_uninstall $OLD_BIN_DIR/xreal_driver_uninstall
 popd > /dev/null
 
 cp manifest $DATA_DIR
-
-echo "Copying the udev rules to ${UDEV_RULES_DIR}"
-cp udev/* $UDEV_RULES_DIR
 
 echo "Copying the systemd service to ${SYSTEMD_USER_DIR}"
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" \
