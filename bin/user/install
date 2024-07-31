@@ -15,44 +15,24 @@ UA_EVENT_NAME="install"
 if [ -z "$XDG_DATA_HOME" ]; then
   XDG_DATA_HOME="$USER_HOME/.local/share"
 fi
-SYSTEMD_DATA_DIR="$XDG_DATA_HOME/systemd"
-SYSTEMD_USER_DIR="$SYSTEMD_DATA_DIR/user"
-if [ ! -d "$SYSTEMD_USER_DIR" ]; then
-  mkdir -p $SYSTEMD_USER_DIR
-fi
+SYSTEMD_USER_DIR="$XDG_DATA_HOME/systemd/user"
 DATA_DIR="$XDG_DATA_HOME/xr_driver"
-if [ ! -d "$DATA_DIR" ]; then
-  mkdir -p $DATA_DIR
-fi
 
 if [ -z "$XDG_CONFIG_HOME" ]; then
   XDG_CONFIG_HOME="$USER_HOME/.config"
 fi
-
 CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
-if [ ! -d "$CONFIG_DIR" ]; then
-  mkdir -p $CONFIG_DIR
-fi
 
 if [ -z "$XDG_BIN_HOME" ]; then
   XDG_BIN_HOME="$USER_HOME/.local/bin"
 fi
 OLD_BIN_DIR="$USER_HOME/bin"
-if [ ! -d "$OLD_BIN_DIR" ]; then
-  mkdir -p $OLD_BIN_DIR
-fi
 BIN_DIR="$XDG_BIN_HOME"
-if [ ! -d "$BIN_DIR" ]; then
-  mkdir -p $BIN_DIR
-fi
 
 if [ -z "$XDG_STATE_HOME" ]; then
   XDG_STATE_HOME="$USER_HOME/.local/state"
 fi
 STATE_DIR="$XDG_STATE_HOME/xr_driver"
-if [ ! -d "$STATE_DIR" ]; then
-  mkdir -p $STATE_DIR
-fi
 
 if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
   echo "Cleaning up the previous installation"

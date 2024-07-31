@@ -26,11 +26,50 @@ fi
 USER=${SUDO_USER:-$USER}
 GROUP=$(id -gn $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
-if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
+
+function create_and_chown() {
+  if [ ! -d "$1" ]; then
+    mkdir -p $1
+  fi
+  chown -R $USER:$GROUP $1
+}
+
+if [ -z "$XDG_DATA_HOME" ]; then
+  XDG_DATA_HOME="$USER_HOME/.local/share"
+fi
+SYSTEMD_DATA_DIR="$XDG_DATA_HOME/systemd"
+SYSTEMD_USER_DIR="$SYSTEMD_DATA_DIR/user"
+create_and_chown $SYSTEMD_USER_DIR
+
+DATA_DIR="$XDG_DATA_HOME/xr_driver"
+create_and_chown $DATA_DIR
+
+if [ -z "$XDG_CONFIG_HOME" ]; then
+  XDG_CONFIG_HOME="$USER_HOME/.config"
+fi
+
+CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
+create_and_chown $CONFIG_DIR
+
+if [ -z "$XDG_BIN_HOME" ]; then
+  XDG_BIN_HOME="$USER_HOME/.local/bin"
+fi
+OLD_BIN_DIR="$USER_HOME/bin"
+BIN_DIR="$XDG_BIN_HOME"
+create_and_chown $OLD_BIN_DIR
+create_and_chown $BIN_DIR
+
+if [ -z "$XDG_STATE_HOME" ]; then
+  XDG_STATE_HOME="$USER_HOME/.local/state"
+fi
+STATE_DIR="$XDG_STATE_HOME/xr_driver"
+create_and_chown $STATE_DIR
+
+if [ -e "$OLD_BIN_DIR/xreal_driver_uninstall" ]; then
   echo "Cleaning up the previous installation"
 
   # ` || true` will ensure that this can't cause a failure, even with `set -e`
-  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
+  $OLD_BIN_DIR/xreal_driver_uninstall --for-install || true
 
   UA_EVENT_NAME="update"
 fi
