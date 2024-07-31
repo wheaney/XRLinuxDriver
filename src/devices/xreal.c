@@ -46,7 +46,9 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
 
 #define XREAL_ID_PRODUCT_COUNT 4
 #define XREAL_ID_VENDOR 0x3318
-const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {0x0424, 0x0428, 0x0432, 0x0426};
+#define XREAL_AIR_2_ULTRA_PID 0x0426
+#define XREAL_AIR_2_ULTRA_FOV 52.0
+const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {0x0424, 0x0428, 0x0432, XREAL_AIR_2_ULTRA_PID};
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {"Air", "Air 2", "Air 2 Pro", "Air 2 Ultra"};
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
@@ -115,7 +117,6 @@ bool xreal_device_connect() {
         device_mcu_clear(glasses_controller);
     }
 
-
     if (!connected && glasses_imu) {
         device_imu_close(glasses_imu);
         free(glasses_imu);
@@ -146,6 +147,9 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
                 device->model = (char *)xreal_supported_models[i];
+                if (product_id == XREAL_AIR_2_ULTRA_PID) {
+                    device->fov = XREAL_AIR_2_ULTRA_FOV;
+                }
 
                 return device;
             }
