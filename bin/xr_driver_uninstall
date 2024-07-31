@@ -55,6 +55,13 @@ fi
 rm -f $SYSTEMD_USER_DIR/xr-driver.service
 
 UDEV_RULES_DIR="/usr/lib/udev/rules.d"
+if [ -f /etc/os-release ]; then
+  . /etc/os-release
+  if [ "$ID" == "steamos" ]; then
+    UDEV_RULES_DIR="/etc/udev/rules.d"
+  fi
+fi
+
 [ "$for_install" -eq 0 ] && echo "Removing the udev rules from ${UDEV_RULES_DIR}"
 sudo rm $UDEV_RULES_DIR/70-*-xr.rules
 

@@ -39,6 +39,7 @@ if [ -z "$XDG_DATA_HOME" ]; then
 fi
 SYSTEMD_DATA_DIR="$XDG_DATA_HOME/systemd"
 SYSTEMD_USER_DIR="$SYSTEMD_DATA_DIR/user"
+create_and_chown $SYSTEMD_DATA_DIR
 create_and_chown $SYSTEMD_USER_DIR
 
 DATA_DIR="$XDG_DATA_HOME/xr_driver"
@@ -96,7 +97,16 @@ su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
 
 ###############################
 ### BEGIN sudo required section
+
+# if steamos is detected, we need to install the udev rules to /etc since /usr is on the readonly FS
 UDEV_RULES_DIR="/usr/lib/udev/rules.d"
+if [ -f /etc/os-release ]; then
+  . /etc/os-release
+  if [ "$ID" == "steamos" ]; then
+    UDEV_RULES_DIR="/etc/udev/rules.d"
+  fi
+fi
+
 mkdir -p $UDEV_RULES_DIR
 
 echo "Copying the udev rules to ${UDEV_RULES_DIR}"
