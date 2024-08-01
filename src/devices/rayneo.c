@@ -181,6 +181,9 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
         device_properties_type* device = calloc(1, sizeof(device_properties_type));
         *device = rayneo_properties;
 
+        // trying to connect to the device too quickly seems to cause irrecoverable connection issues
+        sleep(1);
+
         // device_connect is actually out-of-turn here, the driver would normally call connect after we return the device 
         // properties, but we kick this off now so we can acquire the device name, which unfortunately comes from the SDK 
         // only after establishing a connection.

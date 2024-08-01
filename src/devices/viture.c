@@ -188,6 +188,9 @@ static void disconnect(bool forced) {
 
 bool viture_device_connect() {
     if (!connected || get_imu_state() != STATE_ON) {
+        // newer firmware may require a bit of a wait after the device is plugged in before attempting to connect
+        sleep(2);
+
         if (!initialized) initialized = init(handle_viture_event, viture_mcu_callback);
         connected = initialized && set_imu(true) == ERR_SUCCESS;
     }
