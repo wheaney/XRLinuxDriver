@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "devices/rayneo.h"
+#include "devices/rokid.h"
 #include "devices/viture.h"
 #include "devices/xreal.h"
 #include "runtime_context.h"
@@ -16,9 +17,10 @@
         &viture_driver
     };
 #elif defined(__x86_64__)
-    #define DEVICE_DRIVER_COUNT 3
+    #define DEVICE_DRIVER_COUNT 4
     const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
         &rayneo_driver,
+        &rokid_driver,
         &xreal_driver,
         &viture_driver
     };
@@ -26,10 +28,15 @@
     #error "Unsupported architecture"
 #endif
 
-static connected_device_type* _find_connected_device(struct libusb_device_descriptor descriptor) {
+static connected_device_type* _find_connected_device(libusb_device *usb_device, struct libusb_device_descriptor descriptor) {
     for (int j = 0; j < DEVICE_DRIVER_COUNT; j++) {
         const device_driver_type* driver = device_drivers[j];
-        device_properties_type* device = driver->supported_device_func(descriptor.idVendor, descriptor.idProduct);
+        device_properties_type* device = driver->supported_device_func(
+            descriptor.idVendor, 
+            descriptor.idProduct,
+            libusb_get_bus_number(usb_device),
+            libusb_get_device_address(usb_device)
+        );
         if (device != NULL) {
             printf("Found device with vendor ID 0x%04x and product ID 0x%04x\n", descriptor.idVendor, descriptor.idProduct);
             connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
@@ -64,7 +71,7 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
             handle_device_update_callback(NULL);
         }
     } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
-        connected_device_type* connected_device = _find_connected_device(descriptor);
+        connected_device_type* connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) {
             handle_device_update_callback(connected_device);
         }
@@ -131,7 +138,7 @@ connected_device_type* find_connected_device() {
             continue;
         }
 
-        connected_device = _find_connected_device(descriptor);
+        connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) break;
     }
 

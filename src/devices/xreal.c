@@ -138,7 +138,7 @@ bool xreal_device_connect() {
     return connected;
 };
 
-device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t product_id) {
+device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == XREAL_ID_VENDOR) {
         for (int i=0; i < XREAL_ID_PRODUCT_COUNT; i++) {
             if (product_id == xreal_supported_id_product[i]) {

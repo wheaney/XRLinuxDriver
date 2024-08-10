@@ -79,6 +79,7 @@ endforeach()
 set(DEVICE_MAPPINGS
     "libviture_one_sdk.a:src/devices/viture.c"
     "libRayNeoXRMiniSDK.so:src/devices/rayneo.c"
+    "libGlassSDK.so:src/devices/rokid.c"
 )
 
 set(SOURCES
