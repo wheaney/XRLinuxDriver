@@ -25,9 +25,6 @@ static pthread_mutex_t outputs_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct libevdev* evdev;
 struct libevdev_uinput* uinput;
 
-// counter that resets every second, for triggering things that we don't want to do every cycle
-int imu_counter = 0;
-
 int joystick_debug_imu_cycles;
 int prev_joystick_x = 0;
 int prev_joystick_y = 0;
@@ -259,6 +256,9 @@ bool wait_for_imu_start() {
 static uint64_t last_imu_timestamp_ms;
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
+    // counter that resets every second, for triggering things that we don't want to do every cycle
+    static int imu_counter = 0;
+
     last_imu_timestamp_ms = get_epoch_time_ms();
     device_properties_type* device = device_checkout();
     if (device != NULL) {
@@ -325,9 +325,9 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
         }
 
         // always use joystick debugging as it adds a helpful visual
-        if (config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0) {
+        if (config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0)
             joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
-        }
+
         prev_joystick_x = next_joystick_x;
         prev_joystick_y = next_joystick_y;
 

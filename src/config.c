@@ -28,6 +28,7 @@ driver_config_type *default_config() {
     config->debug_multi_tap = false;
     config->debug_ipc = false;
     config->debug_license = false;
+    config->debug_device = false;
 
     return config;
 }
@@ -96,6 +97,9 @@ driver_config_type* parse_config_file(FILE *fp) {
                 }
                 if (equal(token, "license")) {
                     config->debug_license = true;
+                }
+                if (equal(token, "device")) {
+                    config->debug_device = true;
                 }
                 token = strtok(NULL, ",");
             }

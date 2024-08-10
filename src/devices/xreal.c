@@ -106,6 +106,8 @@ void handle_xreal_controller_event(
 device_imu_type* glasses_imu;
 device_mcu_type* glasses_controller;
 bool xreal_device_connect() {
+    sleep(1);
+    
     glasses_imu = calloc(1, sizeof(device_imu_type));
     connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
     if (connected) {

@@ -65,14 +65,21 @@ void reset_calibration(bool reset_device) {
     state()->calibration_state = CALIBRATING;
 
     if (reset_device && is_driver_connected()) {
+        if (config()->debug_device) printf("\tdebug: reset_calibration, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
     } else if (ipc_enabled) printf("Waiting on device calibration\n");
 }
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
+    // counter that resets every second, for triggering things that we don't want to do every cycle
+    static int imu_counter = 0;
     static int multi_tap = 0;
+
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
+        if (config()->debug_device && imu_counter == 0)
+            printf("\tdebug: driver_handle_imu_event - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
+            
         if (glasses_calibrated) {
             if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
                 if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
@@ -112,7 +119,6 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             // adjust the current rotation by the conjugate of the screen placement quat
             quat = multiply_quaternions(screen_center_conjugate, quat);
 
-
             imu_euler_type euler = quaternion_to_euler(quat);
             imu_euler_type euler_velocities = get_euler_velocities(euler, device->imu_cycles_per_s);
             multi_tap = detect_multi_tap(euler_velocities,
@@ -125,6 +131,11 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             }
 
             handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
+        } else if (config()->debug_device) printf("\tdebug: driver_handle_imu_event, received invalid quat\n");
+
+        // reset the counter every second
+        if ((++imu_counter % device->imu_cycles_per_s) == 0) {
+            imu_counter = 0;
         }
     }
     device_checkin(device);
@@ -191,8 +202,14 @@ static bool block_on_device_ready = false;
 // reevaluates the conditions that determine whether the block_on_device_thread function can be unblocked,
 // we should call this whenever a condition changes that may effect the evaluation of block_on_device_ready
 void evaluate_block_on_device_ready() {
+    if (config()->debug_device) 
+        printf("\tdebug: evaluate_block_on_device_ready, %s, %s, %s\n", 
+            force_quit ? "force_quit" : "no force_quit", 
+            driver_disabled() ? "driver_disabled" : "driver_enabled", 
+            device_present() ? "device_present" : "no device_present");
+
     pthread_mutex_lock(&block_on_device_mutex);
-    block_on_device_ready = !force_quit && !driver_disabled() && device_present();
+    block_on_device_ready = force_quit || !driver_disabled() && device_present();
     if (block_on_device_ready) pthread_cond_signal(&block_on_device_cond);
     pthread_mutex_unlock(&block_on_device_mutex);
 }
@@ -200,6 +217,8 @@ void evaluate_block_on_device_ready() {
 // pthread function to wait for a supported device, create outputs, and block on the device while it's connected
 void *block_on_device_thread_func(void *arg) {
     while (!force_quit) {
+        if (config()->debug_device) printf("\tdebug: block_on_device_thread, loop start\n");
+
         bool first_device_wait = true;
         pthread_mutex_lock(&block_on_device_mutex);
         while (!block_on_device_ready) {
@@ -207,30 +226,35 @@ void *block_on_device_thread_func(void *arg) {
             if (!force_quit && !driver_disabled() && first_device_wait) {
                 printf("Waiting for glasses\n");
                 first_device_wait = false;
-            }
+            } else if (config()->debug_device) printf("\tdebug: block_on_device_thread, waiting on ready\n");
             pthread_cond_wait(&block_on_device_cond, &block_on_device_mutex);
         }
         pthread_mutex_unlock(&block_on_device_mutex);
 
         if (!force_quit) {
+            if (config()->debug_device) printf("\tdebug: block_on_device_thread, device_driver->device_connect_func()\n");
+
             if (device_driver->device_connect_func()) {
+                printf("Device connected, redirecting input to %s...\n", config()->output_mode);
+
                 setup_ipc();
                 reset_calibration(false);
                 if (ipc_enabled) *ipc_values->disabled = false;
-
                 plugins.handle_device_connect();
-                if (!driver_disabled()) {
-                    printf("Device connected, redirecting input to %s...\n", config()->output_mode);
-                    init_outputs();
-                }
+                init_outputs();
 
+                if (config()->debug_device) printf("\tdebug: block_on_device_thread, device_driver->block_on_device_func()\n");
                 device_driver->block_on_device_func();
 
                 plugins.handle_device_disconnect();
                 deinit_outputs();
             } else if (block_on_device_ready) {
-                // device is physically connected, but driver wasn't able to connect, pause before trying again
-                printf("Device driver connection attempt failed, retrying in 1 second\n");
+                printf("Device driver connection attempt failed. ");
+            }
+            
+            if (block_on_device_ready) {
+                // device is still physically connected and will retry, pause for a moment
+                printf("Retrying driver connection in 1 second\n");
                 sleep(1);
             }
         }
@@ -281,10 +305,15 @@ void update_config_from_file(FILE *fp) {
     if (config()->debug_license != new_config->debug_license)
         printf("License debugging has been %s\n", new_config->debug_license ? "enabled" : "disabled");
 
+    if (config()->debug_device != new_config->debug_device)
+        printf("Device debugging has been %s\n", new_config->debug_device ? "enabled" : "disabled");
+
     update_config(config(), new_config);
 
-    if (driver_newly_disabled && is_driver_connected())
+    if (driver_newly_disabled && is_driver_connected()) {
+        if (new_config->debug_device) printf("\tdebug: update_config_from_file, device_driver->disconnect_func()\n");
         device_driver->disconnect_func(true);
+    }
 
     if (output_mode_changed && is_driver_connected()) reinit_outputs();
 
@@ -398,6 +427,10 @@ void handle_control_flags_update() {
             bool requesting_enabled = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
             bool is_already_enabled = device_driver->device_is_sbs_mode_func();
             bool change_requested = is_already_enabled != requesting_enabled;
+
+            if (change_requested && config()->debug_device) 
+                printf("\tdebug: handle_control_flags_update, device_driver->device_set_sbs_mode_func(%s)\n", requesting_enabled ? "true" : "false");
+
             if (change_requested && !device_driver->device_set_sbs_mode_func(requesting_enabled)) {
                 fprintf(stderr, "Error setting requested SBS mode\n");
             }
@@ -405,7 +438,10 @@ void handle_control_flags_update() {
         if (control_flags->force_quit) {
             printf("Force quit requested, exiting\n");
             force_quit = true;
+
+            if (config()->debug_device) printf("\tdebug: handle_control_flags_update, device_driver->disconnect_func(true)\n");
             device_driver->disconnect_func(true);
+            evaluate_block_on_device_ready();
         }
     }
     device_checkin(device);
@@ -477,7 +513,10 @@ void handle_device_update(connected_device_type* usb_device) {
     static device_properties_type* connected_device = NULL;
 
     if (connected_device != NULL) {
-        if (is_driver_connected()) device_driver->disconnect_func(false);
+        if (is_driver_connected()) {
+            if (config()->debug_device) printf("\tdebug: handle_device_update, device_driver->disconnect_func(false)\n");
+            device_driver->disconnect_func(false);
+        }
 
         // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
         device_checkin(connected_device);
