@@ -21,6 +21,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#define MS_PER_SEC 1000
+#define IMU_CHECKPOINT_MS MS_PER_SEC / 4
+
+static int last_imu_checkpoint_ms = 0;
+static imu_quat_type last_imu_checkpoint_quat = {.x = 0.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};
+static uint64_t last_healthy_imu_timestamp_ms = 0;
+
 static pthread_mutex_t outputs_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct libevdev* evdev;
 struct libevdev_uinput* uinput;
@@ -213,6 +220,7 @@ static void _init_outputs() {
 }
 
 static void _deinit_outputs() {
+    last_imu_checkpoint_ms = 0;
     if (uinput) {
         libevdev_uinput_destroy(uinput);
         uinput = NULL;
@@ -253,13 +261,24 @@ bool wait_for_imu_start() {
     return true;
 }
 
-static uint64_t last_imu_timestamp_ms;
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
 
-    last_imu_timestamp_ms = get_epoch_time_ms();
+    // periodically run checks to keep an eye on the health of the IMU
+    if (timestamp_ms - last_imu_checkpoint_ms > IMU_CHECKPOINT_MS) {
+        last_imu_checkpoint_ms = timestamp_ms;
+
+        // in practice, no two quats will be exactly equal even if the glasses are stationary
+        if (!quat_equal(quat, last_imu_checkpoint_quat)) {
+            last_healthy_imu_timestamp_ms = get_epoch_time_ms();
+            last_imu_checkpoint_quat = quat;
+        } else if (config()->debug_device) {
+            printf("\tdebug: handle_imu_update, device failed health check\n");
+        }
+    }
+
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         pthread_mutex_lock(&outputs_mutex);
@@ -343,6 +362,5 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
 }
 
 bool is_imu_alive() {
-    // reasonable to expect an IMU update every 100ms
-    return get_epoch_time_ms() - last_imu_timestamp_ms < 100;
+    return get_epoch_time_ms() - last_healthy_imu_timestamp_ms < MS_PER_SEC;
 }

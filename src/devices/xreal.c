@@ -171,8 +171,7 @@ void *poll_imu_func(void *arg) {
 
 bool sbs_mode_change_requested = false;
 void *poll_controller_func(void *arg) {
-    if (connected && glasses_imu && mcu_enabled) mcu_enabled = wait_for_imu_start();
-    while (connected && glasses_imu && is_imu_alive() && mcu_enabled && device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR) {
+    while (connected && glasses_imu && mcu_enabled && device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR) {
         if (sbs_mode_change_requested) {
             device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
             if (error == DEVICE_MCU_ERROR_NO_ERROR) {
@@ -200,9 +199,10 @@ void xreal_block_on_device() {
         pthread_t controller_thread;
         pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
 
+        connected &= wait_for_imu_start();
         while (connected) {
             sleep(1);
-            connected &= glasses_imu && (!mcu_enabled || glasses_controller);
+            connected &= glasses_imu && (!mcu_enabled || glasses_controller) && is_imu_alive();
         }
 
         pthread_join(imu_thread, NULL);

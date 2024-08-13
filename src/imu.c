@@ -1,6 +1,7 @@
 #include "imu.h"
 
 #include <math.h>
+#include <stdbool.h>
 
 float degree_to_radian(float deg) {
     return deg * M_PI / 180.0f;
@@ -63,4 +64,8 @@ imu_euler_type quaternion_to_euler(imu_quat_type q) {
     euler.yaw = atan2(siny_cosp, cosy_cosp) * (180.0 / M_PI);
 
     return euler;
+}
+
+bool quat_equal(imu_quat_type q1, imu_quat_type q2) {
+    return q1.w == q2.w && q1.x == q2.x && q1.y == q2.y && q1.z == q2.z;
 }

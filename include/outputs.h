@@ -4,6 +4,10 @@
 #include "ipc.h"
 
 #include <stdbool.h>
+#include <stdint.h>
+
+#define MS_PER_SEC 1000
+#define IMU_CHECKPOINT_MS MS_PER_SEC / 4
 
 void init_outputs();
 
