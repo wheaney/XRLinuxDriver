@@ -86,7 +86,7 @@ void rokid_disconnect(bool forced) {
     }
 }
 
-static handle_display_mode(device_properties_type* device, int display_mode) {
+static void handle_display_mode(device_properties_type* device, int display_mode) {
     sbs_mode_enabled = display_mode != RESOLUTION_2D_3840_1080_60HZ;
     if (sbs_mode_enabled) {
         if (display_mode != RESOLUTION_3D_3840_1080_60HZ) {
