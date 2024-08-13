@@ -70,14 +70,14 @@ void rokid_disconnect(bool forced) {
     connected = false;
     if (event_instance) {
         if (event_handle) {
-            _Z20GlassUnRegisterEventPvS_(event_instance, event_handle);
+            GlassUnRegisterEvent(event_instance, event_handle);
             event_handle = NULL;
         }
-        _Z15GlassEventClosePv(event_instance);
+        GlassEventClose(event_instance);
         event_instance = NULL;
     }
     if (control_instance) {
-        _Z17GlassControlClosePv(control_instance);
+        GlassControlClose(control_instance);
         control_instance = NULL;
     }
     if (device_fd >= 0) {
@@ -98,11 +98,11 @@ static handle_display_mode(device_properties_type* device, int display_mode) {
 }
 
 static bool device_connect(device_properties_type* device) {
-    event_instance = _Z14GlassEventInitv();
+    event_instance = GlassEventInit();
     if (!event_instance) {
         fprintf(stderr, "Failed to initialize event instance\n");
     } else {
-        control_instance = _Z16GlassControlInitv();
+        control_instance = GlassControlInit();
         if (!control_instance) {
             fprintf(stderr, "Failed to initialize control instance\n");
         } else {
@@ -112,17 +112,17 @@ static bool device_connect(device_properties_type* device) {
             if (device_fd < 0) {
                 fprintf(stderr, "Failed to open device %s\n", device_path);
             } else {
-                connected = _Z14GlassEventOpenPvi(event_instance, device_fd) && 
-                            _Z16GlassControlOpenPvi(control_instance, device_fd);
+                connected = GlassEventOpen(event_instance, device_fd) && 
+                            GlassControlOpen(control_instance, device_fd);
 
                 if (connected) {
-                    event_handle = _Z26GlassRegisterEventWithSizePv10EVENT_TYPEi(event_instance, ROTATION_EVENT, 50);
+                    event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
                     if (!event_handle) {
                         fprintf(stderr, "Failed to register event handle\n");
                         connected = false;
                     } else {
-                        _Z14AddFusionEventPvi(event_instance, true);
-                        handle_display_mode(device, _Z14GetDisplayModePv(control_instance));
+                        GlassAddFusionEvent(event_instance, true);
+                        handle_display_mode(device, GetDisplayMode(control_instance));
                     }
                 }
             }
@@ -161,13 +161,17 @@ device_properties_type* rokid_supported_device(uint16_t vendor_id, uint16_t prod
 
                 if (device_connect(device)) {
                     // split GetProductName result on the first space to separate brand and model
-                    char* product_name = _Z14GetProductNamePv(control_instance);
+                    char* product_name = GetProductName(control_instance);
                     char* space = strchr(product_name, ' ');
+                    char* version_start = strchr(product_name, '(');
                     if (space) {
                         *space = '\0';
-                        device->brand = strdup(product_name);
+                        if (version_start) {
+                            *version_start = '\0';
+                        }
                         device->model = strdup(space + 1);
                     }
+                    device->brand = strdup(product_name);
                     if (driver_disabled()) rokid_disconnect(true);
                     return device;
                 }
@@ -184,7 +188,7 @@ void rokid_block_on_device() {
     if (device != NULL) {
         struct EventData ed;
         while (connected) {
-            if (_Z14GlassWaitEventPvS_P9EventDatai(event_instance, event_handle, &ed, 1000)) {
+            if (GlassWaitEvent(event_instance, event_handle, &ed, 1000)) {
                 struct SensorData sd = ed.acc;
                 uint32_t timestamp = (uint32_t) (sd.sensor_timestamp_ns / TS_TO_MS_FACTOR);
                 struct RotationData rd = ed.rotation;
@@ -201,7 +205,7 @@ void rokid_block_on_device() {
 
                     // do this every second in the same thread as GlassWaitEvent, it seemed like the
                     // USB interactions between the two calls may not be thread safe
-                    handle_display_mode(device, _Z14GetDisplayModePv(control_instance));
+                    handle_display_mode(device, GetDisplayMode(control_instance));
                 }
 
                 driver_handle_imu_event(timestamp, nwu_quat);
@@ -219,7 +223,7 @@ bool rokid_device_is_sbs_mode() {
 
 bool rokid_device_set_sbs_mode(bool enabled) {
     // 3D mode offers 1080p and 1200p options, might as well go with the higher resolution
-    sbs_mode_enabled = _Z19GlassSetDisplayModePvi(
+    sbs_mode_enabled = GlassSetDisplayMode(
         control_instance, enabled ? RESOLUTION_3D_3840_1200_60HZ : RESOLUTION_2D_3840_1080_60HZ);
     return sbs_mode_enabled;
 };

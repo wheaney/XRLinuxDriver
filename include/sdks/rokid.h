@@ -99,7 +99,7 @@ typedef struct EventData{
 
 
 /* Get usb context
- * Call after GlassEventInit or _Z16GlassControlInitv
+ * Call after GlassEventInit or GlassControlInit
  *
  * \returns libusb_context*
  */
@@ -383,5 +383,56 @@ int GetVendorId(void* handle);
  * \returns true on success, false on failure
  */
 int GlassGetTimeNano(void *handle, long long *hmdTimestamp, long long *sysTimestamp);
+
+
+// redefine the mangled function names here so we can use the API as intended
+typedef bool (*GlassControlCloseFunc)(void* handle);
+typedef bool (*GlassControlReleaseFunc)(void* handle);
+typedef void* (*GlassControlInitFunc)(void);
+typedef bool (*GlassControlOpenFunc)(void* handle, int fd);
+typedef bool (*GlassSetDisplayModeFunc)(void* handle, int mode);
+typedef void* (*GlassEventInitFunc)(void);
+typedef void* (*GlassRegisterEventWithSizeFunc)(void* handle, enum EVENT_TYPE type, int size);
+typedef bool (*GlassUnRegisterEventFunc)(void* handle, void* eventHandle);
+typedef bool (*GlassWaitEventFunc)(void* handle, void* eventHandle, struct EventData* data, int timeout);
+typedef void* (*GlassSDKGetUsbContextFunc)(void);
+typedef void (*GlassAddFusionEventFunc)(void* handle, int enable);
+typedef bool (*GlassEventOpenFunc)(void* handle, int fd);
+typedef bool (*GlassEventCloseFunc)(void* handle);
+typedef int (*GetDisplayModeFunc)(void* handle);
+typedef char* (*GetProductNameFunc)(void* handle);
+
+extern GlassControlCloseFunc GlassControlClose;
+extern GlassControlReleaseFunc GlassControlRelease;
+extern GlassControlInitFunc GlassControlInit;
+extern GlassControlOpenFunc GlassControlOpen;
+extern GlassSetDisplayModeFunc GlassSetDisplayMode;
+extern GlassEventInitFunc GlassEventInit;
+extern GlassRegisterEventWithSizeFunc GlassRegisterEventWithSize;
+extern GlassUnRegisterEventFunc GlassUnRegisterEvent;
+extern GlassWaitEventFunc GlassWaitEvent;
+extern GlassSDKGetUsbContextFunc GlassSDKGetUsbContext;
+extern GlassAddFusionEventFunc GlassAddFusionEvent;
+extern GlassEventOpenFunc GlassEventOpen;
+extern GlassEventCloseFunc GlassEventClose;
+extern GetDisplayModeFunc GetDisplayMode;
+extern GetProductNameFunc GetProductName;
+
+// retrieved using readelf (e.g. `readelf -W -s lib/x86_64/libGlassSDK.so  | grep GlassControlClose`)
+#define GlassControlClose ((GlassControlCloseFunc)_Z17GlassControlClosePv)
+#define GlassControlRelease ((GlassControlReleaseFunc)_Z19GlassControlReleasePv)
+#define GlassControlInit ((GlassControlInitFunc)_Z16GlassControlInitv)
+#define GlassControlOpen ((GlassControlOpenFunc)_Z16GlassControlOpenPvi)
+#define GlassSetDisplayMode ((GlassSetDisplayModeFunc)_Z19GlassSetDisplayModePvi)
+#define GlassEventInit ((GlassEventInitFunc)_Z14GlassEventInitv)
+#define GlassRegisterEventWithSize ((GlassRegisterEventWithSizeFunc)_Z26GlassRegisterEventWithSizePv10EVENT_TYPEi)
+#define GlassUnRegisterEvent ((GlassUnRegisterEventFunc)_Z20GlassUnRegisterEventPvS_)
+#define GlassWaitEvent ((GlassWaitEventFunc)_Z14GlassWaitEventPvS_P9EventDatai)
+#define GlassSDKGetUsbContext ((GlassSDKGetUsbContextFunc)_Z21GlassSDKGetUsbContextv)
+#define GlassAddFusionEvent ((GlassAddFusionEventFunc)_Z14AddFusionEventPvi)
+#define GlassEventOpen ((GlassEventOpenFunc)_Z14GlassEventOpenPvi)
+#define GlassEventClose ((GlassEventCloseFunc)_Z15GlassEventClosePv)
+#define GetDisplayMode ((GetDisplayModeFunc)_Z14GetDisplayModePv)
+#define GetProductName ((GetProductNameFunc)_Z14GetProductNamePv)
 
 #endif //_GLASS_SDK_H_
