@@ -65,6 +65,7 @@ rm -f $BIN_DIR/xr_driver_verify
 # is re-run as a user service
 rm -f /tmp/shader_runtime_*
 rm -f /dev/shm/xr_*
+rm -f /dev/shm/breezy_desktop_imu
 
 # this script is self-deleting, leave this as the last command
 # remove the one we're not using first
