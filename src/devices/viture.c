@@ -153,7 +153,7 @@ void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t t
     }
 }
 
-device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id) {
+device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == VITURE_ID_VENDOR) {
         for (int i=0; i < VITURE_ID_PRODUCT_COUNT; i++) {
             if (product_id == viture_supported_id_product[i]) {

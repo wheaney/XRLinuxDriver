@@ -3,6 +3,7 @@
 #include "driver.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 enum calibration_setup_t {
     CALIBRATION_SETUP_AUTOMATIC,
@@ -13,8 +14,13 @@ typedef enum calibration_setup_t calibration_setup_type;
 struct device_properties_t {
     char* brand;
     char* model;
+
+    // USB information
     int hid_vendor_id;
     int hid_product_id;
+    uint8_t usb_bus;
+    uint8_t usb_address;
+
     calibration_setup_type calibration_setup;
 
     // resolution width and height
@@ -52,7 +58,7 @@ struct device_properties_t {
 typedef struct device_properties_t device_properties_type;
 
 // if this driver supports the device, return the device properties, otherwise NULL
-typedef device_properties_type* (*supported_device_func)(uint16_t id_vendor, uint16_t id_product);
+typedef device_properties_type* (*supported_device_func)(uint16_t id_vendor, uint16_t id_product, uint8_t usb_bus, uint8_t usb_address);
 
 // open device connection, expected to perform cleanup on failure
 typedef bool (*device_connect_func)();

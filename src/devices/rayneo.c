@@ -176,7 +176,7 @@ void rayneo_device_disconnect(bool forced) {
     }
 };
 
-device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id) {
+device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == RAYNEO_ID_VENDOR && product_id == RAYNEO_ID_PRODUCT) {
         device_properties_type* device = calloc(1, sizeof(device_properties_type));
         *device = rayneo_properties;
