@@ -192,24 +192,6 @@ void write_config_data() {
     }
 }
 
-void breezy_desktop_set_config_func(void* config) {
-    if (!config) return;
-    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
-
-    if (bd_config) {
-        if (bd_config->enabled != temp_config->enabled)
-            printf("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
-
-        free(bd_config);
-    }
-    bd_config = temp_config;
-
-    if (has_started) {
-        write_config_data();
-        breezy_desktop_reset_imu_data_func();
-    }
-};
-
 void breezy_desktop_write_imu_data(float *values) {
     pthread_mutex_lock(&file_mutex);
     int fd = get_shared_mem_fd();
@@ -240,9 +222,27 @@ void breezy_desktop_write_imu_data(float *values) {
 
 void breezy_desktop_reset_imu_data_func() {
     if (fd_is_valid(fd) || is_productivity_granted() && bd_config && bd_config->enabled) {
-        breezy_desktop_write_imu_data(IMU_RESET);
+        breezy_desktop_write_imu_data(&IMU_RESET[0]);
     }
 }
+
+void breezy_desktop_set_config_func(void* config) {
+    if (!config) return;
+    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
+
+    if (bd_config) {
+        if (bd_config->enabled != temp_config->enabled)
+            printf("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+
+        free(bd_config);
+    }
+    bd_config = temp_config;
+
+    if (has_started) {
+        write_config_data();
+        breezy_desktop_reset_imu_data_func();
+    }
+};
 
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                           bool imu_calibrated, ipc_values_type *ipc_values) {
