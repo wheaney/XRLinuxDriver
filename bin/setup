@@ -145,6 +145,7 @@ fi
 # remove temporary files that may be left behind, sometimes they cause problems
 rm -f /tmp/shader_runtime_*
 rm -f /dev/shm/xr_*
+rm -f /dev/shm/breezy_desktop_imu
 
 sed -i -e "s/{user_home}/$ESCAPED_USER_HOME/g" \
   -e "s/{user}/$USER/g" \

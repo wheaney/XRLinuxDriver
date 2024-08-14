@@ -99,10 +99,13 @@ set(SOURCES
     src/multitap.c
     src/outputs.c
     src/plugins.c
+    src/plugins/breezy_desktop.c
     src/plugins/custom_banner.c
     src/plugins/device_license.c
     src/plugins/metrics.c
+    src/plugins/sideview.c
     src/plugins/smooth_follow.c
+    src/plugins/virtual_display.c
     src/runtime_context.c
     src/state.c
     src/strings.c
@@ -143,20 +146,6 @@ foreach(TARGET ${ALL_TARGETS})
         endif()
     endif()
 endforeach()
-
-if(DEFINED ENV{BREEZY_DESKTOP})
-  message(STATUS "Breezy Desktop build")
-  add_definitions(-DBREEZY_DESKTOP)
-  list(APPEND SOURCES
-    src/plugins/breezy_desktop.c
-  )
-else()
-  message(STATUS "Standard build")
-  list(APPEND SOURCES
-    src/plugins/sideview.c
-    src/plugins/virtual_display.c
-  )
-endif()
 
 add_executable(xrDriver ${SOURCES})
 

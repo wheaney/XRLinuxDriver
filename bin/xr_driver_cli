@@ -9,6 +9,10 @@ CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
 if [ ! -d "$CONFIG_DIR" ]; then
   mkdir -p $CONFIG_DIR
 fi
+if [ -z "$XDG_STATE_HOME" ]; then
+  XDG_STATE_HOME="$USER_HOME/.local/state"
+fi
+LOG_FILE="$XDG_STATE_HOME/xr_driver/driver.log"
 
 if [ -n "$1" ]
 then
@@ -58,6 +62,12 @@ then
         config_value="external_only"
         config_key2="external_mode"
         config_value2="virtual_display"
+    elif [ "$1" == "--breezy-desktop" ] || [ "$1" == "-bd" ]; then
+        config_type="string"
+        config_key="output_mode"
+        config_value="external_only"
+        config_key2="external_mode"
+        config_value2="breezy_desktop"
     elif [ "$1" == "--sideview" ] || [ "$1" == "-sv" ]; then
         config_type="string"
         config_key="output_mode"
@@ -92,6 +102,8 @@ then
         config_type="string"
         config_key="hardware_id"
         config_file="/dev/shm/xr_driver_state"
+    elif [ "$1" == "--view-log" ] || [ "$1" == "-l" ]; then
+        less +F "$LOG_FILE"
     fi
 
     if [[ -n $config_key ]]; then
@@ -174,6 +186,7 @@ fi
 
 echo "Usage: $0 [options]
 Options:
+  -l, --view-log
   -d, --disable
   -e, --enable
   -s, --status
@@ -182,6 +195,7 @@ Options:
   -ms, --mouse-sensitivity [sensitivity_value]
   -z, --display-zoom [zoom_value]
   -vd, --virtual-display
+  -bd, --breezy-desktop
   -sv, --sideview
   -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
   -svds, --sideview-display-size [display_size]
