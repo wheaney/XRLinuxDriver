@@ -23,6 +23,10 @@
 
 #define MS_PER_SEC 1000
 #define IMU_CHECKPOINT_MS MS_PER_SEC / 4
+#define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
+
+buffer_type **quat_stage_1_buffer;
+buffer_type **quat_stage_2_buffer;
 
 static int last_imu_checkpoint_ms = 0;
 static imu_quat_type last_imu_checkpoint_quat = {.x = 0.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};
@@ -294,6 +298,65 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                 ipc_values->date[2] = (float)t->tm_mday;
                 ipc_values->date[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
             }
+
+            if (imu_calibrated) {
+                if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
+                    quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
+                    quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
+                    for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                        quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
+                        quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
+                        if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
+                            fprintf(stderr, "Error allocating memory\n");
+                            exit(1);
+                        }
+                    }
+                }
+
+                // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
+                // push/pop, to know if the values that are returned will be relevant to our calculations
+                bool was_full = is_full(quat_stage_1_buffer[0]);
+                float stage_1_quat_w = push(quat_stage_1_buffer[0], quat.w);
+                float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
+                float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
+                float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
+
+                // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
+                //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
+                float stage_1_ts = push(quat_stage_1_buffer[4], (float)timestamp_ms);
+
+                if (was_full) {
+                    was_full = is_full(quat_stage_2_buffer[0]);
+                    float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
+                    float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
+                    float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
+                    float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
+                    float stage_2_ts = push(quat_stage_2_buffer[4], stage_1_ts);
+
+                    if (was_full) {
+                        pthread_mutex_lock(ipc_values->imu_data_mutex);
+
+                        // write to shared memory for anyone using the same ipc prefix to consume
+                        ipc_values->imu_data[0] = quat.x;
+                        ipc_values->imu_data[1] = quat.y;
+                        ipc_values->imu_data[2] = quat.z;
+                        ipc_values->imu_data[3] = quat.w;
+                        ipc_values->imu_data[4] = stage_1_quat_x;
+                        ipc_values->imu_data[5] = stage_1_quat_y;
+                        ipc_values->imu_data[6] = stage_1_quat_z;
+                        ipc_values->imu_data[7] = stage_1_quat_w;
+                        ipc_values->imu_data[8] = stage_2_quat_x;
+                        ipc_values->imu_data[9] = stage_2_quat_y;
+                        ipc_values->imu_data[10] = stage_2_quat_z;
+                        ipc_values->imu_data[11] = stage_2_quat_w;
+                        ipc_values->imu_data[12] = (float)timestamp_ms;
+                        ipc_values->imu_data[13] = stage_1_ts;
+                        ipc_values->imu_data[14] = stage_2_ts;
+
+                        pthread_mutex_unlock(ipc_values->imu_data_mutex);
+                    }
+                }
+            }
         }
 
         // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
@@ -359,6 +422,22 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
         pthread_mutex_unlock(&outputs_mutex);
     }
     device_checkin(device);
+}
+
+void reset_imu_data(ipc_values_type *ipc_values) {
+    if (ipc_values) {    
+        pthread_mutex_lock(ipc_values->imu_data_mutex);
+        // reset the 4 quaternion values to (0, 0, 0, 1)
+        for (int i = 0; i < 16; i += 4) {
+            ipc_values->imu_data[i] = 0;
+            ipc_values->imu_data[i + 1] = 0;
+            ipc_values->imu_data[i + 2] = 0;
+            ipc_values->imu_data[i + 3] = 1;
+        }
+        pthread_mutex_unlock(ipc_values->imu_data_mutex);
+    }
+
+    plugins.reset_imu_data();
 }
 
 bool is_imu_alive() {

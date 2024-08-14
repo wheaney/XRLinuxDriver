@@ -104,7 +104,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 screen_center_conjugate = conjugate(screen_center);
 
                 glasses_calibration_started_sec=tv.tv_sec;
-                if (ipc_enabled) plugins.reset_imu_data();
+                if (ipc_enabled) reset_imu_data(ipc_values);
             } else {
                 glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
                 if (glasses_calibrated) {

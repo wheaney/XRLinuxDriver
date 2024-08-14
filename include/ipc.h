@@ -13,6 +13,8 @@ extern const char *display_fov_ipc_name;
 extern const char *lens_distance_ratio_ipc_name;
 extern const char *disabled_ipc_name;
 extern const char *date_ipc_name;
+extern const char *imu_data_ipc_name;
+extern const char *imu_data_mutex_ipc_name;
 
 struct ipc_values_t {
     unsigned int *display_res;
@@ -20,6 +22,8 @@ struct ipc_values_t {
     float *lens_distance_ratio;
     bool *disabled;
     float *date;
+    float *imu_data;
+    pthread_mutex_t *imu_data_mutex;
 };
 
 typedef struct ipc_values_t ipc_values_type;

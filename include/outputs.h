@@ -20,6 +20,7 @@ imu_euler_type get_euler_velocities(imu_euler_type euler, int imu_cycles_per_sec
 
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities, bool ipc_enabled,
                        bool imu_calibrated, ipc_values_type *ipc_values);
+void reset_imu_data(ipc_values_type *ipc_values);
 
 bool wait_for_imu_start();
 bool is_imu_alive();

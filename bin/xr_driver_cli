@@ -58,6 +58,12 @@ then
         config_value="external_only"
         config_key2="external_mode"
         config_value2="virtual_display"
+    elif [ "$1" == "--breezy-desktop" ] || [ "$1" == "-bd" ]; then
+        config_type="string"
+        config_key="output_mode"
+        config_value="external_only"
+        config_key2="external_mode"
+        config_value2="breezy_desktop"
     elif [ "$1" == "--sideview" ] || [ "$1" == "-sv" ]; then
         config_type="string"
         config_key="output_mode"
@@ -182,6 +188,7 @@ Options:
   -ms, --mouse-sensitivity [sensitivity_value]
   -z, --display-zoom [zoom_value]
   -vd, --virtual-display
+  -bd, --breezy-desktop
   -sv, --sideview
   -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
   -svds, --sideview-display-size [display_size]
