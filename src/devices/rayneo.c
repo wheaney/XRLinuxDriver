@@ -2,6 +2,7 @@
 #include "devices/rayneo.h"
 #include "driver.h"
 #include "imu.h"
+#include "logging.h"
 #include "outputs.h"
 #include "runtime_context.h"
 #include "sdks/rayneo.h"
@@ -152,7 +153,7 @@ bool rayneo_device_connect() {
 
             connected = true;
         } else {
-            printf("RayNeo driver, failed to establish a connection\n");
+            log_message("RayNeo driver, failed to establish a connection\n");
         }
     }
 

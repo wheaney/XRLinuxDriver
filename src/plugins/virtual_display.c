@@ -3,6 +3,7 @@
 #include "features/smooth_follow.h"
 #include "features/sbs.h"
 #include "ipc.h"
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
@@ -105,7 +106,7 @@ void virtual_display_set_config_func(void* config) {
 
     if (vd_config) {
         if (vd_config->enabled != temp_config->enabled)
-            printf("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+            log_message("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
         if (!temp_config->enabled) {
             if (temp_config->passthrough_smooth_follow_enabled && temp_config->follow_mode_enabled) {
@@ -116,22 +117,22 @@ void virtual_display_set_config_func(void* config) {
             }
         } else {
             if (vd_config->look_ahead_override != temp_config->look_ahead_override)
-                fprintf(stdout, "Look ahead override has changed to %f\n", temp_config->look_ahead_override);
+                log_message("Look ahead override has changed to %f\n", temp_config->look_ahead_override);
 
             if (vd_config->display_zoom != temp_config->display_zoom)
-                fprintf(stdout, "Display size has changed to %f\n", temp_config->display_zoom);
+                log_message("Display size has changed to %f\n", temp_config->display_zoom);
 
             if (vd_config->sbs_display_size != temp_config->sbs_display_size)
-                fprintf(stdout, "SBS display size has changed to %f\n", temp_config->sbs_display_size);
+                log_message("SBS display size has changed to %f\n", temp_config->sbs_display_size);
 
             if (vd_config->sbs_display_distance != temp_config->sbs_display_distance)
-                fprintf(stdout, "SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
+                log_message("SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
 
             if (vd_config->sbs_content != temp_config->sbs_content)
-                fprintf(stdout, "SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
+                log_message("SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
 
             if (vd_config->sbs_mode_stretched != temp_config->sbs_mode_stretched)
-                fprintf(stdout, "SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
+                log_message("SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
         }
 
         free(vd_config);

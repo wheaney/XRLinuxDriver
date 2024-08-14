@@ -1,6 +1,7 @@
 #include "devices.h"
 #include "driver.h"
 #include "imu.h"
+#include "logging.h"
 #include "outputs.h"
 #include "runtime_context.h"
 #include "sdks/rokid.h"
@@ -100,17 +101,17 @@ static void handle_display_mode(device_properties_type* device, int display_mode
 static bool device_connect(device_properties_type* device) {
     event_instance = GlassEventInit();
     if (!event_instance) {
-        fprintf(stderr, "Failed to initialize event instance\n");
+        log_error("Failed to initialize event instance\n");
     } else {
         control_instance = GlassControlInit();
         if (!control_instance) {
-            fprintf(stderr, "Failed to initialize control instance\n");
+            log_error("Failed to initialize control instance\n");
         } else {
             char device_path[64];
             snprintf(device_path, sizeof(device_path), "/dev/bus/usb/%03d/%03d", device->usb_bus, device->usb_address);
             device_fd = open(device_path, O_RDWR);
             if (device_fd < 0) {
-                fprintf(stderr, "Failed to open device %s\n", device_path);
+                log_error("Failed to open device %s\n", device_path);
             } else {
                 connected = GlassEventOpen(event_instance, device_fd) && 
                             GlassControlOpen(control_instance, device_fd);
@@ -118,7 +119,7 @@ static bool device_connect(device_properties_type* device) {
                 if (connected) {
                     event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
                     if (!event_handle) {
-                        fprintf(stderr, "Failed to register event handle\n");
+                        log_error("Failed to register event handle\n");
                         connected = false;
                     } else {
                         GlassAddFusionEvent(event_instance, true);

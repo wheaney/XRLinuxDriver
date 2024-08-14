@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <glob.h>
+#include "logging.h"
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -64,13 +65,13 @@ void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debu
 
     FILE *ipc_file = fopen(path, "w");
     if (ipc_file == NULL) {
-        fprintf(stderr, "Could not create IPC shared file\n");
+        log_error("Could not create IPC shared file\n");
         exit(1);
     }
     fclose(ipc_file);
 
     key_t key = ftok(path, 0);
-    if (debug) printf("\tdebug: ipc_key, got key %d for path %s\n", key, path);
+    if (debug) log_debug("ipc_key, got key %d for path %s\n", key, path);
     free(path);
 
     int shmid = shmget(key, size, 0666|IPC_CREAT);
@@ -78,27 +79,27 @@ void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debu
         // it may have been allocated using a different size, attempt to find and delete it
         shmid = shmget(key, 0, 0);
         if (shmid != -1) {
-            if (debug) printf("\tdebug: ipc_key, deleting shared memory segment with key %d\n", key);
+            if (debug) log_debug("ipc_key, deleting shared memory segment with key %d\n", key);
             shmctl(shmid, IPC_RMID, NULL);
         } else {
-            if (debug) printf("\tdebug: ipc_key, couldn't delete, no shmid for key %d\n", key);
+            if (debug) log_debug("ipc_key, couldn't delete, no shmid for key %d\n", key);
         }
     }
 
     if (shmid != -1) {
         *shmemValue = shmat(shmid,(void*)0,0);
         if (*shmemValue == (void *) -1) {
-            fprintf(stderr, "Error calling shmat\n");
+            log_error("Error calling shmat\n");
             exit(1);
         }
     } else {
-        fprintf(stderr, "Error calling shmget\n");
+        log_error("Error calling shmget\n");
         exit(1);
     }
 }
 
 void cleanup_ipc(char* file_prefix, bool debug) {
-    if (debug) printf("\tdebug: cleanup_ipc, disabling IPC\n");
+    if (debug) log_debug("cleanup_ipc, disabling IPC\n");
     char pattern[256];
     snprintf(pattern, sizeof(pattern), "%s*", file_prefix);
 
@@ -110,10 +111,10 @@ void cleanup_ipc(char* file_prefix, bool debug) {
         key_t key = ftok(file, 0);
         int shmid = shmget(key, 0, 0);
         if (shmid != -1) {
-            if (debug) printf("\tdebug: cleanup_ipc, deleting shared memory segment with key %d\n", key);
+            if (debug) log_debug("cleanup_ipc, deleting shared memory segment with key %d\n", key);
             shmctl(shmid, IPC_RMID, NULL);
         } else {
-            if (debug) printf("\tdebug: cleanup_ipc, couldn't delete, no shmid for key %d\n", key);
+            if (debug) log_debug("cleanup_ipc, couldn't delete, no shmid for key %d\n", key);
         }
     }
 

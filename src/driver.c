@@ -6,6 +6,7 @@
 #include "files.h"
 #include "imu.h"
 #include "ipc.h"
+#include "logging.h"
 #include "multitap.h"
 #include "outputs.h"
 #include "plugins.h"
@@ -64,9 +65,9 @@ void reset_calibration(bool reset_device) {
     state()->calibration_state = CALIBRATING;
 
     if (reset_device && is_driver_connected()) {
-        if (config()->debug_device) printf("\tdebug: reset_calibration, device_driver->disconnect_func(true)\n");
+        if (config()->debug_device) log_debug("reset_calibration, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
-    } else printf("Waiting on device calibration\n");
+    } else log_message("Waiting on device calibration\n");
 }
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
@@ -77,12 +78,12 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
         if (config()->debug_device && imu_counter == 0)
-            printf("\tdebug: driver_handle_imu_event - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
+            log_debug("driver_handle_imu_event - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
             
         if (glasses_calibrated) {
             if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
-                if (multi_tap == MT_RECENTER_SCREEN) printf("Double-tap detected. ");
-                printf("Centering screen\n");
+                if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected. ");
+                log_message("Centering screen\n");
 
                 screen_center = quat;
                 screen_center_conjugate = conjugate(screen_center);
@@ -108,7 +109,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
                 if (glasses_calibrated) {
                     state()->calibration_state = CALIBRATED;
-                    printf("Device calibration complete\n");
+                    log_message("Device calibration complete\n");
                 }
             }
         }
@@ -124,13 +125,13 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                                         timestamp_ms,
                                         config()->debug_multi_tap);
             if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
-                if (multi_tap == MT_RESET_CALIBRATION) printf("Triple-tap detected. ");
-                printf("Kicking off calibration\n");
+                if (multi_tap == MT_RESET_CALIBRATION) log_message("Triple-tap detected. ");
+                log_message("Kicking off calibration\n");
                 reset_calibration(true);
             }
 
             handle_imu_update(timestamp_ms, quat, euler_velocities, glasses_calibrated, ipc_values);
-        } else if (config()->debug_device) printf("\tdebug: driver_handle_imu_event, received invalid quat\n");
+        } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
 
         // reset the counter every second
         if ((++imu_counter % device->imu_cycles_per_s) == 0) {
@@ -147,13 +148,13 @@ bool driver_disabled() {
 void setup_ipc() {
     bool not_external_only = config()->output_mode && !is_external_mode(config());
     if (!ipc_values) {
-        if (config()->debug_ipc) printf("\tdebug: setup_ipc, enabling IPC\n");
+        if (config()->debug_ipc) log_debug("setup_ipc, enabling IPC\n");
         ipc_values = calloc(1, sizeof(*ipc_values));
         if (!setup_ipc_values(ipc_values, config()->debug_ipc) || !plugins.setup_ipc()) {
-            fprintf(stderr, "Error setting up IPC values\n");
+            log_error("Error setting up IPC values\n");
             exit(1);
         }
-    } else if (config()->debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
+    } else if (config()->debug_ipc) log_debug("setup_ipc, already enabled, doing nothing\n");
 
     device_properties_type* device = device_checkout();
     if (device != NULL) {
@@ -185,7 +186,7 @@ static bool block_on_device_ready = false;
 // we should call this whenever a condition changes that may effect the evaluation of block_on_device_ready
 void evaluate_block_on_device_ready() {
     if (config()->debug_device) 
-        printf("\tdebug: evaluate_block_on_device_ready, %s, %s, %s\n", 
+        log_debug("evaluate_block_on_device_ready, %s, %s, %s\n", 
             force_quit ? "force_quit" : "no force_quit", 
             driver_disabled() ? "driver_disabled" : "driver_enabled", 
             device_present() ? "device_present" : "no device_present");
@@ -199,25 +200,25 @@ void evaluate_block_on_device_ready() {
 // pthread function to wait for a supported device, create outputs, and block on the device while it's connected
 void *block_on_device_thread_func(void *arg) {
     while (!force_quit) {
-        if (config()->debug_device) printf("\tdebug: block_on_device_thread, loop start\n");
+        if (config()->debug_device) log_debug("block_on_device_thread, loop start\n");
 
         bool first_device_wait = true;
         pthread_mutex_lock(&block_on_device_mutex);
         while (!block_on_device_ready) {
             // if the only thing blocking this thread is the device not being ready, print a message
             if (!force_quit && !driver_disabled() && first_device_wait) {
-                printf("Waiting for glasses\n");
+                log_message("Waiting for glasses\n");
                 first_device_wait = false;
-            } else if (config()->debug_device) printf("\tdebug: block_on_device_thread, waiting on ready\n");
+            } else if (config()->debug_device) log_debug("block_on_device_thread, waiting on ready\n");
             pthread_cond_wait(&block_on_device_cond, &block_on_device_mutex);
         }
         pthread_mutex_unlock(&block_on_device_mutex);
 
         if (!force_quit) {
-            if (config()->debug_device) printf("\tdebug: block_on_device_thread, device_driver->device_connect_func()\n");
+            if (config()->debug_device) log_debug("block_on_device_thread, device_driver->device_connect_func()\n");
 
             if (device_driver->device_connect_func()) {
-                printf("Device connected, redirecting input to %s...\n", config()->output_mode);
+                log_message("Device connected, redirecting input to %s...\n", config()->output_mode);
 
                 setup_ipc();
                 reset_calibration(false);
@@ -225,18 +226,18 @@ void *block_on_device_thread_func(void *arg) {
                 plugins.handle_device_connect();
                 init_outputs();
 
-                if (config()->debug_device) printf("\tdebug: block_on_device_thread, device_driver->block_on_device_func()\n");
+                if (config()->debug_device) log_debug("block_on_device_thread, device_driver->block_on_device_func()\n");
                 device_driver->block_on_device_func();
 
                 plugins.handle_device_disconnect();
                 deinit_outputs();
             } else if (block_on_device_ready) {
-                printf("Device driver connection attempt failed. ");
+                log_message("Device driver connection attempt failed. ");
             }
             
             if (block_on_device_ready) {
                 // device is still physically connected and will retry, pause for a moment
-                printf("Retrying driver connection in 1 second\n");
+                log_message("Retrying driver connection in 1 second\n");
                 sleep(1);
             }
         }
@@ -245,7 +246,7 @@ void *block_on_device_thread_func(void *arg) {
     }
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting block_on_device thread; force_quit %d\n", force_quit);
+        log_debug("Exiting block_on_device thread; force_quit %d\n", force_quit);
 }
 
 void update_config_from_file(FILE *fp) {
@@ -253,47 +254,47 @@ void update_config_from_file(FILE *fp) {
 
     bool driver_newly_disabled = !driver_disabled() && new_config->disabled;
     if (driver_newly_disabled)
-        printf("Driver has been disabled\n");
+        log_message("Driver has been disabled\n");
     bool driver_reenabled = driver_disabled() && !new_config->disabled;
     if (driver_reenabled)
-        printf("Driver has been re-enabled\n");
+        log_message("Driver has been re-enabled\n");
 
     if (!config()->use_roll_axis && new_config->use_roll_axis)
-        printf("Roll axis has been enabled\n");
+        log_message("Roll axis has been enabled\n");
     if (config()->use_roll_axis && !new_config->use_roll_axis)
-        printf("Roll axis has been disabled\n");
+        log_message("Roll axis has been disabled\n");
 
     if (config()->mouse_sensitivity != new_config->mouse_sensitivity)
-        printf("Mouse sensitivity has changed to %d\n", new_config->mouse_sensitivity);
+        log_message("Mouse sensitivity has changed to %d\n", new_config->mouse_sensitivity);
 
     bool output_mode_changed = strcmp(config()->output_mode, new_config->output_mode) != 0;
     if (output_mode_changed)
-        printf("Output mode has been changed to '%s'\n", new_config->output_mode);
+        log_message("Output mode has been changed to '%s'\n", new_config->output_mode);
 
     if (!config()->debug_joystick && new_config->debug_joystick)
-        printf("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat $XDG_RUNTIME_DIR/xr_driver/joystick_debug' in bash\n");
+        log_message("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat $XDG_RUNTIME_DIR/xr_driver/joystick_debug' in bash\n");
     if (config()->debug_joystick && !new_config->debug_joystick)
-        printf("Joystick debugging has been disabled\n");
+        log_message("Joystick debugging has been disabled\n");
 
     if (config()->debug_threads != new_config->debug_threads)
-        printf("Threads debugging has been %s\n", new_config->debug_threads ? "enabled" : "disabled");
+        log_message("Threads debugging has been %s\n", new_config->debug_threads ? "enabled" : "disabled");
 
     if (config()->debug_multi_tap != new_config->debug_multi_tap)
-        printf("Multi-tap debugging has been %s\n", new_config->debug_multi_tap ? "enabled" : "disabled");
+        log_message("Multi-tap debugging has been %s\n", new_config->debug_multi_tap ? "enabled" : "disabled");
 
     if (config()->debug_ipc != new_config->debug_ipc)
-        printf("IPC debugging has been %s\n", new_config->debug_ipc ? "enabled" : "disabled");
+        log_message("IPC debugging has been %s\n", new_config->debug_ipc ? "enabled" : "disabled");
 
     if (config()->debug_license != new_config->debug_license)
-        printf("License debugging has been %s\n", new_config->debug_license ? "enabled" : "disabled");
+        log_message("License debugging has been %s\n", new_config->debug_license ? "enabled" : "disabled");
 
     if (config()->debug_device != new_config->debug_device)
-        printf("Device debugging has been %s\n", new_config->debug_device ? "enabled" : "disabled");
+        log_message("Device debugging has been %s\n", new_config->debug_device ? "enabled" : "disabled");
 
     update_config(config(), new_config);
 
     if (driver_newly_disabled && is_driver_connected()) {
-        if (new_config->debug_device) printf("\tdebug: update_config_from_file, device_driver->disconnect_func()\n");
+        if (new_config->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func()\n");
         device_driver->disconnect_func(true);
     }
 
@@ -379,7 +380,7 @@ void *monitor_config_file_thread_func(void *arg) {
     close(fd);
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting monitor_config_file thread; force_quit: %d\n", force_quit);
+        log_debug("Exiting monitor_config_file thread; force_quit: %d\n", force_quit);
 }
 
 // pthread function to update the state and read control flags
@@ -398,7 +399,7 @@ void *manage_state_thread_func(void *arg) {
     write_state(state());
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting write_state thread; force_quit: %d\n", force_quit);
+        log_debug("Exiting write_state thread; force_quit: %d\n", force_quit);
 }
 
 void handle_control_flags_update() {
@@ -411,17 +412,17 @@ void handle_control_flags_update() {
             bool change_requested = is_already_enabled != requesting_enabled;
 
             if (change_requested && config()->debug_device) 
-                printf("\tdebug: handle_control_flags_update, device_driver->device_set_sbs_mode_func(%s)\n", requesting_enabled ? "true" : "false");
+                log_debug("handle_control_flags_update, device_driver->device_set_sbs_mode_func(%s)\n", requesting_enabled ? "true" : "false");
 
             if (change_requested && !device_driver->device_set_sbs_mode_func(requesting_enabled)) {
-                fprintf(stderr, "Error setting requested SBS mode\n");
+                log_error("Error setting requested SBS mode\n");
             }
         }
         if (control_flags->force_quit) {
-            printf("Force quit requested, exiting\n");
+            log_message("Force quit requested, exiting\n");
             force_quit = true;
 
-            if (config()->debug_device) printf("\tdebug: handle_control_flags_update, device_driver->disconnect_func(true)\n");
+            if (config()->debug_device) log_debug("handle_control_flags_update, device_driver->disconnect_func(true)\n");
             device_driver->disconnect_func(true);
             evaluate_block_on_device_ready();
         }
@@ -485,7 +486,7 @@ void *monitor_control_flags_file_thread_func(void *arg) {
     free_and_clear(&control_file_path);
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
+        log_debug("Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
 }
 
 void handle_device_update(connected_device_type* usb_device) {
@@ -496,7 +497,7 @@ void handle_device_update(connected_device_type* usb_device) {
 
     if (connected_device != NULL) {
         if (is_driver_connected()) {
-            if (config()->debug_device) printf("\tdebug: handle_device_update, device_driver->disconnect_func(false)\n");
+            if (config()->debug_device) log_debug("handle_device_update, device_driver->disconnect_func(false)\n");
             device_driver->disconnect_func(false);
         }
 
@@ -528,14 +529,14 @@ void *monitor_usb_devices_thread_func(void *arg) {
     }
 
     if (config()->debug_threads)
-        printf("\tdebug: Exiting monitor_usb_devices_thread_func thread; force_quit: %d\n", force_quit);
+        log_debug("Exiting monitor_usb_devices_thread_func thread; force_quit: %d\n", force_quit);
 }
 
 void segfault_handler(int signal, siginfo_t *si, void *arg) {
     void *error_addr = si->si_addr;
 
     // Write the error address to stderr
-    fprintf(stderr, "Segmentation fault occurred at address: %p\n", error_addr);
+    log_error("Segmentation fault occurred at address: %p\n", error_addr);
 
     // Write the backtrace to stderr
     void *buffer[10];
@@ -553,18 +554,7 @@ int main(int argc, const char** argv) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGSEGV, &sa, NULL);
 
-    // ensure the log file exists, reroute stdout and stderr there
-    char *log_file_path = NULL;
-    FILE *log_file = get_or_create_state_file("driver.log", NULL, &log_file_path, NULL);
-    fclose(log_file);
-    freopen(log_file_path, "a", stdout);
-    freopen(log_file_path, "a", stderr);
-    free_and_clear(&log_file_path);
-
-    // when redirecting stdout/stderr to a file, it becomes fully buffered, requiring lots of manual flushing of the
-    // stream, this makes them unbuffered, which is fine since we log so little
-    setbuf(stdout, NULL);
-    setbuf(stderr, NULL);
+    log_init();
 
     // set a lock so only one instance of the driver can be running at a time
     char *lock_file_path = NULL;
@@ -572,7 +562,7 @@ int main(int argc, const char** argv) {
     int rc = flock(fileno(lock_file), LOCK_EX | LOCK_NB);
     if(rc) {
         if(EWOULDBLOCK == errno)
-            fprintf(stderr, "Another instance of this program is already running.\n");
+            log_error("Another instance of this program is already running.\n");
         exit(1);
     }
     free_and_clear(&lock_file_path);
@@ -582,7 +572,7 @@ int main(int argc, const char** argv) {
     config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
 
-    if (driver_disabled()) printf("Driver is disabled\n");
+    if (driver_disabled()) log_message("Driver is disabled\n");
 
     char** features = NULL;
     int feature_count = plugins.register_features(&features);
@@ -594,7 +584,7 @@ int main(int argc, const char** argv) {
     plugins.start();
     write_state(state());
     set_on_device_change_callback(evaluate_block_on_device_ready);
-    printf("Starting up XR driver\n");
+    log_message("Starting up XR driver\n");
 
     pthread_t monitor_control_flags_file_thread;
     pthread_t monitor_config_file_thread;

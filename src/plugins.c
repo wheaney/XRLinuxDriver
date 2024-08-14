@@ -1,3 +1,4 @@
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/custom_banner.h"
 #include "plugins/breezy_desktop.h"
@@ -80,7 +81,7 @@ bool all_plugins_setup_ipc_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->setup_ipc == NULL) continue;
         if (!all_plugins[i]->setup_ipc()) {
-            fprintf(stderr, "Failed to setup IPC for plugin %s\n", all_plugins[i]->id);
+            log_error("Failed to setup IPC for plugin %s\n", all_plugins[i]->id);
             exit(1);
         }
     }

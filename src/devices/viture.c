@@ -1,6 +1,7 @@
 #include "devices.h"
 #include "driver.h"
 #include "imu.h"
+#include "logging.h"
 #include "outputs.h"
 #include "runtime_context.h"
 #include "sdks/viture_one.h"
@@ -210,7 +211,7 @@ bool viture_device_connect() {
 
             // not a great way to check the firmware version but it's all we have
             old_firmware_version = equal(VITURE_PRO_MODEL_NAME, device->model) ? false : (device->imu_cycles_per_s == 60);
-            if (old_firmware_version) printf("VITURE: Detected old firmware version\n");
+            if (old_firmware_version) log_message("VITURE: Detected old firmware version\n");
 
             device->sbs_mode_supported = !old_firmware_version;
             device->firmware_update_recommended = old_firmware_version;
