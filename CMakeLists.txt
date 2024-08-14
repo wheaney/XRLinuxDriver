@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver C)
+project(xrDriver VERSION 0.10.8 LANGUAGES C)
+
+configure_file(include/version.h.in version.h)
+include_directories(${PROJECT_BINARY_DIR})
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_STANDARD 17)
@@ -94,6 +97,7 @@ set(SOURCES
     src/features/smooth_follow.c
     src/features/sbs.c
     src/files.c
+    src/logging.c
     src/imu.c
     src/ipc.c
     src/multitap.c

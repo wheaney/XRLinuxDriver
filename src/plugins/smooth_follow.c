@@ -3,6 +3,7 @@
 #include "features/smooth_follow.h"
 #include "imu.h"
 #include "ipc.h"
+#include "logging.h"
 #include "plugins/smooth_follow.h"
 #include "runtime_context.h"
 #include "state.h"
@@ -154,12 +155,12 @@ void smooth_follow_set_config_func(void* config) {
         if (temp_config->virtual_display_enabled && (
                 sf_config->virtual_display_follow_enabled != temp_config->virtual_display_follow_enabled ||
                 sf_config->virtual_display_enabled != temp_config->virtual_display_enabled))
-            printf("Virtual display follow has been %s\n", temp_config->virtual_display_follow_enabled ? "enabled" : "disabled");
+            log_message("Virtual display follow has been %s\n", temp_config->virtual_display_follow_enabled ? "enabled" : "disabled");
 
         if (temp_config->sideview_enabled && (
                 sf_config->sideview_follow_enabled != temp_config->sideview_follow_enabled ||
                 sf_config->sideview_enabled != temp_config->sideview_enabled))
-            printf("Sideview follow has been %s\n", temp_config->sideview_follow_enabled ? "enabled" : "disabled");
+            log_message("Sideview follow has been %s\n", temp_config->sideview_follow_enabled ? "enabled" : "disabled");
 
         free(sf_config);
     }
@@ -318,7 +319,7 @@ void smooth_follow_handle_control_flag_line_func(char* key, char* value) {
         }
 
         if (was_enabled != state()->breezy_desktop_smooth_follow_enabled)
-            printf("Breezy Desktop follow has been %s\n", state()->breezy_desktop_smooth_follow_enabled ? "enabled" : "disabled");
+            log_message("Breezy Desktop follow has been %s\n", state()->breezy_desktop_smooth_follow_enabled ? "enabled" : "disabled");
         
         handle_config_and_state_update();
     }

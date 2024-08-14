@@ -1,5 +1,6 @@
 #include "curl.h"
 #include "files.h"
+#include "logging.h"
 #include "plugins/device_license.h"
 #include "runtime_context.h"
 #include "system.h"
@@ -39,13 +40,13 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
     bool is_valid_license_signature(const char* license, const char* signature) {
         if (!license || !signature) {
-            fprintf(stderr, "License or signature is NULL.\n");
+            log_error("License or signature is NULL.\n");
             return false;
         }
 
         BIO *bio = BIO_new_mem_buf((void*)DEVICE_LICENSE_PUBLIC_KEY, -1);
         if (!bio) {
-            fprintf(stderr, "Error creating BIO for public key.\n");
+            log_error("Error creating BIO for public key.\n");
             ERR_print_errors_fp(stderr);
             return false;
         }
@@ -53,26 +54,26 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
         EVP_PKEY *publicKey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
         BIO_free(bio);
         if (!publicKey) {
-            fprintf(stderr, "Error reading the public key.\n");
+            log_error("Error reading the public key.\n");
             ERR_print_errors_fp(stderr);
             return false;
         }
 
         EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
         if (!mdctx) {
-            fprintf(stderr, "Failed to create the EVP_MD_CTX structure.\n");
+            log_error("Failed to create the EVP_MD_CTX structure.\n");
             ERR_print_errors_fp(stderr);
             return false;
         }
 
         if (1 != EVP_DigestVerifyInit(mdctx, NULL, EVP_sha256(), NULL, publicKey)) {
-            fprintf(stderr, "Failed to initialize the digest context for verification.\n");
+            log_error("Failed to initialize the digest context for verification.\n");
             ERR_print_errors_fp(stderr);
             return false;
         }
 
         if (1 != EVP_DigestVerifyUpdate(mdctx, license, strlen((char*)license))) {
-            fprintf(stderr, "Failed to update the digest context.\n");
+            log_error("Failed to update the digest context.\n");
             ERR_print_errors_fp(stderr);
             return false;
         }
@@ -91,9 +92,9 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
         binary_sig = NULL;
 
         if (result == 0) {
-            fprintf(stderr, "Signature is not valid.\n");
+            log_error("Signature is not valid.\n");
         } else if (result != 1) {
-            fprintf(stderr, "Error occurred while checking the signature.\n");
+            log_error("Error occurred while checking the signature.\n");
             ERR_print_errors_fp(stderr);
         }
 
@@ -121,7 +122,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
         json_object *message;
         json_object_object_get_ex(root, "message", &message);
         if (message) {
-            fprintf(stderr, "Error from server: %s\n", json_object_get_string(message));
+            log_error("Error from server: %s\n", json_object_get_string(message));
             json_object_put(root);
             return 0;
         }
@@ -177,11 +178,11 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
                             enabled = true;
                         }
                     }
-                    printf("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
+                    log_message("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                 }
             } else {
                 if (config() && config()->debug_license) {
-                    printf("\tdebug: License hardwareId mismatch;\n\t\treceived: %s\n\t\texpected: %s\n",
+                    log_debug("License hardwareId mismatch;\n\t\treceived: %s\n\t\texpected: %s\n",
                         json_object_get_string(hardwareId), get_hardware_id());
                 }
             }
@@ -214,11 +215,11 @@ void refresh_license(bool force) {
             bool valid_license = false;
             bool debug_license = config() && config()->debug_license;
             while (!valid_license && attempt < 2) {
-                if (debug_license) printf("\tdebug: Attempt %d to refresh license\n", attempt);
+                if (debug_license) log_debug("Attempt %d to refresh license\n", attempt);
                 char* file_path = strdup(device_license_path);
                 FILE *file = force ? NULL : fopen(file_path, "r");
                 if (file) {
-                    if (debug_license) printf("\tdebug: License file already exists\n");
+                    if (debug_license) log_debug("License file already exists\n");
                     // remove the file if it hasn't been touched in over a day
                     struct stat attr;
                     stat(device_license_path, &attr);
@@ -228,7 +229,7 @@ void refresh_license(bool force) {
                         // do this to force a refresh
                         fclose(file);
                         file = NULL;
-                        if (debug_license) printf("\tdebug: License file is 1 day old, attempting to refresh it\n");
+                        if (debug_license) log_debug("License file is 1 day old, attempting to refresh it\n");
                     }
                 }
 
@@ -245,13 +246,13 @@ void refresh_license(bool force) {
                     if(curl) {
                         file = get_or_create_file(file_path, 0777, "w", NULL);
                         if (file == NULL) {
-                            fprintf(stderr, "Error opening file (%s): %d\n", file_path, errno);
+                            log_error("Error opening file (%s): %d\n", file_path, errno);
                             break;
                         }
 
                         curl_easy_setopt(curl, CURLOPT_URL, "https://eu.driver-backend.xronlinux.com/licenses/v1");
                         char* postbody_string = postbody(get_hardware_id(), state()->registered_features, state()->registered_features_count);
-                        if (debug_license) printf("\tdebug: License curl with postbody %s\n", postbody_string);
+                        if (debug_license) log_debug("License curl with postbody %s\n", postbody_string);
                         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
 
                         headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -266,12 +267,12 @@ void refresh_license(bool force) {
                         bool failed = false;
                         if(res != CURLE_OK) {
                             failed = true;
-                            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+                            log_error("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
                         } else {
                             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
                             if(http_code != 200) {
                                 failed = true;
-                                fprintf(stderr, "Unexpected HTTP response: %ld\n", http_code);
+                                log_error("Unexpected HTTP response: %ld\n", http_code);
                                 res = CURLE_HTTP_RETURNED_ERROR;
                             }
                         }
@@ -291,7 +292,7 @@ void refresh_license(bool force) {
                     file = fopen(file_path, "r");
                     if (file == NULL) {
                         free(file_path);
-                        fprintf(stderr, "Error opening file (%s): %d\n", file_path, errno);
+                        log_error("Error opening file (%s): %d\n", file_path, errno);
                         break;
                     }
                 }
@@ -316,7 +317,7 @@ void refresh_license(bool force) {
             free((void*)device_license_path);
             free((void*)device_license_path_tmp);
         } else {
-            fprintf(stderr, "No hardwareId found, not retrieving license\n");
+            log_error("No hardwareId found, not retrieving license\n");
         }
     #endif
 

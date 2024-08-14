@@ -1,6 +1,7 @@
 #include "config.h"
 #include "devices.h"
 #include "ipc.h"
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/sideview.h"
 #include "runtime_context.h"
@@ -68,13 +69,13 @@ void sideview_set_config_func(void* config) {
 
     if (sv_config) {
         if (sv_config->enabled != temp_config->enabled)
-            printf("Sideview has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+            log_message("Sideview has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
         if (sv_config->position != temp_config->position)
-            printf("Sideview position has been changed to %s\n", sideview_position_names[temp_config->position]);
+            log_message("Sideview position has been changed to %s\n", sideview_position_names[temp_config->position]);
 
         if (sv_config->display_size != temp_config->display_size)
-            printf("Sideview display size has been changed to %f\n", temp_config->display_size);
+            log_message("Sideview display size has been changed to %f\n", temp_config->display_size);
 
         free(sv_config);
     }

@@ -1,3 +1,4 @@
+#include "logging.h"
 #include "strings.h"
 
 #include <ifaddrs.h>
@@ -52,7 +53,7 @@ bool get_mac_address_hash(char **mac_address_hash, const char *interface) {
             sprintf(*mac_address_hash + (i*2), "%02x", hash[i]);
 
         found = true;
-        printf("Using hardware id %s\n", *mac_address_hash);
+        log_message("Using hardware id %s\n", *mac_address_hash);
     }
     close(fd);
 
@@ -90,7 +91,7 @@ char *get_hardware_id() {
             }
 
             if (!found && ++attempts <= RETRY_ATTEMPTS) {
-                fprintf(stderr, "Failed to get hardwareId, retrying in %d seconds\n", RETRY_DELAY_SEC);
+                log_error("Failed to get hardwareId, retrying in %d seconds\n", RETRY_DELAY_SEC);
                 sleep(RETRY_DELAY_SEC);
             }
         }

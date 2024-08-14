@@ -1,6 +1,7 @@
 #include "devices.h"
 #include "features/breezy_desktop.h"
 #include "features/sbs.h"
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/breezy_desktop.h"
 #include "plugins/custom_banner.h"
@@ -232,7 +233,7 @@ void breezy_desktop_set_config_func(void* config) {
 
     if (bd_config) {
         if (bd_config->enabled != temp_config->enabled)
-            printf("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+            log_message("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
         free(bd_config);
     }

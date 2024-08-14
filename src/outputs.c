@@ -4,6 +4,7 @@
 #include "imu.h"
 #include "files.h"
 #include "ipc.h"
+#include "logging.h"
 #include "outputs.h"
 #include "plugins.h"
 #include "runtime_context.h"
@@ -48,7 +49,7 @@ float joystick_max_degrees_per_s;
 
 static int evdev_check(char * function, int i) {
     if (i < 0) {
-        printf("libevdev.%s: %s\n", function, strerror(-i));
+        log_message("libevdev.%s: %s\n", function, strerror(-i));
         exit(1);
     }
 
@@ -84,7 +85,7 @@ int joystick_debug_val_to_line(int value) {
 // write a character to a coordinate -- as a grid of characters -- in a file
 void write_character_to_joystick_debug_file(FILE *fp, int col, int row, char new_char) {
     if (row < 0 || row >= JOYSTICK_DEBUG_LINES || col < 0 || col >= JOYSTICK_DEBUG_LINES) {
-        fprintf(stderr, "joystick_debug: invalid row or column index: %d %d\n", row, col);
+        log_error("joystick_debug: invalid row or column index: %d %d\n", row, col);
     } else {
         for (int i = 0; i < row; i++) {
             for (int j = 0; j < JOYSTICK_DEBUG_LINES; j++) {
@@ -279,7 +280,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
             last_healthy_imu_timestamp_ms = get_epoch_time_ms();
             last_imu_checkpoint_quat = quat;
         } else if (config()->debug_device) {
-            printf("\tdebug: handle_imu_update, device failed health check\n");
+            log_debug("handle_imu_update, device failed health check\n");
         }
     }
 
@@ -307,7 +308,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                         quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
                         quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
                         if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
-                            fprintf(stderr, "Error allocating memory\n");
+                            log_error("Error allocating memory\n");
                             exit(1);
                         }
                     }
@@ -399,7 +400,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                 if (config()->use_roll_axis)
                     libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
             } else if (!is_external_mode(config())) {
-                fprintf(stderr, "Unsupported output mode: %s\n", config()->output_mode);
+                log_error("Unsupported output mode: %s\n", config()->output_mode);
             }
 
             if (is_evdev_output_mode(config()))
