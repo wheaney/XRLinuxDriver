@@ -245,9 +245,9 @@ void breezy_desktop_reset_imu_data_func() {
 }
 
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                          bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
+                                          bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
-        if (imu_calibrated) {
+        if (imu_calibrated && ipc_values) {
             breezy_desktop_write_imu_data(ipc_values->imu_data);
         } else {
             breezy_desktop_reset_imu_data_func();

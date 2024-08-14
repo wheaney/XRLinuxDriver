@@ -43,7 +43,6 @@
 device_driver_type *device_driver;
 ipc_values_type *ipc_values;
 
-bool ipc_enabled = false;
 bool glasses_calibrated=false;
 long int glasses_calibration_started_sec=0;
 bool force_quit=false;
@@ -67,7 +66,7 @@ void reset_calibration(bool reset_device) {
     if (reset_device && is_driver_connected()) {
         if (config()->debug_device) printf("\tdebug: reset_calibration, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
-    } else if (ipc_enabled) printf("Waiting on device calibration\n");
+    } else printf("Waiting on device calibration\n");
 }
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
@@ -104,7 +103,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 screen_center_conjugate = conjugate(screen_center);
 
                 glasses_calibration_started_sec=tv.tv_sec;
-                if (ipc_enabled) reset_imu_data(ipc_values);
+                if (ipc_values) reset_imu_data(ipc_values);
             } else {
                 glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
                 if (glasses_calibrated) {
@@ -130,7 +129,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 reset_calibration(true);
             }
 
-            handle_imu_update(timestamp_ms, quat, euler_velocities, ipc_enabled, glasses_calibrated, ipc_values);
+            handle_imu_update(timestamp_ms, quat, euler_velocities, glasses_calibrated, ipc_values);
         } else if (config()->debug_device) printf("\tdebug: driver_handle_imu_event, received invalid quat\n");
 
         // reset the counter every second
@@ -147,34 +146,17 @@ bool driver_disabled() {
 
 void setup_ipc() {
     bool not_external_only = config()->output_mode && !is_external_mode(config());
-    if (!ipc_enabled) {
-        if (config()->debug_ipc) printf("\tdebug: setup_ipc, prefix set, enabling IPC\n");
-        if (!ipc_values) ipc_values = calloc(1, sizeof(*ipc_values));
-        if (setup_ipc_values(ipc_values, config()->debug_ipc) && plugins.setup_ipc()) {
-            ipc_enabled = true;
-
-            if (not_external_only) {
-                if (config()->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config()->output_mode);
-                ipc_enabled = false;
-            } else {
-                printf("IPC enabled\n");
-            }
-        } else {
+    if (!ipc_values) {
+        if (config()->debug_ipc) printf("\tdebug: setup_ipc, enabling IPC\n");
+        ipc_values = calloc(1, sizeof(*ipc_values));
+        if (!setup_ipc_values(ipc_values, config()->debug_ipc) || !plugins.setup_ipc()) {
             fprintf(stderr, "Error setting up IPC values\n");
             exit(1);
         }
-    } else {
-        if (not_external_only) {
-            if (config()->debug_ipc) printf("\tdebug: setup_ipc, mode is %s, disabling IPC\n", config()->output_mode);
-            *ipc_values->disabled = true;
-            ipc_enabled = false;
-        } else {
-            if (config()->debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
-        }
-    }
+    } else if (config()->debug_ipc) printf("\tdebug: setup_ipc, already enabled, doing nothing\n");
 
     device_properties_type* device = device_checkout();
-    if (ipc_enabled && device != NULL) {
+    if (device != NULL) {
         plugins.reset_imu_data();
 
         // set IPC values that won't change after a device is set
@@ -239,7 +221,7 @@ void *block_on_device_thread_func(void *arg) {
 
                 setup_ipc();
                 reset_calibration(false);
-                if (ipc_enabled) *ipc_values->disabled = false;
+                *ipc_values->disabled = false;
                 plugins.handle_device_connect();
                 init_outputs();
 
@@ -259,7 +241,7 @@ void *block_on_device_thread_func(void *arg) {
             }
         }
 
-        if (ipc_enabled) *ipc_values->disabled = true;
+        if (ipc_values) *ipc_values->disabled = true;
     }
 
     if (config()->debug_threads)
@@ -317,7 +299,7 @@ void update_config_from_file(FILE *fp) {
 
     if (output_mode_changed && is_driver_connected()) reinit_outputs();
 
-    if (ipc_enabled) *ipc_values->disabled = driver_disabled();
+    if (ipc_values) *ipc_values->disabled = driver_disabled();
     
     evaluate_block_on_device_ready();
 }

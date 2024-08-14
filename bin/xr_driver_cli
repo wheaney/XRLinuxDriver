@@ -9,6 +9,10 @@ CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
 if [ ! -d "$CONFIG_DIR" ]; then
   mkdir -p $CONFIG_DIR
 fi
+if [ -z "$XDG_STATE_HOME" ]; then
+  XDG_STATE_HOME="$USER_HOME/.local/state"
+fi
+LOG_FILE="$XDG_STATE_HOME/xr_driver/driver.log"
 
 if [ -n "$1" ]
 then
@@ -98,6 +102,8 @@ then
         config_type="string"
         config_key="hardware_id"
         config_file="/dev/shm/xr_driver_state"
+    elif [ "$1" == "--view-log" ] || [ "$1" == "-l" ]; then
+        less +F "$LOG_FILE"
     fi
 
     if [[ -n $config_key ]]; then
@@ -180,6 +186,7 @@ fi
 
 echo "Usage: $0 [options]
 Options:
+  -l, --view-log
   -d, --disable
   -e, --enable
   -s, --status

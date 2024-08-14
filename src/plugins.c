@@ -96,10 +96,10 @@ imu_quat_type all_plugins_modify_screen_center_func(uint32_t timestamp_ms, imu_q
     return screen_center;
 }
 void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                      bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
+                                      bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->handle_imu_data == NULL) continue;
-        all_plugins[i]->handle_imu_data(timestamp_ms, quat, velocities, ipc_enabled, imu_calibrated, ipc_values);
+        all_plugins[i]->handle_imu_data(timestamp_ms, quat, velocities, imu_calibrated, ipc_values);
     }
 }
 void all_plugins_reset_imu_data_func() {
