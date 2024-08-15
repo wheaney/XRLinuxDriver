@@ -127,10 +127,16 @@ cp manifest $DATA_DIR
 cp xr_driver_uninstall $OLD_BIN_DIR/xreal_driver_uninstall
 
 echo "Fixing file and directory ownership"
-chown -R $USER:$GROUP $XDG_DATA_HOME
-chown -R $USER:$GROUP $XDG_CONFIG_HOME
-chown -R $USER:$GROUP $XDG_STATE_HOME
-chown -R $USER:$GROUP $XDG_BIN_HOME
+# for each XDG xr_driver subdirectory, also fix the parent XDG directory in case our old root setup created
+# them, but don't do this recursively in case there are other unrelated files in the parent directory
+chown $USER:$GROUP $XDG_DATA_HOME
+chown -R $USER:$GROUP $DATA_DIR
+chown $USER:$GROUP $XDG_CONFIG_HOME
+chown -R $USER:$GROUP $CONFIG_DIR
+chown $USER:$GROUP $XDG_STATE_HOME
+chown -R $USER:$GROUP $STATE_DIR
+chown $USER:$GROUP $XDG_BIN_HOME
+chown $USER:$GROUP $BIN_DIR/xr*
 chown -R $USER:$GROUP $OLD_BIN_DIR
 
 # clear bash's cache of executable locations, so it can find the newly installed scripts

@@ -232,7 +232,7 @@ void *block_on_device_thread_func(void *arg) {
                 plugins.handle_device_disconnect();
                 deinit_outputs();
             } else if (block_on_device_ready) {
-                log_message("Device driver connection attempt failed. ");
+                log_message("Device driver connection attempt failed\n");
             }
             
             if (block_on_device_ready) {
