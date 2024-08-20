@@ -55,15 +55,11 @@ fi
 rm -f $SYSTEMD_USER_DIR/xr-driver.service
 
 UDEV_RULES_DIR="/usr/lib/udev/rules.d"
-if [ -f /etc/os-release ]; then
-  . /etc/os-release
-  if [ "$ID" == "steamos" ]; then
-    UDEV_RULES_DIR="/etc/udev/rules.d"
-  fi
-fi
+ALT_UDEV_RULES_DIR="/etc/udev/rules.d"
 
-[ "$for_install" -eq 0 ] && echo "Removing the udev rules from ${UDEV_RULES_DIR}"
-sudo rm $UDEV_RULES_DIR/70-*-xr.rules
+[ "$for_install" -eq 0 ] && echo "Removing the udev rules from ${UDEV_RULES_DIR} or ${ALT_UDEV_RULES_DIR}"
+sudo rm $UDEV_RULES_DIR/70-*-xr.rules > /dev/null 2>&1 || true
+sudo rm $ALT_UDEV_RULES_DIR/70-*-xr.rules > /dev/null 2>&1 || true
 
 if [ "$for_install" -eq 0 ]; then
     echo "Removing installed files from $STATE_DIR, $CONFIG_DIR, $DATA_DIR, and $BIN_DIR"
