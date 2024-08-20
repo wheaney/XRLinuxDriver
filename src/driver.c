@@ -82,7 +82,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             
         if (glasses_calibrated) {
             if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
-                if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected. ");
+                if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected.\n");
                 log_message("Centering screen\n");
 
                 screen_center = quat;

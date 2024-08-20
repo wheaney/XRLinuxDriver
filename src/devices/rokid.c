@@ -63,27 +63,21 @@ const device_properties_type rokid_one_properties = {
 static void* event_instance = NULL;
 static void* event_handle = NULL;
 static void* control_instance = NULL;
-static int device_fd = -1;
 static bool connected = false;
 static bool sbs_mode_enabled = false;
 
 void rokid_disconnect(bool forced) {
     connected = false;
-    if (event_instance) {
-        if (event_handle) {
-            GlassUnRegisterEvent(event_instance, event_handle);
-            event_handle = NULL;
+    if (!forced) {
+        if (event_instance) {
+            if (event_handle) {
+                GlassUnRegisterEvent(event_instance, event_handle);
+            }
+            GlassEventClose(event_instance);
         }
-        GlassEventClose(event_instance);
-        event_instance = NULL;
-    }
-    if (control_instance) {
-        GlassControlClose(control_instance);
-        control_instance = NULL;
-    }
-    if (device_fd >= 0) {
-        close(device_fd);
-        device_fd = -1;
+        if (control_instance) {
+            GlassControlClose(control_instance);
+        }
     }
 }
 
@@ -107,24 +101,17 @@ static bool device_connect(device_properties_type* device) {
         if (!control_instance) {
             log_error("Failed to initialize control instance\n");
         } else {
-            char device_path[64];
-            snprintf(device_path, sizeof(device_path), "/dev/bus/usb/%03d/%03d", device->usb_bus, device->usb_address);
-            device_fd = open(device_path, O_RDWR);
-            if (device_fd < 0) {
-                log_error("Failed to open device %s\n", device_path);
-            } else {
-                connected = GlassEventOpen(event_instance, device_fd) && 
-                            GlassControlOpen(control_instance, device_fd);
+            connected = GlassEventOpen(event_instance, device->hid_vendor_id, device->hid_product_id) && 
+                        GlassControlOpen(control_instance, device->hid_vendor_id, device->hid_product_id);
 
-                if (connected) {
-                    event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
-                    if (!event_handle) {
-                        log_error("Failed to register event handle\n");
-                        connected = false;
-                    } else {
-                        GlassAddFusionEvent(event_instance, true);
-                        handle_display_mode(device, GetDisplayMode(control_instance));
-                    }
+            if (connected) {
+                event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
+                if (!event_handle) {
+                    log_error("Failed to register event handle\n");
+                    connected = false;
+                } else {
+                    GlassAddFusionEvent(event_instance, true);
+                    handle_display_mode(device, GetDisplayMode(control_instance));
                 }
             }
         }
