@@ -100,9 +100,19 @@ su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
 
 # if steamos is detected, we need to install the udev rules to /etc since /usr is on the readonly FS
 UDEV_RULES_DIR="/usr/lib/udev/rules.d"
+UDEV_RULES_DIR_CHANGED=0
 if [ -f /etc/os-release ]; then
   . /etc/os-release
   if [ "$ID" == "steamos" ]; then
+    UDEV_RULES_DIR="/etc/udev/rules.d"
+    UDEV_RULES_DIR_CHANGED=1
+  fi
+fi
+
+if [ $UDEV_RULES_DIR_CHANGED -eq 0 ]; then
+  if touch "$UDEV_RULES_DIR/100-xr-driver-test-rule" 2>/dev/null; then
+    rm "$UDEV_RULES_DIR/100-xr-driver-test-rule"
+  else 
     UDEV_RULES_DIR="/etc/udev/rules.d"
   fi
 fi
