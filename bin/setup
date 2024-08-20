@@ -38,7 +38,10 @@ function create_and_chown() {
     chown $USER:$GROUP $2
   fi
 
-  chown -R $USER:$GROUP $1
+  # only recursively chown the directory if it's not an XDG dir
+  if [ -z "$2" ] || [ "$1" != "$2" ]; then
+    chown -R $USER:$GROUP $1
+  fi
 }
 
 if [ -z "$XDG_DATA_HOME" ]; then
