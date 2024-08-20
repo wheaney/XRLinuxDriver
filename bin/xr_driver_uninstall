@@ -8,30 +8,23 @@ fi
 # we don't want the uninstall script to be able to cause a failure if being triggered by the setup script
 [ "$for_install" -eq 0 ] && set -e
 
-# Make sure only root can run our script
-if [ "$(id -u)" != "0" ]; then
-   echo "This script must be run as root" 1>&2
-   exit 1
-fi
-
 # Get the directory of the current script
 script_dir=$(dirname "$0")
 
 USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
-if [ -z "$XDG_STATE_HOME" ]; then
-  XDG_STATE_HOME="$USER_HOME/.local/state"
-fi
-STATE_DIR="$XDG_STATE_HOME/xr_driver"
 
 if [ -z "$XDG_DATA_HOME" ]; then
   XDG_DATA_HOME="$USER_HOME/.local/share"
 fi
+SYSTEMD_DATA_DIR="$XDG_DATA_HOME/systemd"
+SYSTEMD_USER_DIR="$SYSTEMD_DATA_DIR/user"
 DATA_DIR="$XDG_DATA_HOME/xr_driver"
 
 if [ -z "$XDG_CONFIG_HOME" ]; then
   XDG_CONFIG_HOME="$USER_HOME/.config"
 fi
+
 CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
 
 if [ -z "$XDG_BIN_HOME" ]; then
@@ -40,11 +33,33 @@ fi
 OLD_BIN_DIR="$USER_HOME/bin"
 BIN_DIR="$XDG_BIN_HOME"
 
-[ "$for_install" -eq 0 ] && echo "Removing the systemd service"
-if systemctl is-active --quiet xr-driver; then
-    systemctl stop xr-driver
+if [ -z "$XDG_STATE_HOME" ]; then
+  XDG_STATE_HOME="$USER_HOME/.local/state"
 fi
-rm -f /etc/systemd/system/xr-driver.service
+STATE_DIR="$XDG_STATE_HOME/xr_driver"
+
+[ "$for_install" -eq 0 ] && echo "Removing the systemd service"
+# if this is root
+if [ "$(id -u)" == "0" ]; then
+  export XDG_RUNTIME_DIR=/run/user/$(id -u $USER)
+  if su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user is-active --quiet xr-driver" $USER; then
+      su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user stop xr-driver" $USER
+  fi
+else
+  if systemctl --user is-active --quiet xr-driver; then
+      systemctl --user stop xr-driver
+  fi
+fi
+
+[ "$for_install" -eq 0 ] && echo "Removing the systemd service from ${SYSTEMD_USER_DIR}"
+rm -f $SYSTEMD_USER_DIR/xr-driver.service
+
+UDEV_RULES_DIR="/usr/lib/udev/rules.d"
+ALT_UDEV_RULES_DIR="/etc/udev/rules.d"
+
+[ "$for_install" -eq 0 ] && echo "Removing the udev rules from ${UDEV_RULES_DIR} or ${ALT_UDEV_RULES_DIR}"
+sudo rm $UDEV_RULES_DIR/70-*-xr.rules > /dev/null 2>&1 || true
+sudo rm $ALT_UDEV_RULES_DIR/70-*-xr.rules > /dev/null 2>&1 || true
 
 if [ "$for_install" -eq 0 ]; then
     echo "Removing installed files from $STATE_DIR, $CONFIG_DIR, $DATA_DIR, and $BIN_DIR"
@@ -61,8 +76,6 @@ rm -f $BIN_DIR/xrDriver
 rm -f $BIN_DIR/xr_driver_cli
 rm -f $BIN_DIR/xr_driver_verify
 
-# while these files aren't permanent, they are owned by root and we want to clean them up in case the driver
-# is re-run as a user service
 rm -f /tmp/shader_runtime_*
 rm -f /dev/shm/xr_*
 rm -f /dev/shm/breezy_desktop_imu

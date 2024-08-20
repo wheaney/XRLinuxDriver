@@ -1,6 +1,5 @@
 #include "devices.h"
 #include "features/breezy_desktop.h"
-#include "features/sbs.h"
 #include "logging.h"
 #include "plugins.h"
 #include "plugins/breezy_desktop.h"
