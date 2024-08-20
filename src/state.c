@@ -1,4 +1,5 @@
 #include "devices.h"
+#include "logging.h"
 #include "plugins.h"
 #include "state.h"
 #include "strings.h"
@@ -83,7 +84,7 @@ void read_control_flags(FILE *fp, control_flags_type *flags) {
                 } else if (strcmp(value, "enable") == 0) {
                     flags->sbs_mode = SBS_CONTROL_ENABLE;
                 } else {
-                    printf("Invalid sbs_mode value: %s\n", value);
+                    log_message("Invalid sbs_mode value: %s\n", value);
                 }
             } else if (strcmp(key, "force_quit") == 0) {
                 flags->force_quit = strcmp(value, "true") == 0;
@@ -128,9 +129,9 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
 
     if (was_sbs_mode_enabled != state->sbs_mode_enabled) {
         if (state->sbs_mode_enabled) {
-            printf("SBS mode has been enabled\n");
+            log_message("SBS mode has been enabled\n");
         } else {
-            printf("SBS mode has been disabled\n");
+            log_message("SBS mode has been disabled\n");
         }
     }
 

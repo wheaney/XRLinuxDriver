@@ -1,9 +1,9 @@
-#include "buffer.h"
 #include "config.h"
 #include "devices.h"
 #include "features/smooth_follow.h"
 #include "features/sbs.h"
 #include "ipc.h"
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
@@ -14,10 +14,6 @@
 #include <errno.h>
 #include <pthread.h>
 
-#define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
-
-buffer_type **quat_stage_1_buffer;
-buffer_type **quat_stage_2_buffer;
 virtual_display_config *vd_config;
 virtual_display_ipc_values_type *virtual_display_ipc_values;
 
@@ -110,7 +106,7 @@ void virtual_display_set_config_func(void* config) {
 
     if (vd_config) {
         if (vd_config->enabled != temp_config->enabled)
-            printf("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+            log_message("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
         if (!temp_config->enabled) {
             if (temp_config->passthrough_smooth_follow_enabled && temp_config->follow_mode_enabled) {
@@ -121,22 +117,22 @@ void virtual_display_set_config_func(void* config) {
             }
         } else {
             if (vd_config->look_ahead_override != temp_config->look_ahead_override)
-                fprintf(stdout, "Look ahead override has changed to %f\n", temp_config->look_ahead_override);
+                log_message("Look ahead override has changed to %f\n", temp_config->look_ahead_override);
 
             if (vd_config->display_zoom != temp_config->display_zoom)
-                fprintf(stdout, "Display size has changed to %f\n", temp_config->display_zoom);
+                log_message("Display size has changed to %f\n", temp_config->display_zoom);
 
             if (vd_config->sbs_display_size != temp_config->sbs_display_size)
-                fprintf(stdout, "SBS display size has changed to %f\n", temp_config->sbs_display_size);
+                log_message("SBS display size has changed to %f\n", temp_config->sbs_display_size);
 
             if (vd_config->sbs_display_distance != temp_config->sbs_display_distance)
-                fprintf(stdout, "SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
+                log_message("SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
 
             if (vd_config->sbs_content != temp_config->sbs_content)
-                fprintf(stdout, "SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
+                log_message("SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
 
             if (vd_config->sbs_mode_stretched != temp_config->sbs_mode_stretched)
-                fprintf(stdout, "SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
+                log_message("SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
         }
 
         free(vd_config);
@@ -155,8 +151,6 @@ int virtual_display_register_features_func(char*** features) {
 }
 
 const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
-const char *virtual_display_imu_data_ipc_name = "imu_quat_data";
-const char *virtual_display_imu_data_mutex_ipc_name = "imu_quat_data_mutex";
 const char *virtual_display_look_ahead_cfg_ipc_name = "look_ahead_cfg";
 const char *virtual_display_display_zoom_ipc_name = "display_zoom";
 const char *virtual_display_display_north_offset_ipc_name = "display_north_offset";
@@ -168,7 +162,6 @@ bool virtual_display_setup_ipc_func() {
     bool debug = config()->debug_ipc;
     if (!virtual_display_ipc_values) virtual_display_ipc_values = calloc(1, sizeof(virtual_display_ipc_values_type));
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
-    setup_ipc_value(virtual_display_imu_data_ipc_name, (void**) &virtual_display_ipc_values->imu_data, sizeof(float) * 16, debug);
     setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
     setup_ipc_value(virtual_display_display_zoom_ipc_name, (void**) &virtual_display_ipc_values->display_zoom, sizeof(float), debug);
     setup_ipc_value(virtual_display_display_north_offset_ipc_name, (void**) &virtual_display_ipc_values->display_north_offset, sizeof(float), debug);
@@ -176,101 +169,9 @@ bool virtual_display_setup_ipc_func() {
     setup_ipc_value(virtual_display_sbs_content_name, (void**) &virtual_display_ipc_values->sbs_content, sizeof(bool), debug);
     setup_ipc_value(virtual_display_sbs_mode_stretched_name, (void**) &virtual_display_ipc_values->sbs_mode_stretched, sizeof(bool), debug);
 
-    // attempt to destroy the mutex if it already existed from a previous run
-    setup_ipc_value(virtual_display_imu_data_mutex_ipc_name, (void**) &virtual_display_ipc_values->imu_data_mutex, sizeof(pthread_mutex_t), debug);
-    int ret = pthread_mutex_destroy(virtual_display_ipc_values->imu_data_mutex);
-    if (ret != 0) {
-        perror("pthread_mutex_destroy");
-        if (ret != EINVAL) return false;
-    }
-
-    pthread_mutexattr_t attr;
-    if (pthread_mutexattr_init(&attr) != 0) {
-        perror("pthread_mutexattr_init");
-        return false;
-    }
-    if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
-        perror("pthread_mutexattr_setpshared");
-        return false;
-    }
-    if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) != 0) {
-        perror("pthread_mutexattr_setrobust");
-        return false;
-    }
-    if (pthread_mutex_init(virtual_display_ipc_values->imu_data_mutex, &attr) != 0) {
-        perror("pthread_mutex_init");
-        return false;
-    }
-
     set_virtual_display_ipc_values();
 
     return true;
-}
-
-void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                          bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (vd_config && ipc_enabled && virtual_display_ipc_values) {
-        device_properties_type* device = device_checkout();
-        if (imu_calibrated && device != NULL) {
-            if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
-                quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-                quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-                for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                    quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
-                    quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
-                    if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
-                        fprintf(stderr, "Error allocating memory\n");
-                        exit(1);
-                    }
-                }
-            }
-
-            // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
-            // push/pop, to know if the values that are returned will be relevant to our calculations
-            bool was_full = is_full(quat_stage_1_buffer[0]);
-            float stage_1_quat_w = push(quat_stage_1_buffer[0], quat.w);
-            float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
-            float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
-            float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
-
-            // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
-            //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
-            float stage_1_ts = push(quat_stage_1_buffer[4], (float)timestamp_ms);
-
-            if (was_full) {
-                was_full = is_full(quat_stage_2_buffer[0]);
-                float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
-                float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
-                float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
-                float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
-                float stage_2_ts = push(quat_stage_2_buffer[4], stage_1_ts);
-
-                if (was_full) {
-                    pthread_mutex_lock(virtual_display_ipc_values->imu_data_mutex);
-
-                    // write to shared memory for anyone using the same ipc prefix to consume
-                    virtual_display_ipc_values->imu_data[0] = quat.x;
-                    virtual_display_ipc_values->imu_data[1] = quat.y;
-                    virtual_display_ipc_values->imu_data[2] = quat.z;
-                    virtual_display_ipc_values->imu_data[3] = quat.w;
-                    virtual_display_ipc_values->imu_data[4] = stage_1_quat_x;
-                    virtual_display_ipc_values->imu_data[5] = stage_1_quat_y;
-                    virtual_display_ipc_values->imu_data[6] = stage_1_quat_z;
-                    virtual_display_ipc_values->imu_data[7] = stage_1_quat_w;
-                    virtual_display_ipc_values->imu_data[8] = stage_2_quat_x;
-                    virtual_display_ipc_values->imu_data[9] = stage_2_quat_y;
-                    virtual_display_ipc_values->imu_data[10] = stage_2_quat_z;
-                    virtual_display_ipc_values->imu_data[11] = stage_2_quat_w;
-                    virtual_display_ipc_values->imu_data[12] = (float)timestamp_ms;
-                    virtual_display_ipc_values->imu_data[13] = stage_1_ts;
-                    virtual_display_ipc_values->imu_data[14] = stage_2_ts;
-
-                    pthread_mutex_unlock(virtual_display_ipc_values->imu_data_mutex);
-                }
-            }
-        }
-        device_checkin(device);
-    }
 }
 
 void virtual_display_handle_state_func() {
@@ -280,18 +181,6 @@ void virtual_display_handle_state_func() {
     set_virtual_display_ipc_values();
 }
 
-void virtual_display_reset_imu_data_func() {
-    if (!virtual_display_ipc_values) return;
-
-    // reset the 4 quaternion values to (0, 0, 0, 1)
-    for (int i = 0; i < 16; i += 4) {
-        virtual_display_ipc_values->imu_data[i] = 0;
-        virtual_display_ipc_values->imu_data[i + 1] = 0;
-        virtual_display_ipc_values->imu_data[i + 2] = 0;
-        virtual_display_ipc_values->imu_data[i + 3] = 1;
-    }
-}
-
 const plugin_type virtual_display_plugin = {
     .id = "virtual_display",
     .default_config = virtual_display_default_config_func,
@@ -299,8 +188,6 @@ const plugin_type virtual_display_plugin = {
     .set_config = virtual_display_set_config_func,
     .register_features = virtual_display_register_features_func,
     .setup_ipc = virtual_display_setup_ipc_func,
-    .handle_imu_data = virtual_display_handle_imu_data_func,
-    .reset_imu_data = virtual_display_reset_imu_data_func,
     .handle_state = virtual_display_handle_state_func,
     .handle_device_disconnect = virtual_display_handle_device_disconnect_func
 };

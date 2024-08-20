@@ -2,9 +2,6 @@
 
 #include "plugins.h"
 
-extern const char *virtual_display_imu_data_ipc_name;
-extern const char *virtual_display_imu_data_mutex_ipc_name;
-extern const char *virtual_display_imu_data_period_name;
 extern const char *virtual_display_look_ahead_cfg_ipc_name;
 extern const char *virtual_display_display_zoom_ipc_name;
 extern const char *virtual_display_display_north_offset_ipc_name;
@@ -14,8 +11,6 @@ extern const char *virtual_display_sbs_mode_stretched_name;
 
 struct virtual_display_ipc_values_t {
     bool *enabled;
-    float *imu_data;
-    pthread_mutex_t *imu_data_mutex;
     float *look_ahead_cfg;
     float *display_zoom;
     float *display_north_offset;

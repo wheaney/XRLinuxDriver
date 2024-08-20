@@ -1,7 +1,9 @@
 #include "devices.h"
 #include "devices/rayneo.h"
+#include "devices/rokid.h"
 #include "devices/viture.h"
 #include "devices/xreal.h"
+#include "logging.h"
 #include "runtime_context.h"
 
 #include <libusb.h>
@@ -16,9 +18,10 @@
         &viture_driver
     };
 #elif defined(__x86_64__)
-    #define DEVICE_DRIVER_COUNT 3
+    #define DEVICE_DRIVER_COUNT 4
     const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
         &rayneo_driver,
+        &rokid_driver,
         &xreal_driver,
         &viture_driver
     };
@@ -26,12 +29,17 @@
     #error "Unsupported architecture"
 #endif
 
-static connected_device_type* _find_connected_device(struct libusb_device_descriptor descriptor) {
+static connected_device_type* _find_connected_device(libusb_device *usb_device, struct libusb_device_descriptor descriptor) {
     for (int j = 0; j < DEVICE_DRIVER_COUNT; j++) {
         const device_driver_type* driver = device_drivers[j];
-        device_properties_type* device = driver->supported_device_func(descriptor.idVendor, descriptor.idProduct);
+        device_properties_type* device = driver->supported_device_func(
+            descriptor.idVendor, 
+            descriptor.idProduct,
+            libusb_get_bus_number(usb_device),
+            libusb_get_device_address(usb_device)
+        );
         if (device != NULL) {
-            printf("Found device with vendor ID 0x%04x and product ID 0x%04x\n", descriptor.idVendor, descriptor.idProduct);
+            log_message("Found device with vendor ID 0x%04x and product ID 0x%04x\n", descriptor.idVendor, descriptor.idProduct);
             connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
             connected_device->driver = driver;
             connected_device->device = device;
@@ -45,14 +53,14 @@ static connected_device_type* _find_connected_device(struct libusb_device_descri
 static handle_device_update_func handle_device_update_callback = NULL;
 int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotplug_event event, void *user_data) {
     if (handle_device_update_callback == NULL) {
-        fprintf(stderr, "hotplug_callback: init_devices must be called first\n");
+        log_error("hotplug_callback: init_devices must be called first\n");
         return 1;
     }
 
     struct libusb_device_descriptor descriptor;
     int r = libusb_get_device_descriptor(usb_device, &descriptor);
     if (r < 0) {
-        fprintf(stderr, "Failed to get device descriptor\n");
+        log_error("Failed to get device descriptor\n");
         return 1;
     }
 
@@ -64,7 +72,7 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
             handle_device_update_callback(NULL);
         }
     } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
-        connected_device_type* connected_device = _find_connected_device(descriptor);
+        connected_device_type* connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) {
             handle_device_update_callback(connected_device);
         }
@@ -79,7 +87,7 @@ libusb_hotplug_callback_handle callback_handle;
 void init_devices(handle_device_update_func callback) {
     int r = libusb_init(&ctx);
     if (r < 0) {
-        fprintf(stderr, "Failed to initialize libusb\n");
+        log_error("Failed to initialize libusb\n");
         return;
     }
     handle_device_update_callback = callback;
@@ -90,7 +98,7 @@ void init_devices(handle_device_update_func callback) {
                                         hotplug_callback, NULL, &callback_handle);
     if (r < 0) {
         handle_device_update_callback = NULL;
-        fprintf(stderr, "Failed to register hotplug callback\n");
+        log_error("Failed to register hotplug callback\n");
     }
 
     connected_device_type* connected_device = find_connected_device();
@@ -114,7 +122,7 @@ connected_device_type* find_connected_device() {
     libusb_device **usb_device_list;
     ssize_t usb_device_count = libusb_get_device_list(ctx, &usb_device_list);
     if (usb_device_count < 0) {
-        fprintf(stderr, "Failed to get device list\n");
+        log_error("Failed to get device list\n");
         libusb_exit(ctx);
         return NULL;
     }
@@ -127,11 +135,11 @@ connected_device_type* find_connected_device() {
         struct libusb_device_descriptor descriptor;
         int r = libusb_get_device_descriptor(usb_device, &descriptor);
         if (r < 0) {
-            fprintf(stderr, "Failed to get device descriptor\n");
+            log_error("Failed to get device descriptor\n");
             continue;
         }
 
-        connected_device = _find_connected_device(descriptor);
+        connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) break;
     }
 

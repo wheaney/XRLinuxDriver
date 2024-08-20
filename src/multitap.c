@@ -1,6 +1,7 @@
 #include "imu.h"
 #include "buffer.h"
 
+#include "logging.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -65,7 +66,7 @@ int detect_multi_tap(imu_euler_type velocities, uint32_t timestamp, bool debug) 
                 int final_tap_count = tap_count;
                 tap_count = 0;
 
-                if (final_tap_count > 0 && debug) fprintf(stdout, "\tdebug: detected multi-tap of %d\n", final_tap_count);
+                if (final_tap_count > 0 && debug) log_debug("detected multi-tap of %d\n", final_tap_count);
                 return final_tap_count;
             } else {
                 switch(mt_state) {
@@ -74,12 +75,12 @@ int detect_multi_tap(imu_euler_type velocities, uint32_t timestamp, bool debug) 
                             tap_start_time = timestamp;
                             peak_max = 0.0;
                             mt_state = MT_STATE_RISE;
-                            if (debug) fprintf(stdout, "\tdebug: tap-rise detected %f\n", acceleration);
+                            if (debug) log_debug("tap-rise detected %f\n", acceleration);
                         } else {
                             if (debug) {
                                 if (acceleration > peak_max) peak_max = acceleration;
                                 if ((timestamp - last_logged_peak_time) > 1000) {
-                                    fprintf(stdout, "\tdebug: no-tap detected, peak was %f\n", peak_max);
+                                    log_debug("no-tap detected, peak was %f\n", peak_max);
                                     peak_max = 0.0;
                                     last_logged_peak_time = timestamp;
                                 }
@@ -95,12 +96,12 @@ int detect_multi_tap(imu_euler_type velocities, uint32_t timestamp, bool debug) 
                     case MT_STATE_FALL: {
                         if (acceleration > 0) { // acceleration switches back, stopping the fall
                             if (tap_elapsed_ms > max_tap_duration_ms) {
-                                if (debug) fprintf(stdout, "\tdebug: rise and fall took %d, too long for a tap\n", tap_elapsed_ms);
+                                if (debug) log_debug("rise and fall took %d, too long for a tap\n", tap_elapsed_ms);
                                 peak_max = 0.0;
                                 mt_state = MT_STATE_IDLE;
                                 tap_count == 0;
                             } else {
-                                if (debug) fprintf(stdout, "\tdebug: rise and fall took %d\n", tap_elapsed_ms);
+                                if (debug) log_debug("rise and fall took %d\n", tap_elapsed_ms);
                                 tap_count++;
                                 pause_start_time = timestamp;
                                 mt_state = MT_STATE_PAUSE;

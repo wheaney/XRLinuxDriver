@@ -1,4 +1,5 @@
 #include "config.h"
+#include "logging.h"
 #include "plugins.h"
 #include "strings.h"
 
@@ -14,7 +15,7 @@ const char *external_only_output_mode = "external_only";
 driver_config_type *default_config() {
     driver_config_type *config = calloc(1, sizeof(driver_config_type));
     if (config == NULL) {
-        fprintf(stderr, "Error allocating config");
+        log_error("Error allocating config");
         exit(1);
     }
 
@@ -28,6 +29,7 @@ driver_config_type *default_config() {
     config->debug_multi_tap = false;
     config->debug_ipc = false;
     config->debug_license = false;
+    config->debug_device = false;
 
     return config;
 }
@@ -49,7 +51,7 @@ void float_config(char* key, char *value, float *config_value) {
     if (errno != ERANGE && endptr != value) {
         *config_value = num;
     } else {
-        fprintf(stderr, "Error parsing %s value: %s\n", key, value);
+        log_error("Error parsing %s value: %s\n", key, value);
     }
 }
 
@@ -60,7 +62,7 @@ void int_config(char* key, char *value, int *config_value) {
     if (errno != ERANGE && endptr != value) {
         *config_value = (int) num;
     } else {
-        fprintf(stderr, "Error parsing %s value: %s\n", key, value);
+        log_error("Error parsing %s value: %s\n", key, value);
     }
 }
 
@@ -96,6 +98,9 @@ driver_config_type* parse_config_file(FILE *fp) {
                 }
                 if (equal(token, "license")) {
                     config->debug_license = true;
+                }
+                if (equal(token, "device")) {
+                    config->debug_device = true;
                 }
                 token = strtok(NULL, ",");
             }

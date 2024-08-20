@@ -2,6 +2,7 @@
 #include "devices/rayneo.h"
 #include "driver.h"
 #include "imu.h"
+#include "logging.h"
 #include "outputs.h"
 #include "runtime_context.h"
 #include "sdks/rayneo.h"
@@ -152,7 +153,7 @@ bool rayneo_device_connect() {
 
             connected = true;
         } else {
-            printf("RayNeo driver, failed to establish a connection\n");
+            log_message("RayNeo driver, failed to establish a connection\n");
         }
     }
 
@@ -176,7 +177,7 @@ void rayneo_device_disconnect(bool forced) {
     }
 };
 
-device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id) {
+device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == RAYNEO_ID_VENDOR && product_id == RAYNEO_ID_PRODUCT) {
         device_properties_type* device = calloc(1, sizeof(device_properties_type));
         *device = rayneo_properties;

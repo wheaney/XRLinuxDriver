@@ -1,6 +1,6 @@
-#include "buffer.h"
 #include "devices.h"
 #include "features/breezy_desktop.h"
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/breezy_desktop.h"
 #include "plugins/custom_banner.h"
@@ -37,10 +37,6 @@ float IMU_RESET[NUM_IMU_VALUES] = {
         0.0, 0.0, 0.0, 0.0
 };
 
-#define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
-
-buffer_type **bd_quat_stage_1_buffer;
-buffer_type **bd_quat_stage_2_buffer;
 breezy_desktop_config *bd_config;
 
 void breezy_desktop_reset_config(breezy_desktop_config *config) {
@@ -157,13 +153,12 @@ char* get_shared_mem_file_path() {
 }
 
 // https://stackoverflow.com/a/12340725
-int fd_is_valid(int fd)
-{
-    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+static int fd_is_valid(int fd) {
+    return fd >= 0 && (fcntl(fd, F_GETFD) != -1 || errno != EBADF);
 }
 
-int get_shared_mem_fd() {
-    if (!fd_is_valid) {
+static int get_shared_mem_fd() {
+    if (!fd_is_valid(fd)) {
         fd = BREEZY_DESKTOP_FD_RESET;
     }
 
@@ -188,28 +183,16 @@ int get_shared_mem_fd() {
 }
 
 void write_config_data() {
-    pthread_mutex_lock(&file_mutex);
-    int fd = get_shared_mem_fd();
-    if (fd != -1) do_write_config_data(fd);
-    pthread_mutex_unlock(&file_mutex);
+    // write this if the file exists, even if it's not actually enabled, so we can ensure that 
+    // the file at least reflects the current state
+    if (fd_is_valid(fd) || is_productivity_granted() && bd_config && bd_config->enabled) {
+        pthread_mutex_lock(&file_mutex);
+        do_write_config_data(fd);
+        pthread_mutex_unlock(&file_mutex);
+    }
 }
 
-void breezy_desktop_set_config_func(void* config) {
-    if (!config) return;
-    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
-
-    if (bd_config) {
-        if (bd_config->enabled != temp_config->enabled)
-            printf("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
-
-        free(bd_config);
-    }
-    bd_config = temp_config;
-
-    if (has_started) write_config_data();
-};
-
-void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
+void breezy_desktop_write_imu_data(float *values) {
     pthread_mutex_lock(&file_mutex);
     int fd = get_shared_mem_fd();
     if (fd != -1) {
@@ -238,81 +221,43 @@ void breezy_desktop_write_imu_data(float values[NUM_IMU_VALUES]) {
 }
 
 void breezy_desktop_reset_imu_data_func() {
-    breezy_desktop_write_imu_data(IMU_RESET);
+    if (fd_is_valid(fd) || is_productivity_granted() && bd_config && bd_config->enabled) {
+        breezy_desktop_write_imu_data(&IMU_RESET[0]);
+    }
 }
 
-// TODO - share this with virtual_display plugin
+void breezy_desktop_set_config_func(void* config) {
+    if (!config) return;
+    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
+
+    if (bd_config) {
+        if (bd_config->enabled != temp_config->enabled)
+            log_message("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
+
+        free(bd_config);
+    }
+    bd_config = temp_config;
+
+    if (has_started) {
+        write_config_data();
+        breezy_desktop_reset_imu_data_func();
+    }
+};
+
 void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                          bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
+                                          bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
-        device_properties_type* device = device_checkout();
-        if (imu_calibrated && device != NULL) {
-            if (bd_quat_stage_1_buffer == NULL || bd_quat_stage_2_buffer == NULL) {
-                bd_quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-                bd_quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-                for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                    bd_quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
-                    bd_quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
-                    if (bd_quat_stage_1_buffer[i] == NULL || bd_quat_stage_2_buffer[i] == NULL) {
-                        fprintf(stderr, "Error allocating memory\n");
-                        exit(1);
-                    }
-                }
-            }
-
-            // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
-            // push/pop, to know if the values that are returned will be relevant to our calculations
-            bool was_full = is_full(bd_quat_stage_1_buffer[0]);
-            float stage_1_quat_w = push(bd_quat_stage_1_buffer[0], quat.w);
-            float stage_1_quat_x = push(bd_quat_stage_1_buffer[1], quat.x);
-            float stage_1_quat_y = push(bd_quat_stage_1_buffer[2], quat.y);
-            float stage_1_quat_z = push(bd_quat_stage_1_buffer[3], quat.z);
-
-            // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
-            //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
-            float stage_1_ts = push(bd_quat_stage_1_buffer[4], (float)timestamp_ms);
-
-            if (was_full) {
-                was_full = is_full(bd_quat_stage_2_buffer[0]);
-                float stage_2_quat_w = push(bd_quat_stage_2_buffer[0], stage_1_quat_w);
-                float stage_2_quat_x = push(bd_quat_stage_2_buffer[1], stage_1_quat_x);
-                float stage_2_quat_y = push(bd_quat_stage_2_buffer[2], stage_1_quat_y);
-                float stage_2_quat_z = push(bd_quat_stage_2_buffer[3], stage_1_quat_z);
-                float stage_2_ts = push(bd_quat_stage_2_buffer[4], stage_1_ts);
-
-                if (was_full) {
-                    // write to shared memory for anyone using the same ipc prefix to consume
-                    float imu_data[NUM_IMU_VALUES];
-                    imu_data[0] = quat.x;
-                    imu_data[1] = quat.y;
-                    imu_data[2] = quat.z;
-                    imu_data[3] = quat.w;
-                    imu_data[4] = stage_1_quat_x;
-                    imu_data[5] = stage_1_quat_y;
-                    imu_data[6] = stage_1_quat_z;
-                    imu_data[7] = stage_1_quat_w;
-                    imu_data[8] = stage_2_quat_x;
-                    imu_data[9] = stage_2_quat_y;
-                    imu_data[10] = stage_2_quat_z;
-                    imu_data[11] = stage_2_quat_w;
-                    imu_data[12] = (float)timestamp_ms;
-                    imu_data[13] = stage_1_ts;
-                    imu_data[14] = stage_2_ts;
-
-                    breezy_desktop_write_imu_data(imu_data);
-                }
-            }
+        if (imu_calibrated && ipc_values) {
+            breezy_desktop_write_imu_data(ipc_values->imu_data);
         } else {
             breezy_desktop_reset_imu_data_func();
         }
-        device_checkin(device);
     }
 }
 
 int breezy_desktop_register_features_func(char*** features) {
     *features = calloc(breezy_desktop_feature_count, sizeof(char*));
     (*features)[0] = strdup(productivity_basic_feature_name);
-    // (*features)[1] = strdup(productivity_pro_feature_name);
 
     return breezy_desktop_feature_count;
 }
@@ -327,7 +272,8 @@ void breezy_desktop_device_connect_func() {
     fd = BREEZY_DESKTOP_FD_RESET;
 
     has_started = true;
-    breezy_desktop_write_imu_data(IMU_RESET);
+    write_config_data();
+    breezy_desktop_reset_imu_data_func();
 }
 
 const plugin_type breezy_desktop_plugin = {

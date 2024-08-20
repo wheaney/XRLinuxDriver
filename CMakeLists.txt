@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver C)
+project(xrDriver VERSION 0.10.8 LANGUAGES C)
+
+configure_file(include/version.h.in version.h)
+include_directories(${PROJECT_BINARY_DIR})
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_STANDARD 17)
@@ -79,6 +82,7 @@ endforeach()
 set(DEVICE_MAPPINGS
     "libviture_one_sdk.a:src/devices/viture.c"
     "libRayNeoXRMiniSDK.so:src/devices/rayneo.c"
+    "libGlassSDK.so:src/devices/rokid.c"
 )
 
 set(SOURCES
@@ -93,15 +97,19 @@ set(SOURCES
     src/features/smooth_follow.c
     src/features/sbs.c
     src/files.c
+    src/logging.c
     src/imu.c
     src/ipc.c
     src/multitap.c
     src/outputs.c
     src/plugins.c
+    src/plugins/breezy_desktop.c
     src/plugins/custom_banner.c
     src/plugins/device_license.c
     src/plugins/metrics.c
+    src/plugins/sideview.c
     src/plugins/smooth_follow.c
+    src/plugins/virtual_display.c
     src/runtime_context.c
     src/state.c
     src/strings.c
@@ -142,20 +150,6 @@ foreach(TARGET ${ALL_TARGETS})
         endif()
     endif()
 endforeach()
-
-if(DEFINED ENV{BREEZY_DESKTOP})
-  message(STATUS "Breezy Desktop build")
-  add_definitions(-DBREEZY_DESKTOP)
-  list(APPEND SOURCES
-    src/plugins/breezy_desktop.c
-  )
-else()
-  message(STATUS "Standard build")
-  list(APPEND SOURCES
-    src/plugins/sideview.c
-    src/plugins/virtual_display.c
-  )
-endif()
 
 add_executable(xrDriver ${SOURCES})
 

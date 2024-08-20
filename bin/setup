@@ -31,6 +31,13 @@ function create_and_chown() {
   if [ ! -d "$1" ]; then
     mkdir -p $1
   fi
+
+  # XDG dir can be provided as the second argument, we want to make sure it's owned by the user
+  # but don't recursively chown it since other programs may put files in there
+  if [ -n "$2" ]; then
+    chown $USER:$GROUP $2
+  fi
+
   chown -R $USER:$GROUP $1
 }
 
@@ -39,18 +46,17 @@ if [ -z "$XDG_DATA_HOME" ]; then
 fi
 SYSTEMD_DATA_DIR="$XDG_DATA_HOME/systemd"
 SYSTEMD_USER_DIR="$SYSTEMD_DATA_DIR/user"
-create_and_chown $SYSTEMD_DATA_DIR
-create_and_chown $SYSTEMD_USER_DIR
+mkdir -p $SYSTEMD_USER_DIR # this will get chowned by the recursive call triggered next
+create_and_chown $SYSTEMD_DATA_DIR $XDG_DATA_HOME
 
 DATA_DIR="$XDG_DATA_HOME/xr_driver"
-create_and_chown $DATA_DIR
+create_and_chown $DATA_DIR $XDG_DATA_HOME
 
 if [ -z "$XDG_CONFIG_HOME" ]; then
   XDG_CONFIG_HOME="$USER_HOME/.config"
 fi
-
 CONFIG_DIR="$XDG_CONFIG_HOME/xr_driver"
-create_and_chown $CONFIG_DIR
+create_and_chown $CONFIG_DIR $XDG_CONFIG_HOME
 
 if [ -z "$XDG_BIN_HOME" ]; then
   XDG_BIN_HOME="$USER_HOME/.local/bin"
@@ -58,13 +64,13 @@ fi
 OLD_BIN_DIR="$USER_HOME/bin"
 BIN_DIR="$XDG_BIN_HOME"
 create_and_chown $OLD_BIN_DIR
-create_and_chown $BIN_DIR
+create_and_chown $BIN_DIR $XDG_BIN_HOME
 
 if [ -z "$XDG_STATE_HOME" ]; then
   XDG_STATE_HOME="$USER_HOME/.local/state"
 fi
 STATE_DIR="$XDG_STATE_HOME/xr_driver"
-create_and_chown $STATE_DIR
+create_and_chown $STATE_DIR $XDG_STATE_HOME
 
 if [ -e "$OLD_BIN_DIR/xreal_driver_uninstall" ]; then
   echo "Cleaning up the previous installation"

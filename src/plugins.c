@@ -1,3 +1,4 @@
+#include "logging.h"
 #include "plugins.h"
 #include "plugins/custom_banner.h"
 #include "plugins/breezy_desktop.h"
@@ -10,26 +11,16 @@
 
 #include <stdlib.h>
 
-#ifdef BREEZY_DESKTOP
-#define PLUGIN_COUNT 5
-const plugin_type* all_plugins[PLUGIN_COUNT] = {
-    &device_license_plugin,
-    &metrics_plugin,
-    &custom_banner_plugin,
-    &smooth_follow_plugin,
-    &breezy_desktop_plugin
-};
-#else
-#define PLUGIN_COUNT 6
+#define PLUGIN_COUNT 7
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
     &sideview_plugin,
     &metrics_plugin,
     &custom_banner_plugin,
-    &smooth_follow_plugin
+    &smooth_follow_plugin,
+    &breezy_desktop_plugin
 };
-#endif
 
 
 void all_plugins_start_func() {
@@ -90,7 +81,7 @@ bool all_plugins_setup_ipc_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->setup_ipc == NULL) continue;
         if (!all_plugins[i]->setup_ipc()) {
-            fprintf(stderr, "Failed to setup IPC for plugin %s\n", all_plugins[i]->id);
+            log_error("Failed to setup IPC for plugin %s\n", all_plugins[i]->id);
             exit(1);
         }
     }
@@ -106,10 +97,10 @@ imu_quat_type all_plugins_modify_screen_center_func(uint32_t timestamp_ms, imu_q
     return screen_center;
 }
 void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                      bool ipc_enabled, bool imu_calibrated, ipc_values_type *ipc_values) {
+                                      bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->handle_imu_data == NULL) continue;
-        all_plugins[i]->handle_imu_data(timestamp_ms, quat, velocities, ipc_enabled, imu_calibrated, ipc_values);
+        all_plugins[i]->handle_imu_data(timestamp_ms, quat, velocities, imu_calibrated, ipc_values);
     }
 }
 void all_plugins_reset_imu_data_func() {

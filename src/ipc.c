@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <glob.h>
+#include "logging.h"
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -17,6 +18,8 @@ const char *display_fov_ipc_name = "display_fov";
 const char *lens_distance_ratio_ipc_name = "lens_distance_ratio";
 const char *disabled_ipc_name = "disabled";
 const char *date_ipc_name = "keepalive_date";
+const char *imu_data_ipc_name = "imu_quat_data";
+const char *imu_data_mutex_ipc_name = "imu_quat_data_mutex";
 
 bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
     setup_ipc_value(display_res_ipc_name, (void**) &ipc_values->display_res, sizeof(unsigned int) * 2, debug);
@@ -24,6 +27,33 @@ bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
     setup_ipc_value(lens_distance_ratio_ipc_name, (void**) &ipc_values->lens_distance_ratio, sizeof(float), debug);
     setup_ipc_value(disabled_ipc_name, (void**) &ipc_values->disabled, sizeof(bool), debug);
     setup_ipc_value(date_ipc_name, (void**) &ipc_values->date, sizeof(float) * 4, debug);
+    setup_ipc_value(imu_data_ipc_name, (void**) &ipc_values->imu_data, sizeof(float) * 16, debug);
+
+    // attempt to destroy the mutex if it already existed from a previous run
+    setup_ipc_value(imu_data_mutex_ipc_name, (void**) &ipc_values->imu_data_mutex, sizeof(pthread_mutex_t), debug);
+    int ret = pthread_mutex_destroy(ipc_values->imu_data_mutex);
+    if (ret != 0) {
+        perror("pthread_mutex_destroy");
+        if (ret != EINVAL) return false;
+    }
+
+    pthread_mutexattr_t attr;
+    if (pthread_mutexattr_init(&attr) != 0) {
+        perror("pthread_mutexattr_init");
+        return false;
+    }
+    if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
+        perror("pthread_mutexattr_setpshared");
+        return false;
+    }
+    if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) != 0) {
+        perror("pthread_mutexattr_setrobust");
+        return false;
+    }
+    if (pthread_mutex_init(ipc_values->imu_data_mutex, &attr) != 0) {
+        perror("pthread_mutex_init");
+        return false;
+    }
 
     return true;
 }
@@ -35,13 +65,13 @@ void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debu
 
     FILE *ipc_file = fopen(path, "w");
     if (ipc_file == NULL) {
-        fprintf(stderr, "Could not create IPC shared file\n");
+        log_error("Could not create IPC shared file\n");
         exit(1);
     }
     fclose(ipc_file);
 
     key_t key = ftok(path, 0);
-    if (debug) printf("\tdebug: ipc_key, got key %d for path %s\n", key, path);
+    if (debug) log_debug("ipc_key, got key %d for path %s\n", key, path);
     free(path);
 
     int shmid = shmget(key, size, 0666|IPC_CREAT);
@@ -49,27 +79,27 @@ void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debu
         // it may have been allocated using a different size, attempt to find and delete it
         shmid = shmget(key, 0, 0);
         if (shmid != -1) {
-            if (debug) printf("\tdebug: ipc_key, deleting shared memory segment with key %d\n", key);
+            if (debug) log_debug("ipc_key, deleting shared memory segment with key %d\n", key);
             shmctl(shmid, IPC_RMID, NULL);
         } else {
-            if (debug) printf("\tdebug: ipc_key, couldn't delete, no shmid for key %d\n", key);
+            if (debug) log_debug("ipc_key, couldn't delete, no shmid for key %d\n", key);
         }
     }
 
     if (shmid != -1) {
         *shmemValue = shmat(shmid,(void*)0,0);
         if (*shmemValue == (void *) -1) {
-            fprintf(stderr, "Error calling shmat\n");
+            log_error("Error calling shmat\n");
             exit(1);
         }
     } else {
-        fprintf(stderr, "Error calling shmget\n");
+        log_error("Error calling shmget\n");
         exit(1);
     }
 }
 
 void cleanup_ipc(char* file_prefix, bool debug) {
-    if (debug) printf("\tdebug: cleanup_ipc, disabling IPC\n");
+    if (debug) log_debug("cleanup_ipc, disabling IPC\n");
     char pattern[256];
     snprintf(pattern, sizeof(pattern), "%s*", file_prefix);
 
@@ -81,10 +111,10 @@ void cleanup_ipc(char* file_prefix, bool debug) {
         key_t key = ftok(file, 0);
         int shmid = shmget(key, 0, 0);
         if (shmid != -1) {
-            if (debug) printf("\tdebug: cleanup_ipc, deleting shared memory segment with key %d\n", key);
+            if (debug) log_debug("cleanup_ipc, deleting shared memory segment with key %d\n", key);
             shmctl(shmid, IPC_RMID, NULL);
         } else {
-            if (debug) printf("\tdebug: cleanup_ipc, couldn't delete, no shmid for key %d\n", key);
+            if (debug) log_debug("cleanup_ipc, couldn't delete, no shmid for key %d\n", key);
         }
     }
 
