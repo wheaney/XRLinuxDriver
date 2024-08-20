@@ -34,11 +34,11 @@ if [ -z "$XDG_STATE_HOME" ]; then
 fi
 STATE_DIR="$XDG_STATE_HOME/xr_driver"
 
-if [ -e "$USER_HOME/bin/xreal_driver_uninstall" ]; then
+if [ -e "$OLD_BIN_DIR/xreal_driver_uninstall" ]; then
   echo "Cleaning up the previous installation"
 
   # ` || true` will ensure that this can't cause a failure, even with `set -e`
-  $USER_HOME/bin/xreal_driver_uninstall --for-install || true
+  $OLD_BIN_DIR/xreal_driver_uninstall --for-install || true
 
   UA_EVENT_NAME="update"
 fi
