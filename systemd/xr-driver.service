@@ -4,10 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-Environment=HOME={user_home}
 Environment=LD_LIBRARY_PATH={ld_library_path}
-ExecStart=/bin/bash -c {bin_dir}/xrDriver
+ExecStart={bin_dir}/xrDriver
 Restart=always
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

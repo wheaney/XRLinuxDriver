@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -e
+
+# this part of the setup should be run as the user, not root
+if [ "$(id -u)" == "0" ]; then
+   echo "This script must NOT be run as root" 1>&2
+   exit 1
+fi
+
+echo "Setting up the systemd service"
+systemctl --user daemon-reload
+systemctl --user start xr-driver
+
+# check if systemd startup was successful
+if ! systemctl --user is-active --quiet xr-driver; then
+  echo "systemd startup failed"
+  exit 1
+fi
+
+# set it to run on startup
+systemctl --user enable xr-driver
