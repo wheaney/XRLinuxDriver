@@ -174,12 +174,12 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
     return NULL;
 };
 
-static void disconnect(bool forced) {
+static void disconnect(bool soft) {
     if (connected) {
         set_imu(false);
 
         // VITURE SDK freezes if we attempt deinit() while it's still physically connected, so only do this if the device is no longer present
-        if (!forced || !device_present()) {
+        if (!soft || !device_present()) {
             deinit();
             initialized = false;
         }
@@ -253,8 +253,8 @@ bool viture_is_connected() {
     return connected;
 };
 
-void viture_disconnect(bool forced) {
-    disconnect(forced);
+void viture_disconnect(bool soft) {
+    disconnect(soft);
 };
 
 const device_driver_type viture_driver = {

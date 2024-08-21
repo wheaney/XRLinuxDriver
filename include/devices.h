@@ -75,9 +75,9 @@ typedef bool (*device_set_sbs_mode_func)(bool enabled);
 // whether the driver is currently holding open a connection to the device
 typedef bool (*is_connected_func)();
 
-// tells the driver to release its connection to the device, forced means that the device is being 
-// disconnected due to a user action, and not due to a physical disconnect
-typedef void (*disconnect_func)(bool forced);
+// tells the driver to release its connection to the device, `soft` describes whether this is a 
+// software-only disconnect, true means the device is still physically connected
+typedef void (*disconnect_func)(bool soft);
 
 struct device_driver_t {
     supported_device_func supported_device_func;
