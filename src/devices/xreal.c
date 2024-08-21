@@ -261,7 +261,7 @@ bool xreal_is_connected() {
     return connected;
 };
 
-void xreal_disconnect(bool forced) {
+void xreal_disconnect(bool soft) {
     connected = false;
 };
 

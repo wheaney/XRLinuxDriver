@@ -121,6 +121,16 @@ void* _Z14GlassEventInitv(void);
 bool  _Z14GlassEventOpenPvi(void* handle, int fd);
 
 /*
+ * Open glass event instance with vid and pid
+ *
+ * \param handle a glass event instance
+ * \param vid usb vendor id
+ * \param pid usb product id
+ * \returns true on success, false on failure
+ */
+bool  _Z14GlassEventOpenPvii(void* handle, int vid, int pid);
+
+/*
  * Close glass event instance
  *
  * \param handle a glass event instance
@@ -185,7 +195,7 @@ bool  _Z14GlassWaitEventPvS_P9EventDatai(void* handle, void* eventHandle, struct
  * \returns 0  get event success
  *          1  timeout
  *          -1 GlassEvent closed
- *          -2 invalid param or _Z17GlassEventReleasePv
+ *          -2 invalid param or GlassEventRelease
  */
 int   _Z14GlassWaitEventPvS_P9EventDatai2(void* handle, void* ehandle, struct EventData* data, int timeout);
 
@@ -212,6 +222,16 @@ void* _Z16GlassControlInitv   (void);
  * \returns true on success, false on failure
  */
 bool  _Z16GlassControlOpenPvi   (void* handle, int fd);
+
+/*
+ * Open glass control instance with fd
+ *
+ * \param handle a glass control instance
+ * \param vid usb vendor id
+ * \param pid usb product id
+ * \returns true on success, false on failure
+ */
+bool  _Z16GlassControlOpenPvii   (void* handle, int vid, int pid);
 
 /*
  * Close glass control instance
@@ -289,7 +309,7 @@ bool  GlassSyncTimeStamp (void*handle);
 /*
  * Get glass brightness
  *
- * \param handle a glass control inacc_run_threadstance
+ * \param handle a glass control instance
  * \param channel always 0
  * \returns brightness, see \ref SetBrightness
  */
@@ -389,7 +409,7 @@ int GlassGetTimeNano(void *handle, long long *hmdTimestamp, long long *sysTimest
 typedef bool (*GlassControlCloseFunc)(void* handle);
 typedef bool (*GlassControlReleaseFunc)(void* handle);
 typedef void* (*GlassControlInitFunc)(void);
-typedef bool (*GlassControlOpenFunc)(void* handle, int fd);
+typedef bool (*GlassControlOpenFunc)(void* handle, int vid, int pid);
 typedef bool (*GlassSetDisplayModeFunc)(void* handle, int mode);
 typedef void* (*GlassEventInitFunc)(void);
 typedef void* (*GlassRegisterEventWithSizeFunc)(void* handle, enum EVENT_TYPE type, int size);
@@ -397,7 +417,7 @@ typedef bool (*GlassUnRegisterEventFunc)(void* handle, void* eventHandle);
 typedef bool (*GlassWaitEventFunc)(void* handle, void* eventHandle, struct EventData* data, int timeout);
 typedef void* (*GlassSDKGetUsbContextFunc)(void);
 typedef void (*GlassAddFusionEventFunc)(void* handle, int enable);
-typedef bool (*GlassEventOpenFunc)(void* handle, int fd);
+typedef bool (*GlassEventOpenFunc)(void* handle, int vid, int pid);
 typedef bool (*GlassEventCloseFunc)(void* handle);
 typedef int (*GetDisplayModeFunc)(void* handle);
 typedef char* (*GetProductNameFunc)(void* handle);
@@ -422,7 +442,7 @@ extern GetProductNameFunc GetProductName;
 #define GlassControlClose ((GlassControlCloseFunc)_Z17GlassControlClosePv)
 #define GlassControlRelease ((GlassControlReleaseFunc)_Z19GlassControlReleasePv)
 #define GlassControlInit ((GlassControlInitFunc)_Z16GlassControlInitv)
-#define GlassControlOpen ((GlassControlOpenFunc)_Z16GlassControlOpenPvi)
+#define GlassControlOpen ((GlassControlOpenFunc)_Z16GlassControlOpenPvii)
 #define GlassSetDisplayMode ((GlassSetDisplayModeFunc)_Z19GlassSetDisplayModePvi)
 #define GlassEventInit ((GlassEventInitFunc)_Z14GlassEventInitv)
 #define GlassRegisterEventWithSize ((GlassRegisterEventWithSizeFunc)_Z26GlassRegisterEventWithSizePv10EVENT_TYPEi)
@@ -430,7 +450,7 @@ extern GetProductNameFunc GetProductName;
 #define GlassWaitEvent ((GlassWaitEventFunc)_Z14GlassWaitEventPvS_P9EventDatai)
 #define GlassSDKGetUsbContext ((GlassSDKGetUsbContextFunc)_Z21GlassSDKGetUsbContextv)
 #define GlassAddFusionEvent ((GlassAddFusionEventFunc)_Z14AddFusionEventPvi)
-#define GlassEventOpen ((GlassEventOpenFunc)_Z14GlassEventOpenPvi)
+#define GlassEventOpen ((GlassEventOpenFunc)_Z14GlassEventOpenPvii)
 #define GlassEventClose ((GlassEventCloseFunc)_Z15GlassEventClosePv)
 #define GetDisplayMode ((GetDisplayModeFunc)_Z14GetDisplayModePv)
 #define GetProductName ((GetProductNameFunc)_Z14GetProductNamePv)

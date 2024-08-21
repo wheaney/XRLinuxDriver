@@ -63,28 +63,34 @@ const device_properties_type rokid_one_properties = {
 static void* event_instance = NULL;
 static void* event_handle = NULL;
 static void* control_instance = NULL;
-static int device_fd = -1;
-static bool connected = false;
 static bool sbs_mode_enabled = false;
 
-void rokid_disconnect(bool forced) {
-    connected = false;
-    if (event_instance) {
-        if (event_handle) {
-            GlassUnRegisterEvent(event_instance, event_handle);
-            event_handle = NULL;
+// hardware connection - device is physically plugged in
+static bool hard_connected = false;
+// software connection - we're actively in communication, holding open a connection
+static bool soft_connected = false;
+
+static void cleanup() {
+    if (event_instance && event_handle) {
+        GlassUnRegisterEvent(event_instance, event_handle);
+        event_handle = NULL;
+    }
+
+    if (!hard_connected) {
+        if (event_instance) {
+            GlassEventClose(event_instance);
+            event_instance = NULL;
         }
-        GlassEventClose(event_instance);
-        event_instance = NULL;
+        if (control_instance) {
+            GlassControlClose(control_instance);
+            control_instance = NULL;
+        }
     }
-    if (control_instance) {
-        GlassControlClose(control_instance);
-        control_instance = NULL;
-    }
-    if (device_fd >= 0) {
-        close(device_fd);
-        device_fd = -1;
-    }
+}
+
+void rokid_disconnect(bool soft) {
+    soft_connected = false;
+    hard_connected = soft;
 }
 
 static void handle_display_mode(device_properties_type* device, int display_mode) {
@@ -99,52 +105,45 @@ static void handle_display_mode(device_properties_type* device, int display_mode
 }
 
 static bool device_connect(device_properties_type* device) {
-    event_instance = GlassEventInit();
+    hard_connected = true;
+    if (!event_instance) event_instance = GlassEventInit();
     if (!event_instance) {
         log_error("Failed to initialize event instance\n");
     } else {
-        control_instance = GlassControlInit();
+        if (!control_instance) control_instance = GlassControlInit();
         if (!control_instance) {
             log_error("Failed to initialize control instance\n");
         } else {
-            char device_path[64];
-            snprintf(device_path, sizeof(device_path), "/dev/bus/usb/%03d/%03d", device->usb_bus, device->usb_address);
-            device_fd = open(device_path, O_RDWR);
-            if (device_fd < 0) {
-                log_error("Failed to open device %s\n", device_path);
-            } else {
-                connected = GlassEventOpen(event_instance, device_fd) && 
-                            GlassControlOpen(control_instance, device_fd);
+            soft_connected = GlassEventOpen(event_instance, device->hid_vendor_id, device->hid_product_id) && 
+                             GlassControlOpen(control_instance, device->hid_vendor_id, device->hid_product_id);
 
-                if (connected) {
-                    event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
-                    if (!event_handle) {
-                        log_error("Failed to register event handle\n");
-                        connected = false;
-                    } else {
-                        GlassAddFusionEvent(event_instance, true);
-                        handle_display_mode(device, GetDisplayMode(control_instance));
-                    }
+            if (soft_connected) {
+                event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
+                if (!event_handle) {
+                    log_error("Failed to register event handle\n");
+                    soft_connected = false;
+                } else {
+                    GlassAddFusionEvent(event_instance, true);
+                    handle_display_mode(device, GetDisplayMode(control_instance));
                 }
             }
         }
     }
     
-    if (!connected) {
-        rokid_disconnect(false);
+    if (!soft_connected) {
+        cleanup();
     }
 
-    return connected;
+    return soft_connected;
 }
 
 // this will already be connected if the driver is enabled
 bool rokid_device_connect() {
-    if (!connected) {
-        device_properties_type* device = device_checkout();
-        if (device != NULL) device_connect(device);
-        device_checkin(device);
-    }
-    return connected;
+    device_properties_type* device = device_checkout();
+    if (device != NULL) device_connect(device);
+    device_checkin(device);
+
+    return soft_connected;
 }
 
 device_properties_type* rokid_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
@@ -188,7 +187,7 @@ void rokid_block_on_device() {
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         struct EventData ed;
-        while (connected) {
+        while (soft_connected) {
             if (GlassWaitEvent(event_instance, event_handle, &ed, 1000)) {
                 struct SensorData sd = ed.acc;
                 uint32_t timestamp = (uint32_t) (sd.sensor_timestamp_ns / TS_TO_MS_FACTOR);
@@ -214,6 +213,7 @@ void rokid_block_on_device() {
                 rokid_disconnect(false);
             }
         }
+        cleanup();
     }
     device_checkin(device);
 };
@@ -230,7 +230,7 @@ bool rokid_device_set_sbs_mode(bool enabled) {
 };
 
 bool rokid_is_connected() {
-    return connected;
+    return soft_connected;
 };
 
 const device_driver_type rokid_driver = {
