@@ -107,6 +107,11 @@ su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
 ###############################
 ### BEGIN sudo required section
 
+if ! lsmod | grep -q uinput; then
+  echo "Setting up uinput kernel module"
+  modprobe uinput
+fi
+
 # if steamos is detected, we need to install the udev rules to /etc since /usr is on the readonly FS
 UDEV_RULES_DIR="/usr/lib/udev/rules.d"
 UDEV_RULES_DIR_CHANGED=0

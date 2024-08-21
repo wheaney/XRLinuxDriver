@@ -84,11 +84,6 @@ if [ -e "/var/lib/xr_driver/device_license" ]; then
   popd > /dev/null
 fi
 
-if ! lsmod | grep -q uinput; then
-  echo "Setting up uinput kernel module"
-  modprobe uinput
-fi
-
 # escaping sed replace: https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
 ESCAPED_USER_HOME=$(printf '%s\n' "$USER_HOME" | sed -e 's/[\/&]/\\&/g')
 ESCAPED_LD_LIBRARY_PATH=$(printf '%s\n' "$DATA_DIR/lib" | sed -e 's/[\/&]/\\&/g')
