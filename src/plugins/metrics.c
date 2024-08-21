@@ -24,6 +24,7 @@ void log_metric(char *event_name) {
 
         curl = curl_easy_init();
         if(curl) {
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
             headers = curl_slist_append(headers, "Content-Type: application/json");
 
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
