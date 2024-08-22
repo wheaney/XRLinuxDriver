@@ -1,15 +1,15 @@
 # Rule for USB devices
-SUBSYSTEM=="usb", ACTION=="add", ATTR{idVendor}=="3318", ATTR{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ACTION=="add", ATTR{idVendor}=="3318", MODE="0660", TAG+="uaccess"
 
 # Rule for Input devices (such as eventX)
-SUBSYSTEM=="input", KERNEL=="event[0-9]*", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="input", KERNEL=="event[0-9]*", ATTRS{idVendor}=="3318", MODE="0660", TAG+="uaccess"
 
 # Rule for Sound devices (pcmCxDx and controlCx)
-SUBSYSTEM=="sound", KERNEL=="pcmC[0-9]D[0-9]p", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="sound", KERNEL=="controlC[0-9]", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="sound", KERNEL=="pcmC[0-9]D[0-9]p", ATTRS{idVendor}=="3318", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="sound", KERNEL=="controlC[0-9]", ATTRS{idVendor}=="3318", MODE="0660", TAG+="uaccess"
 
 # Rule for HID Devices (hidraw)
-SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="3318", MODE="0660", TAG+="uaccess"
 
 # Rule for HID Devices (hiddev)
-SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="3318", ATTRS{idProduct}=="0424|0428|0432", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", KERNEL=="hiddev[0-9]*", ATTRS{idVendor}=="3318", MODE="0660", TAG+="uaccess"
