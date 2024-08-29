@@ -38,6 +38,7 @@ pkg_check_modules(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(JSONC REQUIRED json-c)
 pkg_check_modules(CURL REQUIRED libcurl)
+pkg_check_modules(LIBWAYLAND_CLIENT REQUIRED wayland-client)
 
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -106,6 +107,7 @@ set(SOURCES
     src/plugins/breezy_desktop.c
     src/plugins/custom_banner.c
     src/plugins/device_license.c
+    src/plugins/gamescope_reshade_wl.c
     src/plugins/metrics.c
     src/plugins/sideview.c
     src/plugins/smooth_follow.c
@@ -114,6 +116,7 @@ set(SOURCES
     src/state.c
     src/strings.c
     src/system.c
+    src/wl_client/gamescope_reshade.c
 )
 
 # Function to get the source file from a mapping
@@ -163,6 +166,7 @@ target_include_directories(xrDriver
 		${LIBUSB_INCLUDE_DIRS}
 		${LIBCURL_INCLUDE_DIRS}
 		${OPENSSL_INCLUDE_DIRS}
+		${LIBWAYLAND_CLIENT_INCLUDE_DIRS}
 )
 
 set(ALL_IMPORTED_LIBS)
@@ -185,5 +189,6 @@ target_link_libraries(xrDriver
         ${OPENSSL_LIBRARIES}
         ${ALL_IMPORTED_LIBS}
         ${LIBUSB_LIBRARIES}
+        ${LIBWAYLAND_CLIENT_LIBRARIES}
 )
 add_dependencies(xrDriver run_python_script)
