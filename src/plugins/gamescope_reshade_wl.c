@@ -123,7 +123,12 @@ void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, co
     wl_array_release(&array);
 
     if (flush) {
-        wl_display_roundtrip(display);
+        if (effect_ready_callback) {
+            // this is a blocking call, so only use it if we're waiting on an event callback
+            wl_display_roundtrip(display);
+        } else {
+            wl_display_flush(display);
+        }
     }
 }
 

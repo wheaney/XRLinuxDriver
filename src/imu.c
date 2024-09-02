@@ -3,6 +3,13 @@
 #include <math.h>
 #include <stdbool.h>
 
+const int imu_reset_data[16] = {
+    0.0, 0.0, 0.0, 1.0,
+    0.0, 0.0, 0.0, 1.0,
+    0.0, 0.0, 0.0, 1.0,
+    0.0, 0.0, 0.0, 1.0
+};
+
 float degree_to_radian(float deg) {
     return deg * M_PI / 180.0f;
 }

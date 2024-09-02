@@ -3,6 +3,7 @@
 #include "epoch.h"
 #include "features/smooth_follow.h"
 #include "features/sbs.h"
+#include "imu.h"
 #include "ipc.h"
 #include "logging.h"
 #include "plugins.h"
@@ -166,6 +167,12 @@ void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type q
     }
 }
 
+void virtual_display_reset_imu_data_func() {
+    if (using_gamescope_wayland) {
+        set_gamescope_reshade_effect_uniform_variable("imu_quat_data", &imu_reset_data, 16, sizeof(float), true);
+    }
+}
+
 void virtual_display_set_config_func(void* config) {
     if (!config) return;
     virtual_display_config* temp_config = (virtual_display_config*) config;
@@ -255,6 +262,7 @@ const plugin_type virtual_display_plugin = {
     .set_config = virtual_display_set_config_func,
     .register_features = virtual_display_register_features_func,
     .handle_imu_data = virtual_display_handle_imu_data_func,
+    .reset_imu_data = virtual_display_reset_imu_data_func,
     .setup_ipc = virtual_display_setup_ipc_func,
     .handle_state = virtual_display_handle_state_func,
     .handle_device_connect = virtual_display_handle_device_connect_func,

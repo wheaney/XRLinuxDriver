@@ -428,13 +428,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
 void reset_imu_data(ipc_values_type *ipc_values) {
     if (ipc_values) {    
         pthread_mutex_lock(ipc_values->imu_data_mutex);
-        // reset the 4 quaternion values to (0, 0, 0, 1)
-        for (int i = 0; i < 16; i += 4) {
-            ipc_values->imu_data[i] = 0;
-            ipc_values->imu_data[i + 1] = 0;
-            ipc_values->imu_data[i + 2] = 0;
-            ipc_values->imu_data[i + 3] = 1;
-        }
+        memcpy(ipc_values->imu_data, imu_reset_data, sizeof(float) * 16);
         pthread_mutex_unlock(ipc_values->imu_data_mutex);
     }
 
