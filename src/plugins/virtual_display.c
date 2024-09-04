@@ -2,6 +2,7 @@
 #include "devices.h"
 #include "features/smooth_follow.h"
 #include "features/sbs.h"
+#include "imu.h"
 #include "ipc.h"
 #include "logging.h"
 #include "plugins.h"
@@ -9,6 +10,8 @@
 #include "plugins/virtual_display.h"
 #include "runtime_context.h"
 
+#include <math.h>
+#include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -29,6 +32,7 @@ void virtual_display_reset_config(virtual_display_config *config) {
     config->sbs_mode_stretched = false;
     config->passthrough_smooth_follow_enabled = false;
     config->follow_mode_enabled = false;
+    config->curved_display = false;
 };
 
 void *virtual_display_default_config_func() {
@@ -58,6 +62,8 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
         boolean_config(key, value, &temp_config->sbs_mode_stretched);
     } else if (equal(key, "sideview_smooth_follow_enabled") && is_smooth_follow_granted()) {
         boolean_config(key, value, &temp_config->passthrough_smooth_follow_enabled);
+    } else if (equal(key, "curved_display")) {
+        boolean_config(key, value, &temp_config->curved_display);
     }
 };
 
@@ -94,6 +100,42 @@ void set_virtual_display_ipc_values() {
         virtual_display_ipc_values->look_ahead_cfg[3]      = device->look_ahead_ms_cap;
         *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
         *virtual_display_ipc_values->sbs_mode_stretched    = vd_config->sbs_mode_stretched;
+        *virtual_display_ipc_values->curved_display        = vd_config->curved_display;
+
+        // computed values based on display and SBS config/state
+        float displayAspectRatio = (float)device->resolution_w / (float)device->resolution_h;
+        float diagToVertRatio = sqrt(pow(displayAspectRatio, 2) + 1);
+        *virtual_display_ipc_values->half_fov_z_rads = degree_to_radian(device->fov / diagToVertRatio) / 2;
+        *virtual_display_ipc_values->half_fov_y_rads = *virtual_display_ipc_values->half_fov_z_rads * displayAspectRatio;
+        virtual_display_ipc_values->fov_half_widths[0] = tan(*virtual_display_ipc_values->half_fov_y_rads);
+        virtual_display_ipc_values->fov_half_widths[1] = tan(*virtual_display_ipc_values->half_fov_z_rads);
+        virtual_display_ipc_values->fov_widths[0] = virtual_display_ipc_values->fov_half_widths[0] * 2;
+        virtual_display_ipc_values->fov_widths[1] = virtual_display_ipc_values->fov_half_widths[1] * 2;
+        virtual_display_ipc_values->texcoord_x_limits[0] = 0.0;
+        virtual_display_ipc_values->texcoord_x_limits[1] = 1.0;
+        virtual_display_ipc_values->texcoord_x_limits_r[0] = 0.0;
+        virtual_display_ipc_values->texcoord_x_limits_r[1] = 1.0;
+        float lensFromCenter = 0.0;
+        if (state()->sbs_mode_enabled) {
+            lensFromCenter = device->lens_distance_ratio / 3.0;
+            if (vd_config->sbs_content) {
+                virtual_display_ipc_values->texcoord_x_limits[1] = 0.5;
+                virtual_display_ipc_values->texcoord_x_limits_r[0] = 0.5;
+                if (!vd_config->sbs_mode_stretched) {
+                    virtual_display_ipc_values->texcoord_x_limits[0] = 0.25;
+                    virtual_display_ipc_values->texcoord_x_limits_r[1] = 0.75;
+                }
+            } else if (!vd_config->sbs_mode_stretched) {
+                virtual_display_ipc_values->texcoord_x_limits[0] = 0.25;
+                virtual_display_ipc_values->texcoord_x_limits[1] = 0.75;
+            }
+        }
+        virtual_display_ipc_values->lens_vector[0] = device->lens_distance_ratio;
+        virtual_display_ipc_values->lens_vector[1] = lensFromCenter;
+        virtual_display_ipc_values->lens_vector[2] = 0.0;
+        virtual_display_ipc_values->lens_vector_r[0] = device->lens_distance_ratio;
+        virtual_display_ipc_values->lens_vector_r[1] = -lensFromCenter;
+        virtual_display_ipc_values->lens_vector_r[2] = 0.0;
     } else {
         virtual_display_handle_device_disconnect_func();
     }
@@ -133,6 +175,9 @@ void virtual_display_set_config_func(void* config) {
 
             if (vd_config->sbs_mode_stretched != temp_config->sbs_mode_stretched)
                 log_message("SBS mode has been changed to %s\n", temp_config->sbs_mode_stretched ? "stretched" : "centered");
+
+            if (vd_config->curved_display != temp_config->curved_display)
+                log_message("Curved display has been %s\n", temp_config->curved_display ? "enabled" : "disabled");
         }
 
         free(vd_config);
@@ -157,6 +202,15 @@ const char *virtual_display_display_north_offset_ipc_name = "display_north_offse
 const char *virtual_display_sbs_enabled_name = "sbs_enabled";
 const char *virtual_display_sbs_content_name = "sbs_content";
 const char *virtual_display_sbs_mode_stretched_name = "sbs_mode_stretched";
+const char *virtual_display_half_fov_z_rads_ipc_name = "half_fov_z_rads";
+const char *virtual_display_half_fov_y_rads_ipc_name = "half_fov_y_rads";
+const char *virtual_display_fov_half_widths_ipc_name = "fov_half_widths";
+const char *virtual_display_fov_widths_ipc_name = "fov_widths";
+const char *virtual_display_texcoord_x_limits_ipc_name = "texcoord_x_limits";
+const char *virtual_display_texcoord_x_limits_r_ipc_name = "texcoord_x_limits_r";
+const char *virtual_display_lens_vector_ipc_name = "lens_vector";
+const char *virtual_display_lens_vector_r_ipc_name = "lens_vector_r";
+const char *virtual_display_curved_display_ipc_name = "curved_display";
 
 bool virtual_display_setup_ipc_func() {
     bool debug = config()->debug_ipc;
@@ -168,6 +222,15 @@ bool virtual_display_setup_ipc_func() {
     setup_ipc_value(virtual_display_sbs_enabled_name, (void**) &virtual_display_ipc_values->sbs_enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_sbs_content_name, (void**) &virtual_display_ipc_values->sbs_content, sizeof(bool), debug);
     setup_ipc_value(virtual_display_sbs_mode_stretched_name, (void**) &virtual_display_ipc_values->sbs_mode_stretched, sizeof(bool), debug);
+    setup_ipc_value(virtual_display_half_fov_z_rads_ipc_name, (void**) &virtual_display_ipc_values->half_fov_z_rads, sizeof(float), debug);
+    setup_ipc_value(virtual_display_half_fov_y_rads_ipc_name, (void**) &virtual_display_ipc_values->half_fov_y_rads, sizeof(float), debug);
+    setup_ipc_value(virtual_display_fov_half_widths_ipc_name, (void**) &virtual_display_ipc_values->fov_half_widths, sizeof(float) * 2, debug);
+    setup_ipc_value(virtual_display_fov_widths_ipc_name, (void**) &virtual_display_ipc_values->fov_widths, sizeof(float) * 2, debug);
+    setup_ipc_value(virtual_display_texcoord_x_limits_ipc_name, (void**) &virtual_display_ipc_values->texcoord_x_limits, sizeof(float) * 2, debug);
+    setup_ipc_value(virtual_display_texcoord_x_limits_r_ipc_name, (void**) &virtual_display_ipc_values->texcoord_x_limits_r, sizeof(float) * 2, debug);
+    setup_ipc_value(virtual_display_lens_vector_ipc_name, (void**) &virtual_display_ipc_values->lens_vector, sizeof(float) * 3, debug);
+    setup_ipc_value(virtual_display_lens_vector_r_ipc_name, (void**) &virtual_display_ipc_values->lens_vector_r, sizeof(float) * 3, debug);
+    setup_ipc_value(virtual_display_curved_display_ipc_name, (void**) &virtual_display_ipc_values->curved_display, sizeof(bool), debug);
 
     set_virtual_display_ipc_values();
 
