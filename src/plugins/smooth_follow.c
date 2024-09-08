@@ -60,6 +60,7 @@ void *smooth_follow_default_config_func() {
     config->breezy_desktop_enabled = false;
     config->virtual_display_size = 1.0;
     config->sbs_display_distance = 1.0;
+    config->sbs_display_size = 1.0;
 
     return config;
 };
@@ -89,6 +90,8 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         float_config(key, value, &temp_config->virtual_display_size);
     } else if (equal(key, "sbs_display_distance")) {
         float_config(key, value, &temp_config->sbs_display_distance);
+    } else if (equal(key, "sbs_display_size")) {
+        float_config(key, value, &temp_config->sbs_display_size);
     }
 }
 
@@ -108,7 +111,8 @@ void handle_config_and_state_update() {
         *sf_params = loose_follow_params;
         device_properties_type* device = device_checkout();
         if (device != NULL) {
-            float device_fov_threshold = device->fov * 0.9 * sf_config->virtual_display_size / display_distance;
+            float display_size = state()->sbs_mode_enabled ? sf_config->sbs_display_size : sf_config->virtual_display_size;
+            float device_fov_threshold = device->fov * 0.9 * display_size / display_distance;
             sf_params->lower_angle_threshold = device_fov_threshold / 2.0;
             sf_params->upper_angle_threshold = device_fov_threshold;
         }
@@ -150,7 +154,6 @@ void handle_config_and_state_update() {
     } else if (was_smooth_follow_enabled && snap_back_to_center) {
         // we'll want to return as close to the original center as possible
         *sf_params = sticky_params;
-        sf_params->return_to_angle = 0.0;
     }
 }
 
@@ -164,10 +167,13 @@ void smooth_follow_set_config_func(void* config) {
                 sf_config->virtual_display_enabled != temp_config->virtual_display_enabled))
             log_message("Virtual display follow has been %s\n", temp_config->virtual_display_follow_enabled ? "enabled" : "disabled");
 
-        if (temp_config->sideview_enabled && (
+        if (temp_config->sideview_enabled && 
                 sf_config->sideview_follow_enabled != temp_config->sideview_follow_enabled ||
-                sf_config->sideview_enabled != temp_config->sideview_enabled))
+            sf_config->sideview_enabled != temp_config->sideview_enabled)
             log_message("Sideview follow has been %s\n", temp_config->sideview_follow_enabled ? "enabled" : "disabled");
+
+        if (temp_config->sideview_follow_threshold != sf_config->sideview_follow_threshold)
+            log_message("Sideview follow threshold has been changed to %f\n", temp_config->sideview_follow_threshold);
 
         free(sf_config);
     }
@@ -339,4 +345,5 @@ const plugin_type smooth_follow_plugin = {
     .handle_control_flag_line = smooth_follow_handle_control_flag_line_func,
     .set_config = smooth_follow_set_config_func,
     .modify_screen_center = smooth_follow_modify_screen_center_func,
+    .handle_device_connect = handle_config_and_state_update
 };

@@ -29,7 +29,7 @@ void virtual_display_reset_config(virtual_display_config *config) {
     config->sbs_display_distance = 1.0;
     config->sbs_display_size = 1.0;
     config->sbs_content = false;
-    config->sbs_mode_stretched = false;
+    config->sbs_mode_stretched = true;
     config->passthrough_smooth_follow_enabled = false;
     config->follow_mode_enabled = false;
     config->curved_display = false;
@@ -128,6 +128,8 @@ void set_virtual_display_ipc_values() {
             } else if (!vd_config->sbs_mode_stretched) {
                 virtual_display_ipc_values->texcoord_x_limits[0] = 0.25;
                 virtual_display_ipc_values->texcoord_x_limits[1] = 0.75;
+                virtual_display_ipc_values->texcoord_x_limits_r[0] = 0.25;
+                virtual_display_ipc_values->texcoord_x_limits_r[1] = 0.75;
             }
         }
         virtual_display_ipc_values->lens_vector[0] = device->lens_distance_ratio;
@@ -150,14 +152,7 @@ void virtual_display_set_config_func(void* config) {
         if (vd_config->enabled != temp_config->enabled)
             log_message("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
-        if (!temp_config->enabled) {
-            if (temp_config->passthrough_smooth_follow_enabled && temp_config->follow_mode_enabled) {
-                // passthrough mode should use the default configs
-                virtual_display_reset_config(temp_config);
-                temp_config->passthrough_smooth_follow_enabled = true;
-                temp_config->follow_mode_enabled = true;
-            }
-        } else {
+        if (temp_config->enabled || temp_config->passthrough_smooth_follow_enabled && temp_config->follow_mode_enabled) {
             if (vd_config->look_ahead_override != temp_config->look_ahead_override)
                 log_message("Look ahead override has changed to %f\n", temp_config->look_ahead_override);
 
@@ -252,5 +247,6 @@ const plugin_type virtual_display_plugin = {
     .register_features = virtual_display_register_features_func,
     .setup_ipc = virtual_display_setup_ipc_func,
     .handle_state = virtual_display_handle_state_func,
+    .handle_device_connect = set_virtual_display_ipc_values,
     .handle_device_disconnect = virtual_display_handle_device_disconnect_func
 };

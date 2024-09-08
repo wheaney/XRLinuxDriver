@@ -19,6 +19,7 @@ struct smooth_follow_config_t {
     bool breezy_desktop_enabled;
     float virtual_display_size;
     float sbs_display_distance;
+    float sbs_display_size;
 };
 typedef struct smooth_follow_config_t smooth_follow_config;
 
