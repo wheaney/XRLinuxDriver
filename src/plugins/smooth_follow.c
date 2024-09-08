@@ -87,7 +87,7 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         }
     } else if (equal(key, "display_zoom")) {
         float_config(key, value, &temp_config->virtual_display_size);
-    } else if (equals(key, "sbs_display_distance")) {
+    } else if (equal(key, "sbs_display_distance")) {
         float_config(key, value, &temp_config->sbs_display_distance);
     }
 }
@@ -149,7 +149,7 @@ void handle_config_and_state_update() {
         }
     } else if (was_smooth_follow_enabled && snap_back_to_center) {
         // we'll want to return as close to the original center as possible
-        *sf_params = tight_follow_params;
+        *sf_params = sticky_params;
         sf_params->return_to_angle = 0.0;
     }
 }

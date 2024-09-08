@@ -56,7 +56,7 @@ void set_sideview_ipc_values_from_config() {
 
     if (device_present()) {
         *sideview_ipc_values->enabled = sv_config->enabled && !config()->disabled;
-        *sideview_ipc_values->position = sv_config->position;
+        *sideview_ipc_values->position = (float) sv_config->position;
         *sideview_ipc_values->display_size = sv_config->display_size;
     } else {
         sideview_handle_device_disconnect_func();
@@ -92,7 +92,7 @@ bool sideview_setup_ipc_func() {
     bool debug = config()->debug_ipc;
     if (!sideview_ipc_values) sideview_ipc_values = calloc(1, sizeof(sideview_ipc_values_type));
     setup_ipc_value(sideview_enabled_name, (void**) &sideview_ipc_values->enabled, sizeof(bool), debug);
-    setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(int), debug);
+    setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(float), debug);
     setup_ipc_value(sideview_display_size_name, (void**) &sideview_ipc_values->display_size, sizeof(float), debug);
 
     set_sideview_ipc_values_from_config();
