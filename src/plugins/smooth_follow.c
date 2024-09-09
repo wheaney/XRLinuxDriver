@@ -20,17 +20,7 @@ typedef enum {
     FOLLOW_STATE_SLERPING
 } follow_state_type;
 
-const smooth_follow_params loose_follow_params = {
-    .lower_angle_threshold = 20.0,
-    .upper_angle_threshold = 40.0,
-    .delay_ms = 2000,
-    .return_to_angle = 5.0,
-
-    // moves 99% of the way to the center in 1.5 seconds
-    .interpolation_ratio_ms = 1-pow(1 - 0.99, 1.0/1500.0)
-};
-
-const smooth_follow_params tight_follow_params = {
+const smooth_follow_params sticky_params = {
     .lower_angle_threshold = 0.5,
     .upper_angle_threshold = 0.5,
     .delay_ms = 0,
@@ -40,14 +30,14 @@ const smooth_follow_params tight_follow_params = {
     .interpolation_ratio_ms = 1-pow(1 - 0.99, 1.0/1000.0)
 };
 
-const smooth_follow_params keep_close_follow_params = {
-    .lower_angle_threshold = 15.0,
-    .upper_angle_threshold = 15.0,
-    .delay_ms = 0,
-    .return_to_angle = 15.0,
+const smooth_follow_params loose_follow_params = {
+    .lower_angle_threshold = 20.0,
+    .upper_angle_threshold = 40.0,
+    .delay_ms = 2000,
+    .return_to_angle = 5.0,
 
-    // moves 99% of the way to the center in 1 second
-    .interpolation_ratio_ms = 1-pow(1 - 0.99, 1.0/1000.0)
+    // moves 99% of the way to the center in 1.5 seconds
+    .interpolation_ratio_ms = 1-pow(1 - 0.99, 1.0/1500.0)
 };
 
 uint32_t get_time_ms() {
@@ -65,8 +55,12 @@ void *smooth_follow_default_config_func() {
     config->virtual_display_follow_enabled = false;
     config->sideview_enabled = false;
     config->sideview_follow_enabled = false;
+    config->sideview_follow_threshold = 0.5;
+    config->sideview_display_size = 1.0;
     config->breezy_desktop_enabled = false;
     config->virtual_display_size = 1.0;
+    config->sbs_display_distance = 1.0;
+    config->sbs_display_size = 1.0;
 
     return config;
 };
@@ -80,6 +74,10 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         boolean_config(key, value, &temp_config->virtual_display_follow_enabled);
     } else if (equal(key, "sideview_smooth_follow_enabled")) {
         boolean_config(key, value, &temp_config->sideview_follow_enabled);
+    } else if (equal(key, "sideview_follow_threshold")) {
+        float_config(key, value, &temp_config->sideview_follow_threshold);
+    } else if (equal(key, "sideview_display_size")) {
+        float_config(key, value, &temp_config->sideview_display_size);
     } else if (equal(key, "external_mode")) {
         if (equal(value, "virtual_display")) {
             temp_config->virtual_display_enabled = true;
@@ -90,6 +88,10 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         }
     } else if (equal(key, "display_zoom")) {
         float_config(key, value, &temp_config->virtual_display_size);
+    } else if (equal(key, "sbs_display_distance")) {
+        float_config(key, value, &temp_config->sbs_display_distance);
+    } else if (equal(key, "sbs_display_size")) {
+        float_config(key, value, &temp_config->sbs_display_size);
     }
 }
 
@@ -101,32 +103,41 @@ void handle_config_and_state_update() {
     bool virtual_display_follow = sf_config->virtual_display_enabled && sf_config->virtual_display_follow_enabled;
     bool smooth_follow = sf_config->sideview_enabled && sf_config->sideview_follow_enabled;
     bool breezy_desktop_follow = sf_config->breezy_desktop_enabled && state()->breezy_desktop_smooth_follow_enabled;
+    float display_distance = 1.0;
+    if (state()->sbs_mode_enabled) {
+        display_distance = sf_config->sbs_display_distance;
+    }
     if (virtual_display_follow) {
         *sf_params = loose_follow_params;
         device_properties_type* device = device_checkout();
         if (device != NULL) {
-            float device_fov_threshold = device->fov * 0.9;
-            sf_params->lower_angle_threshold = device_fov_threshold / 2.0 * sf_config->virtual_display_size;
-            sf_params->upper_angle_threshold = device_fov_threshold * sf_config->virtual_display_size;
+            float display_size = state()->sbs_mode_enabled ? sf_config->sbs_display_size : sf_config->virtual_display_size;
+            float device_fov_threshold = device->fov * 0.9 * display_size / display_distance;
+            sf_params->lower_angle_threshold = device_fov_threshold / 2.0;
+            sf_params->upper_angle_threshold = device_fov_threshold;
         }
         device_checkin(device);
     } else if (smooth_follow) {
-        *sf_params = tight_follow_params;
+        *sf_params = sticky_params;
+        float threshold = sf_params->lower_angle_threshold;
+        if (sf_config->sideview_follow_threshold) threshold = sf_config->sideview_follow_threshold;
+        threshold *= sf_config->sideview_display_size / display_distance;
+
+        sf_params->lower_angle_threshold = threshold;
+        sf_params->upper_angle_threshold = threshold;
+        sf_params->return_to_angle = threshold;
     } else if (breezy_desktop_follow) {
-        *sf_params = keep_close_follow_params;
+        *sf_params = sticky_params;
         if (state()) {
-            if (state()->breezy_desktop_follow_threshold) {
-                sf_params->lower_angle_threshold = state()->breezy_desktop_follow_threshold;
-                sf_params->upper_angle_threshold = state()->breezy_desktop_follow_threshold;
-                sf_params->return_to_angle = state()->breezy_desktop_follow_threshold;
-            }
-            if (state()->breezy_desktop_display_distance) {
-                // a closer display (lower number) results in a loosening of the thresholds,
-                // a further display (higher number) results in a tightening of the thresholds
-                sf_params->lower_angle_threshold /= state()->breezy_desktop_display_distance;
-                sf_params->upper_angle_threshold /= state()->breezy_desktop_display_distance;
-                sf_params->return_to_angle /= state()->breezy_desktop_display_distance;
-            }
+            display_distance = 1.0;
+            float threshold = sf_params->lower_angle_threshold;
+            if (state()->breezy_desktop_display_distance) display_distance = state()->breezy_desktop_display_distance;
+            if (state()->breezy_desktop_follow_threshold) threshold = state()->breezy_desktop_follow_threshold;
+            threshold /=  display_distance;
+
+            sf_params->lower_angle_threshold = threshold;
+            sf_params->upper_angle_threshold = threshold;
+            sf_params->return_to_angle = threshold;
         }
     }
 
@@ -142,8 +153,7 @@ void handle_config_and_state_update() {
         }
     } else if (was_smooth_follow_enabled && snap_back_to_center) {
         // we'll want to return as close to the original center as possible
-        *sf_params = tight_follow_params;
-        sf_params->return_to_angle = 0.0;
+        *sf_params = sticky_params;
     }
 }
 
@@ -157,10 +167,13 @@ void smooth_follow_set_config_func(void* config) {
                 sf_config->virtual_display_enabled != temp_config->virtual_display_enabled))
             log_message("Virtual display follow has been %s\n", temp_config->virtual_display_follow_enabled ? "enabled" : "disabled");
 
-        if (temp_config->sideview_enabled && (
+        if (temp_config->sideview_enabled && 
                 sf_config->sideview_follow_enabled != temp_config->sideview_follow_enabled ||
-                sf_config->sideview_enabled != temp_config->sideview_enabled))
+            sf_config->sideview_enabled != temp_config->sideview_enabled)
             log_message("Sideview follow has been %s\n", temp_config->sideview_follow_enabled ? "enabled" : "disabled");
+
+        if (temp_config->sideview_follow_threshold != sf_config->sideview_follow_threshold)
+            log_message("Sideview follow threshold has been changed to %f\n", temp_config->sideview_follow_threshold);
 
         free(sf_config);
     }
@@ -332,4 +345,5 @@ const plugin_type smooth_follow_plugin = {
     .handle_control_flag_line = smooth_follow_handle_control_flag_line_func,
     .set_config = smooth_follow_set_config_func,
     .modify_screen_center = smooth_follow_modify_screen_center_func,
+    .handle_device_connect = handle_config_and_state_update
 };

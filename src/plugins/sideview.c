@@ -1,5 +1,6 @@
 #include "config.h"
 #include "devices.h"
+#include "features/smooth_follow.h"
 #include "ipc.h"
 #include "logging.h"
 #include "plugins.h"
@@ -43,6 +44,8 @@ void sideview_handle_config_line_func(void* config, char* key, char* value) {
         }
     } else if (equal(key, "sideview_display_size")) {
         float_config(key, value, &temp_config->display_size);
+    } else if (equal(key, "sideview_smooth_follow_enabled") && is_smooth_follow_granted()) {
+        boolean_config(key, value, &temp_config->smooth_follow_enabled);
     }
 };
 
@@ -56,7 +59,7 @@ void set_sideview_ipc_values_from_config() {
 
     if (device_present()) {
         *sideview_ipc_values->enabled = sv_config->enabled && !config()->disabled;
-        *sideview_ipc_values->position = sv_config->position;
+        *sideview_ipc_values->position = (float) sv_config->position;
         *sideview_ipc_values->display_size = sv_config->display_size;
     } else {
         sideview_handle_device_disconnect_func();
@@ -74,6 +77,8 @@ void sideview_set_config_func(void* config) {
         if (sv_config->position != temp_config->position)
             log_message("Sideview position has been changed to %s\n", sideview_position_names[temp_config->position]);
 
+        // smooth follow mode allows sizes > 1, so we need to clamp it if in sideview mode
+        if (!temp_config->smooth_follow_enabled && temp_config->display_size > 1.0) temp_config->display_size = 1.0;
         if (sv_config->display_size != temp_config->display_size)
             log_message("Sideview display size has been changed to %f\n", temp_config->display_size);
 
@@ -92,7 +97,7 @@ bool sideview_setup_ipc_func() {
     bool debug = config()->debug_ipc;
     if (!sideview_ipc_values) sideview_ipc_values = calloc(1, sizeof(sideview_ipc_values_type));
     setup_ipc_value(sideview_enabled_name, (void**) &sideview_ipc_values->enabled, sizeof(bool), debug);
-    setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(int), debug);
+    setup_ipc_value(sideview_position_name, (void**) &sideview_ipc_values->position, sizeof(float), debug);
     setup_ipc_value(sideview_display_size_name, (void**) &sideview_ipc_values->display_size, sizeof(float), debug);
 
     set_sideview_ipc_values_from_config();
@@ -106,5 +111,6 @@ const plugin_type sideview_plugin = {
     .handle_config_line = sideview_handle_config_line_func,
     .set_config = sideview_set_config_func,
     .setup_ipc = sideview_setup_ipc_func,
+    .handle_device_connect = set_sideview_ipc_values_from_config,
     .handle_device_disconnect = sideview_handle_device_disconnect_func
 };

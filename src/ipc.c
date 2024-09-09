@@ -1,8 +1,8 @@
 #include "ipc.h"
+#include "logging.h"
 
 #include <errno.h>
 #include <glob.h>
-#include "logging.h"
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -14,20 +14,23 @@
 const char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
 const char *display_res_ipc_name = "display_res";
-const char *display_fov_ipc_name = "display_fov";
-const char *lens_distance_ratio_ipc_name = "lens_distance_ratio";
 const char *disabled_ipc_name = "disabled";
 const char *date_ipc_name = "keepalive_date";
 const char *imu_data_ipc_name = "imu_quat_data";
 const char *imu_data_mutex_ipc_name = "imu_quat_data_mutex";
 
+// deprecated - can be removed once this version is widely distributed
+const char *display_fov_ipc_name = "display_fov";
+const char *lens_distance_ratio_ipc_name = "lens_distance_ratio";
+
 bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
-    setup_ipc_value(display_res_ipc_name, (void**) &ipc_values->display_res, sizeof(unsigned int) * 2, debug);
-    setup_ipc_value(display_fov_ipc_name, (void**) &ipc_values->display_fov, sizeof(float), debug);
-    setup_ipc_value(lens_distance_ratio_ipc_name, (void**) &ipc_values->lens_distance_ratio, sizeof(float), debug);
+    setup_ipc_value(display_res_ipc_name, (void**) &ipc_values->display_res, sizeof(float) * 2, debug);
     setup_ipc_value(disabled_ipc_name, (void**) &ipc_values->disabled, sizeof(bool), debug);
     setup_ipc_value(date_ipc_name, (void**) &ipc_values->date, sizeof(float) * 4, debug);
     setup_ipc_value(imu_data_ipc_name, (void**) &ipc_values->imu_data, sizeof(float) * 16, debug);
+
+    setup_ipc_value(display_fov_ipc_name, (void**) &ipc_values->display_fov, sizeof(float), debug);
+    setup_ipc_value(lens_distance_ratio_ipc_name, (void**) &ipc_values->lens_distance_ratio, sizeof(float), debug);
 
     // attempt to destroy the mutex if it already existed from a previous run
     setup_ipc_value(imu_data_mutex_ipc_name, (void**) &ipc_values->imu_data_mutex, sizeof(pthread_mutex_t), debug);

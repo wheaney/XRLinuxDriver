@@ -9,21 +9,24 @@
 extern const char *sombrero_ipc_file_prefix;
 
 extern const char *display_res_ipc_name;
-extern const char *display_fov_ipc_name;
-extern const char *lens_distance_ratio_ipc_name;
 extern const char *disabled_ipc_name;
 extern const char *date_ipc_name;
 extern const char *imu_data_ipc_name;
 extern const char *imu_data_mutex_ipc_name;
 
+// deprecated - can be removed once this version is widely distributed
+extern const char *display_fov_ipc_name;
+extern const char *lens_distance_ratio_ipc_name;
+
 struct ipc_values_t {
-    unsigned int *display_res;
-    float *display_fov;
-    float *lens_distance_ratio;
+    float *display_res;
     bool *disabled;
     float *date;
     float *imu_data;
     pthread_mutex_t *imu_data_mutex;
+
+    float *display_fov;
+    float *lens_distance_ratio;
 };
 
 typedef struct ipc_values_t ipc_values_type;
