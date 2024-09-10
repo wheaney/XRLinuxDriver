@@ -98,6 +98,17 @@ then
         config_type="string"
         config_key="sideview_display_size"
         config_value="$2"
+    elif [ "$1" == "--smooth-follow-enable" ] || [ "$1" == "-sfe" ]; then
+        config_key="sideview_smooth_follow_enabled"
+        config_value="true"
+    elif [ "$1" == "--smooth-follow-disable" ] || [ "$1" == "-sfd" ]; then
+        config_key="sideview_smooth_follow_enabled"
+        config_value="false"
+    elif [ "$1" == "--smooth-follow-threshold" ] || [ "$1" == "-sft" ]; then
+        config_key="sideview_follow_threshold"
+        if [ -n "$2" ]; then
+            config_value="$2"
+        fi
     elif [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
         config_type="string"
         config_key="hardware_id"
@@ -199,6 +210,9 @@ Options:
   -sv, --sideview
   -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
   -svds, --sideview-display-size [display_size]
+  -sfe, --smooth-follow-enable
+  -sfd, --smooth-follow-disable
+  -sft, --smooth-follow-threshold [threshold_value]
   -sbsms, --sbs-mode-stretched [true|false]
   -sbs3d, --sbs-content-3d [true|false]
   -sbsds, --sbs-display-size [display_size]
