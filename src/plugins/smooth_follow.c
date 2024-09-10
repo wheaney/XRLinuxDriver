@@ -107,39 +107,40 @@ void handle_config_and_state_update() {
     if (state()->sbs_mode_enabled) {
         display_distance = sf_config->sbs_display_distance;
     }
-    if (virtual_display_follow) {
-        *sf_params = loose_follow_params;
-        device_properties_type* device = device_checkout();
-        if (device != NULL) {
+    device_properties_type* device = device_checkout();
+    if (device != NULL) {
+        if (virtual_display_follow) {
+            *sf_params = loose_follow_params;
             float display_size = state()->sbs_mode_enabled ? sf_config->sbs_display_size : sf_config->virtual_display_size;
             float device_fov_threshold = device->fov * 0.9 * display_size / display_distance;
+
             sf_params->lower_angle_threshold = device_fov_threshold / 2.0;
             sf_params->upper_angle_threshold = device_fov_threshold;
-        }
-        device_checkin(device);
-    } else if (smooth_follow) {
-        *sf_params = sticky_params;
-        float threshold = sf_params->lower_angle_threshold;
-        if (sf_config->sideview_follow_threshold) threshold = sf_config->sideview_follow_threshold;
-        threshold *= sf_config->sideview_display_size / display_distance;
-
-        sf_params->lower_angle_threshold = threshold;
-        sf_params->upper_angle_threshold = threshold;
-        sf_params->return_to_angle = threshold;
-    } else if (breezy_desktop_follow) {
-        *sf_params = sticky_params;
-        if (state()) {
-            display_distance = 1.0;
+        } else if (smooth_follow) {
+            *sf_params = sticky_params;
             float threshold = sf_params->lower_angle_threshold;
-            if (state()->breezy_desktop_display_distance) display_distance = state()->breezy_desktop_display_distance;
-            if (state()->breezy_desktop_follow_threshold) threshold = state()->breezy_desktop_follow_threshold;
-            threshold /=  display_distance;
+            if (sf_config->sideview_follow_threshold) threshold = sf_config->sideview_follow_threshold;
+            threshold += fmax(0.0, device->fov * (sf_config->sideview_display_size / display_distance - 1.0));
 
             sf_params->lower_angle_threshold = threshold;
             sf_params->upper_angle_threshold = threshold;
             sf_params->return_to_angle = threshold;
+        } else if (breezy_desktop_follow) {
+            *sf_params = sticky_params;
+            if (state()) {
+                display_distance = 1.0;
+                float threshold = sf_params->lower_angle_threshold;
+                if (state()->breezy_desktop_display_distance) display_distance = state()->breezy_desktop_display_distance;
+                if (state()->breezy_desktop_follow_threshold) threshold = state()->breezy_desktop_follow_threshold;
+                threshold += fmax(0.0, device->fov * (1.0 / display_distance - 1.0));
+                
+                sf_params->lower_angle_threshold = threshold;
+                sf_params->upper_angle_threshold = threshold;
+                sf_params->return_to_angle = threshold;
+            }
         }
     }
+    device_checkin(device);
 
     bool was_smooth_follow_enabled = smooth_follow_enabled;
     smooth_follow_enabled = false;
