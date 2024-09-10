@@ -161,8 +161,8 @@ void setup_ipc() {
         plugins.reset_imu_data();
 
         // set IPC values that won't change after a device is set
-        ipc_values->display_res[0]        = device->resolution_w;
-        ipc_values->display_res[1]        = device->resolution_h;
+        ipc_values->display_res[0]        = (float) device->resolution_w;
+        ipc_values->display_res[1]        = (float) device->resolution_h;
         *ipc_values->display_fov          = device->fov;
         *ipc_values->lens_distance_ratio  = device->lens_distance_ratio;
 

@@ -118,7 +118,7 @@ static bool device_connect(device_properties_type* device) {
                              GlassControlOpen(control_instance, device->hid_vendor_id, device->hid_product_id);
 
             if (soft_connected) {
-                event_handle = GlassRegisterEventWithSize(event_instance, ROTATION_EVENT, 50);
+                event_handle = GlassRegisterEventWithSize(event_instance, GAME_ROTATION_EVENT, 50);
                 if (!event_handle) {
                     log_error("Failed to register event handle\n");
                     soft_connected = false;

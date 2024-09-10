@@ -14,8 +14,12 @@ struct smooth_follow_config_t {
     bool virtual_display_follow_enabled;
     bool sideview_enabled;
     bool sideview_follow_enabled;
+    float sideview_follow_threshold;
+    float sideview_display_size;
     bool breezy_desktop_enabled;
     float virtual_display_size;
+    float sbs_display_distance;
+    float sbs_display_size;
 };
 typedef struct smooth_follow_config_t smooth_follow_config;
 
