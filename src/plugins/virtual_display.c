@@ -1,14 +1,12 @@
 #include "config.h"
 #include "devices.h"
-#include "epoch.h"
 #include "features/smooth_follow.h"
 #include "features/sbs.h"
 #include "imu.h"
 #include "ipc.h"
 #include "logging.h"
 #include "plugins.h"
-#include "plugins/custom_banner.h"
-#include "plugins/gamescope_reshade_wl.h"
+#include "plugins/gamescope_reshade_wayland.h"
 #include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
 #include "runtime_context.h"
@@ -20,12 +18,8 @@
 #include <errno.h>
 #include <pthread.h>
 
-#define GAMESCOPE_RESHADE_WAIT_TIME_MS 500
-
 virtual_display_config *vd_config;
 virtual_display_ipc_values_type *virtual_display_ipc_values;
-static bool using_gamescope_wayland = false;
-static uint64_t gamescope_reshade_effect_request_time = 0;
 
 const int virtual_display_feature_count = 2;
 
@@ -74,17 +68,10 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
     }
 };
 
-static void wayland_cleanup() {
-    bool enabled = false;
-    set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), true);
-    gamescope_reshade_wl_server_disconnect();
-    using_gamescope_wayland = false;
-    gamescope_reshade_effect_request_time = 0;
-}
-
 void virtual_display_handle_device_disconnect_func() {
-    if (using_gamescope_wayland) wayland_cleanup();
-    if (virtual_display_ipc_values) *virtual_display_ipc_values->enabled = false;
+    bool enabled = false;
+    if (virtual_display_ipc_values) *virtual_display_ipc_values->enabled = enabled;
+    set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
 };
 
 void set_virtual_display_ipc_values() {
@@ -107,113 +94,72 @@ void set_virtual_display_ipc_values() {
                                         device->look_ahead_frametime_multiplier : 
                                         0.0) :
                                     0.0;
-        if (virtual_display_ipc_values) {
-            *virtual_display_ipc_values->enabled = enabled && !using_gamescope_wayland;
+        float look_ahead_cfg[4] = {look_ahead_constant, look_ahead_ftm, device->look_ahead_scanline_adjust, device->look_ahead_ms_cap};
+
+        // computed values based on display and SBS config/state
+        float display_aspect_ratio = (float)device->resolution_w / (float)device->resolution_h;
+        float diag_to_vert_ratio = sqrt(pow(display_aspect_ratio, 2) + 1);
+        float half_fov_z_rads = degree_to_radian(device->fov / diag_to_vert_ratio) / 2;
+        float half_fov_y_rads = half_fov_z_rads * display_aspect_ratio;
+        float fov_half_widths[2] = {tan(half_fov_y_rads), tan(half_fov_z_rads)};
+        float fov_widths[2] = {fov_half_widths[0] * 2, fov_half_widths[1] * 2};
+        float texcoord_x_limits[2] = {0.0, 1.0};
+        float texcoord_x_limits_r[2] = {0.0, 1.0};
+        float lens_vector[3] = {device->lens_distance_ratio, 0.0, 0.0};
+        float lens_vector_r[3] = {device->lens_distance_ratio, 0.0, 0.0};
+        if (state()->sbs_mode_enabled) {
+            lens_vector[1] = device->lens_distance_ratio / 3.0;
+            lens_vector_r[1] = -lens_vector[1];
+            if (vd_config->sbs_content) {
+                texcoord_x_limits[1] = 0.5;
+                texcoord_x_limits_r[0] = 0.5;
+                if (!vd_config->sbs_mode_stretched) {
+                    texcoord_x_limits[0] = 0.25;
+                    texcoord_x_limits_r[1] = 0.75;
+                }
+            } else if (!vd_config->sbs_mode_stretched) {
+                texcoord_x_limits[0] = 0.25;
+                texcoord_x_limits[1] = 0.75;
+                texcoord_x_limits_r[0] = 0.25;
+                texcoord_x_limits_r[1] = 0.75;
+            }
         }
-        if (using_gamescope_wayland) {
+        if (virtual_display_ipc_values) {
+            *virtual_display_ipc_values->enabled                = enabled && !is_gamescope_reshade_ipc_connected();
+            *virtual_display_ipc_values->display_zoom           = display_zoom;
+            *virtual_display_ipc_values->display_north_offset   = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
+            memcpy(virtual_display_ipc_values->look_ahead_cfg, look_ahead_cfg, sizeof(look_ahead_cfg));
+            *virtual_display_ipc_values->curved_display         = vd_config->curved_display;
+            *virtual_display_ipc_values->half_fov_z_rads        = half_fov_z_rads;
+            *virtual_display_ipc_values->half_fov_y_rads        = half_fov_y_rads;
+            memcpy(virtual_display_ipc_values->fov_half_widths, fov_half_widths, sizeof(fov_half_widths));
+            memcpy(virtual_display_ipc_values->fov_widths, fov_widths, sizeof(fov_widths));
+            memcpy(virtual_display_ipc_values->texcoord_x_limits, texcoord_x_limits, sizeof(texcoord_x_limits));
+            memcpy(virtual_display_ipc_values->texcoord_x_limits_r, texcoord_x_limits_r, sizeof(texcoord_x_limits_r));
+            memcpy(virtual_display_ipc_values->lens_vector, lens_vector, sizeof(lens_vector));
+            memcpy(virtual_display_ipc_values->lens_vector_r, lens_vector_r, sizeof(lens_vector_r));
+        }
+
+        if (is_gamescope_reshade_ipc_connected()) {
             // don't set the "flush" flag here, we'll let the IMU data trigger the flush
             set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("display_zoom", &display_zoom, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->sbs_display_distance, 1, sizeof(float), false);
-            float look_ahead_cfg[4] = {look_ahead_constant, look_ahead_ftm, device->look_ahead_scanline_adjust, device->look_ahead_ms_cap};
             set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("sbs_content", &vd_config->sbs_content, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &vd_config->sbs_mode_stretched, 1, sizeof(bool), false);
-        } else if (virtual_display_ipc_values) {
-            *virtual_display_ipc_values->display_zoom          = display_zoom;
-            *virtual_display_ipc_values->display_north_offset  = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
-            virtual_display_ipc_values->look_ahead_cfg[0]      = look_ahead_constant;
-            virtual_display_ipc_values->look_ahead_cfg[1]      = look_ahead_ftm;
-            virtual_display_ipc_values->look_ahead_cfg[2]      = device->look_ahead_scanline_adjust;
-            virtual_display_ipc_values->look_ahead_cfg[3]      = device->look_ahead_ms_cap;
-            *virtual_display_ipc_values->sbs_content           = vd_config->sbs_content;
-            *virtual_display_ipc_values->sbs_mode_stretched    = vd_config->sbs_mode_stretched;
-            *virtual_display_ipc_values->curved_display        = vd_config->curved_display;
-
-            // computed values based on display and SBS config/state
-            float displayAspectRatio = (float)device->resolution_w / (float)device->resolution_h;
-            float diagToVertRatio = sqrt(pow(displayAspectRatio, 2) + 1);
-            *virtual_display_ipc_values->half_fov_z_rads = degree_to_radian(device->fov / diagToVertRatio) / 2;
-            *virtual_display_ipc_values->half_fov_y_rads = *virtual_display_ipc_values->half_fov_z_rads * displayAspectRatio;
-            virtual_display_ipc_values->fov_half_widths[0] = tan(*virtual_display_ipc_values->half_fov_y_rads);
-            virtual_display_ipc_values->fov_half_widths[1] = tan(*virtual_display_ipc_values->half_fov_z_rads);
-            virtual_display_ipc_values->fov_widths[0] = virtual_display_ipc_values->fov_half_widths[0] * 2;
-            virtual_display_ipc_values->fov_widths[1] = virtual_display_ipc_values->fov_half_widths[1] * 2;
-            virtual_display_ipc_values->texcoord_x_limits[0] = 0.0;
-            virtual_display_ipc_values->texcoord_x_limits[1] = 1.0;
-            virtual_display_ipc_values->texcoord_x_limits_r[0] = 0.0;
-            virtual_display_ipc_values->texcoord_x_limits_r[1] = 1.0;
-            float lensFromCenter = 0.0;
-            if (state()->sbs_mode_enabled) {
-                lensFromCenter = device->lens_distance_ratio / 3.0;
-                if (vd_config->sbs_content) {
-                    virtual_display_ipc_values->texcoord_x_limits[1] = 0.5;
-                    virtual_display_ipc_values->texcoord_x_limits_r[0] = 0.5;
-                    if (!vd_config->sbs_mode_stretched) {
-                        virtual_display_ipc_values->texcoord_x_limits[0] = 0.25;
-                        virtual_display_ipc_values->texcoord_x_limits_r[1] = 0.75;
-                    }
-                } else if (!vd_config->sbs_mode_stretched) {
-                    virtual_display_ipc_values->texcoord_x_limits[0] = 0.25;
-                    virtual_display_ipc_values->texcoord_x_limits[1] = 0.75;
-                    virtual_display_ipc_values->texcoord_x_limits_r[0] = 0.25;
-                    virtual_display_ipc_values->texcoord_x_limits_r[1] = 0.75;
-                }
-            }
-            virtual_display_ipc_values->lens_vector[0] = device->lens_distance_ratio;
-            virtual_display_ipc_values->lens_vector[1] = lensFromCenter;
-            virtual_display_ipc_values->lens_vector[2] = 0.0;
-            virtual_display_ipc_values->lens_vector_r[0] = device->lens_distance_ratio;
-            virtual_display_ipc_values->lens_vector_r[1] = -lensFromCenter;
-            virtual_display_ipc_values->lens_vector_r[2] = 0.0;
+            set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
+            set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("half_fov_y_rads", &half_fov_y_rads, 1, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("fov_half_widths", (void*) fov_half_widths, 2, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("fov_widths", (void*) fov_widths, 2, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits", (void*) texcoord_x_limits, 2, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
         }
     } else {
         virtual_display_handle_device_disconnect_func();
     }
     device_checkin(device);
-}
-
-static void _gamescope_reshade_effect_ready() {
-    gamescope_reshade_effect_request_time = 0;
-}
-
-void virtual_display_handle_device_connect_func() {
-    set_virtual_display_ipc_values();
-    using_gamescope_wayland = gamescope_reshade_wl_server_connect();
-    if (using_gamescope_wayland) {
-        if (config()->debug_ipc) log_debug("virtual_display_handle_device_connect_func using wayland\n");
-        gamescope_reshade_effect_request_time = get_epoch_time_ms();
-        add_gamescope_effect_ready_listener(_gamescope_reshade_effect_ready);
-        enable_gamescope_virtual_display_effect();
-    } else {
-        if (config()->debug_ipc) log_debug("virtual_display_handle_device_connect_func using shared memory\n");
-    }
-};
-
-void virtual_display_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                          bool imu_calibrated, ipc_values_type *ipc_values) {
-    if (using_gamescope_wayland) {
-        if (gamescope_reshade_effect_request_time != 0 && 
-                get_epoch_time_ms() - gamescope_reshade_effect_request_time > 
-                GAMESCOPE_RESHADE_WAIT_TIME_MS) {
-            log_error("gamescope effect_ready event never received, falling back to shared memory IPC\n");
-            wayland_cleanup();
-            set_virtual_display_ipc_values();
-        } else {
-            set_gamescope_reshade_effect_uniform_variable("display_res", ipc_values->display_res, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("display_fov", ipc_values->display_fov, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("lens_distance_ratio", ipc_values->lens_distance_ratio, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("custom_banner_enabled", custom_banner_ipc_values->enabled, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("imu_quat_data", ipc_values->imu_data, 16, sizeof(float), true);
-        }
-    }
-}
-
-void virtual_display_reset_imu_data_func() {
-    if (using_gamescope_wayland) {
-        set_gamescope_reshade_effect_uniform_variable("imu_quat_data", &imu_reset_data, 16, sizeof(float), true);
-    }
 }
 
 void virtual_display_set_config_func(void* config) {
@@ -307,7 +253,7 @@ bool virtual_display_setup_ipc_func() {
 void virtual_display_handle_state_func() {
     bool sbs_enabled = state()->sbs_mode_enabled && is_sbs_granted();
     if (virtual_display_ipc_values) *virtual_display_ipc_values->sbs_enabled = sbs_enabled;
-    if (using_gamescope_wayland) set_gamescope_reshade_effect_uniform_variable("sbs_enabled", &sbs_enabled, 1, sizeof(bool), true);
+    set_gamescope_reshade_effect_uniform_variable("sbs_enabled", &sbs_enabled, 1, sizeof(bool), true);
 
     set_virtual_display_ipc_values();
 }
@@ -318,10 +264,9 @@ const plugin_type virtual_display_plugin = {
     .handle_config_line = virtual_display_handle_config_line_func,
     .set_config = virtual_display_set_config_func,
     .register_features = virtual_display_register_features_func,
-    .handle_imu_data = virtual_display_handle_imu_data_func,
-    .reset_imu_data = virtual_display_reset_imu_data_func,
     .setup_ipc = virtual_display_setup_ipc_func,
+    .handle_ipc_change = set_virtual_display_ipc_values,
     .handle_state = virtual_display_handle_state_func,
-    .handle_device_connect = virtual_display_handle_device_connect_func,
+    .handle_device_connect = set_virtual_display_ipc_values,
     .handle_device_disconnect = virtual_display_handle_device_disconnect_func
 };

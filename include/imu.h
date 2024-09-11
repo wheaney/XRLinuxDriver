@@ -15,7 +15,7 @@ struct imu_quat_t {
 	float w;
 };
 
-extern const int imu_reset_data[16];
+extern const float imu_reset_data[16];
 
 typedef struct imu_euler_t imu_euler_type;
 typedef struct imu_quat_t imu_quat_type;

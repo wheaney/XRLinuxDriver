@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 0.12.0.1 LANGUAGES C)
+project(xrDriver VERSION 1.0.0 LANGUAGES C)
 
 configure_file(include/version.h.in version.h)
 include_directories(${PROJECT_BINARY_DIR})
@@ -107,7 +107,7 @@ set(SOURCES
     src/plugins/breezy_desktop.c
     src/plugins/custom_banner.c
     src/plugins/device_license.c
-    src/plugins/gamescope_reshade_wl.c
+    src/plugins/gamescope_reshade_wayland.c
     src/plugins/metrics.c
     src/plugins/sideview.c
     src/plugins/smooth_follow.c

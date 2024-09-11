@@ -3,6 +3,7 @@
 #include "plugins/custom_banner.h"
 #include "plugins/breezy_desktop.h"
 #include "plugins/device_license.h"
+#include "plugins/gamescope_reshade_wayland.h"
 #include "plugins/metrics.h"
 #include "plugins/sideview.h"
 #include "plugins/smooth_follow.h"
@@ -11,7 +12,7 @@
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 7
+#define PLUGIN_COUNT 8
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
@@ -19,7 +20,8 @@ const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &metrics_plugin,
     &custom_banner_plugin,
     &smooth_follow_plugin,
-    &breezy_desktop_plugin
+    &breezy_desktop_plugin,
+    &gamescope_reshade_wayland_plugin
 };
 
 
@@ -88,6 +90,12 @@ bool all_plugins_setup_ipc_func() {
 
     return true;
 }
+void all_plugins_handle_ipc_change_func() {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->handle_ipc_change == NULL) continue;
+        all_plugins[i]->handle_ipc_change();
+    }
+}
 imu_quat_type all_plugins_modify_screen_center_func(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->modify_screen_center == NULL) continue;
@@ -137,6 +145,7 @@ const plugin_type plugins = {
     .handle_control_flag_line = all_plugins_handle_control_flag_line_func,
     .set_config = all_plugins_set_config_func,
     .setup_ipc = all_plugins_setup_ipc_func,
+    .handle_ipc_change = all_plugins_handle_ipc_change_func,
     .modify_screen_center = all_plugins_modify_screen_center_func,
     .handle_imu_data = all_plugins_handle_imu_data_func,
     .reset_imu_data = all_plugins_reset_imu_data_func,

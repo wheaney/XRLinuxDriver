@@ -3,7 +3,7 @@
 #include <math.h>
 #include <stdbool.h>
 
-const int imu_reset_data[16] = {
+const float imu_reset_data[16] = {
     0.0, 0.0, 0.0, 1.0,
     0.0, 0.0, 0.0, 1.0,
     0.0, 0.0, 0.0, 1.0,
