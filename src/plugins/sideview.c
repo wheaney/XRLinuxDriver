@@ -120,6 +120,7 @@ const plugin_type sideview_plugin = {
     .handle_config_line = sideview_handle_config_line_func,
     .set_config = sideview_set_config_func,
     .setup_ipc = sideview_setup_ipc_func,
+    .handle_ipc_change = set_sideview_ipc_values_from_config,
     .handle_device_connect = set_sideview_ipc_values_from_config,
     .handle_device_disconnect = sideview_handle_device_disconnect_func
 };
