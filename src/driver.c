@@ -10,6 +10,7 @@
 #include "multitap.h"
 #include "outputs.h"
 #include "plugins.h"
+#include "plugins/gamescope_reshade_wayland.h"
 #include "runtime_context.h"
 #include "state.h"
 #include "strings.h"
@@ -163,6 +164,8 @@ void setup_ipc() {
         // set IPC values that won't change after a device is set
         ipc_values->display_res[0]        = (float) device->resolution_w;
         ipc_values->display_res[1]        = (float) device->resolution_h;
+
+        // deprecated - can be removed once this version is widely distributed
         *ipc_values->display_fov          = device->fov;
         *ipc_values->lens_distance_ratio  = device->lens_distance_ratio;
 
@@ -174,6 +177,9 @@ void setup_ipc() {
         ipc_values->date[1]               = 0.0;
         ipc_values->date[2]               = 0.0;
         ipc_values->date[3]               = 0.0;
+
+        set_gamescope_reshade_effect_uniform_variable("display_res", ipc_values->display_res, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), false);
     }
     device_checkin(device);
 }

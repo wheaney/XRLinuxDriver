@@ -78,16 +78,48 @@ char *get_hardware_id() {
                 found = get_mac_address_hash(&mac_address_hash, network_interfaces[i]);
             }
 
-            struct ifaddrs *ifaddr, *ifa;
-            if (!found && getifaddrs(&ifaddr) != -1) {
-                for (ifa = ifaddr; ifa != NULL && !found; ifa = ifa->ifa_next) {
-                    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET ||
-                        in_array(ifa->ifa_name, network_interfaces, NET_INTERFACE_COUNT))
-                        continue;
+            if (!found) {
+                // find and sort the remaining interfaces before generating a hash 
+                // in an attempt to get a consistent hardwareId
+                struct ifaddrs *ifaddr, *ifa;
+                char **remaining_interfaces = NULL;
+                int remaining_count = 0;
 
-                    found = get_mac_address_hash(&mac_address_hash, ifa->ifa_name);
+                if (getifaddrs(&ifaddr) != -1) {
+                    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+                        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET ||
+                            in_array(ifa->ifa_name, network_interfaces, NET_INTERFACE_COUNT))
+                            continue;
+                        remaining_count++;
+                    }
+
+                    remaining_interfaces = malloc(remaining_count * sizeof(char*));
+                    if (remaining_interfaces == NULL) {
+                        log_error("Memory allocation failed\n");
+                        freeifaddrs(ifaddr);
+                        break;
+                    }
+
+                    int index = 0;
+                    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+                        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET ||
+                            in_array(ifa->ifa_name, network_interfaces, NET_INTERFACE_COUNT))
+                            continue;
+                        remaining_interfaces[index++] = strdup(ifa->ifa_name);
+                    }
+
+                    // sort by ifa->ifa_name
+                    qsort(remaining_interfaces, remaining_count, sizeof(char*), compare_strings);
+                    for (int i = 0; i < remaining_count && !found; i++) {
+                        found = get_mac_address_hash(&mac_address_hash, remaining_interfaces[i]);
+                    }
+
+                    for (int i = 0; i < remaining_count; i++) {
+                        free(remaining_interfaces[i]);
+                    }
+                    free(remaining_interfaces);
+                    freeifaddrs(ifaddr);
                 }
-                freeifaddrs(ifaddr);
             }
 
             if (!found && ++attempts <= RETRY_ATTEMPTS) {

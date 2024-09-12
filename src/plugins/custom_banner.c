@@ -1,5 +1,6 @@
 #include "custom_banner_config.h"
 #include "plugins/custom_banner.h"
+#include "plugins/gamescope_reshade_wayland.h"
 #include "ipc.h"
 #include "runtime_context.h"
 
@@ -14,30 +15,33 @@ const int target_device_product_id = CUSTOM_BANNER_TARGET_DEVICE_PRODUCT_ID;
 custom_banner_ipc_values_type *custom_banner_ipc_values;
 void evaluate_banner_conditions() {
     device_properties_type* device = device_checkout();
-    if (custom_banner_ipc_values && device != NULL) {
-        bool any_conditions_set = false;
-        bool banner_device_conditions_met = true;
-        if (target_device_vendor_id != 0) {
-            any_conditions_set = true;
-            banner_device_conditions_met = device->hid_vendor_id == target_device_vendor_id;
-            if (target_device_product_id != 0) {
-                banner_device_conditions_met &= device->hid_product_id == target_device_product_id;
+    if (device != NULL) {
+        if (custom_banner_ipc_values) {
+            bool any_conditions_set = false;
+            bool banner_device_conditions_met = true;
+            if (target_device_vendor_id != 0) {
+                any_conditions_set = true;
+                banner_device_conditions_met = device->hid_vendor_id == target_device_vendor_id;
+                if (target_device_product_id != 0) {
+                    banner_device_conditions_met &= device->hid_product_id == target_device_product_id;
+                }
             }
-        }
 
-        bool banner_time_conditions_met = true;
-        time_t now = time(NULL);
-        if (banner_start_date != 0) {
-            any_conditions_set = true;
-            banner_time_conditions_met = now > banner_start_date;
-        }
-        if (banner_end_date != 0) {
-            any_conditions_set = true;
-            banner_time_conditions_met &= now < banner_end_date;
-        }
+            bool banner_time_conditions_met = true;
+            time_t now = time(NULL);
+            if (banner_start_date != 0) {
+                any_conditions_set = true;
+                banner_time_conditions_met = now > banner_start_date;
+            }
+            if (banner_end_date != 0) {
+                any_conditions_set = true;
+                banner_time_conditions_met &= now < banner_end_date;
+            }
 
-        *custom_banner_ipc_values->enabled = any_conditions_set && banner_device_conditions_met && banner_time_conditions_met;
+            *custom_banner_ipc_values->enabled = any_conditions_set && banner_device_conditions_met && banner_time_conditions_met;
+        }
     }
+    set_gamescope_reshade_effect_uniform_variable("custom_banner_enabled", custom_banner_ipc_values->enabled, 1, sizeof(bool), false);
     device_checkin(device);
 }
 

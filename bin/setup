@@ -23,6 +23,12 @@ if ! find /usr/lib* -name 'libcurl.so*' -print -quit | grep -q .; then
   exit 1
 fi
 
+if ! find /usr/lib* -name 'libwayland-client.so*' -print -quit | grep -q .; then
+  echo -e "\n\n!!! WARNING: The Wayland client library was not found, which will disable the gamescope integration. \
+To enable this, install the appropriate library. It's typically provided by the package libwayland-client0 \
+(Debian/Ubuntu), wayland (Fedora), or wayland (Arch).\n\n"
+fi
+
 USER=${SUDO_USER:-$USER}
 GROUP=$(id -gn $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)

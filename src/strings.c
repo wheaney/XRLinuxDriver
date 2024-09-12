@@ -28,3 +28,8 @@ const char* concat(const char* path, const char* extension) {
 
     return s;
 }
+
+// Comparison function intended for qsort
+int compare_strings(const void* a, const void* b) {
+    return strcmp(*(const char**)a, *(const char**)b);
+}

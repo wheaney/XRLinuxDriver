@@ -4,6 +4,7 @@
 #include "ipc.h"
 #include "logging.h"
 #include "plugins.h"
+#include "plugins/gamescope_reshade_wayland.h"
 #include "plugins/sideview.h"
 #include "runtime_context.h"
 #include "strings.h"
@@ -50,17 +51,25 @@ void sideview_handle_config_line_func(void* config, char* key, char* value) {
 };
 
 void sideview_handle_device_disconnect_func() {
-    if (sideview_ipc_values) *sideview_ipc_values->enabled = false;
+    bool enabled = false;
+    if (sideview_ipc_values) *sideview_ipc_values->enabled = enabled;
+    set_gamescope_reshade_effect_uniform_variable("sideview_enabled", &enabled, 1, sizeof(bool), true);
 };
 
 void set_sideview_ipc_values_from_config() {
-    if (!sideview_ipc_values) return;
     if (!sv_config) sv_config = sideview_default_config_func();
 
     if (device_present()) {
-        *sideview_ipc_values->enabled = sv_config->enabled && !config()->disabled;
-        *sideview_ipc_values->position = (float) sv_config->position;
-        *sideview_ipc_values->display_size = sv_config->display_size;
+        bool enabled = sv_config->enabled && !config()->disabled;
+        float position = (float) sv_config->position;
+        if (sideview_ipc_values) {
+            *sideview_ipc_values->enabled = enabled && !is_gamescope_reshade_ipc_connected();
+            *sideview_ipc_values->position = position;
+            *sideview_ipc_values->display_size = sv_config->display_size;
+        }
+        set_gamescope_reshade_effect_uniform_variable("sideview_enabled", &enabled, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("sideview_position", &position, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("sideview_display_size", &sv_config->display_size, 1, sizeof(float), false);
     } else {
         sideview_handle_device_disconnect_func();
     }
@@ -111,6 +120,7 @@ const plugin_type sideview_plugin = {
     .handle_config_line = sideview_handle_config_line_func,
     .set_config = sideview_set_config_func,
     .setup_ipc = sideview_setup_ipc_func,
+    .handle_ipc_change = set_sideview_ipc_values_from_config,
     .handle_device_connect = set_sideview_ipc_values_from_config,
     .handle_device_disconnect = sideview_handle_device_disconnect_func
 };
