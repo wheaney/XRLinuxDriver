@@ -13,6 +13,15 @@
 #include <unistd.h>
 #include <string.h>
 
+/**
+ * The wayland-client library may not be present, so we create a weak reference to wl_proxy_create just
+ * for the sake of checking if the library is linked. All function calls should be preceeded by a check
+ * for the presence of wl_proxy_create or the presence of the reshade_object (which implies the presence 
+ * of the former has already succeeded previously).
+ */
+#include <wayland-client.h>
+__attribute__((weak)) struct wl_proxy *wl_proxy_create(struct wl_proxy *factory, const struct wl_interface *interface);
+
 #define GAMESCOPE_RESHADE_INTERFACE_NAME "gamescope_reshade"
 #define GAMESCOPE_RESHADE_EFFECT_FILE "Sombrero.frag"
 #define GAMESCOPE_RESHADE_EFFECT_PATH "reshade/Shaders/" GAMESCOPE_RESHADE_EFFECT_FILE
@@ -72,6 +81,12 @@ static void gamescope_reshade_wl_server_disconnect() {
 static void gamescope_reshade_wl_server_connect() {
     if (gamescope_reshade_ipc_connected) return;
 
+    if (wl_proxy_create == NULL) {
+        if (config()->debug_ipc) 
+            log_debug("gamescope_reshade_wl_server_connect wayland-client library not present\n");
+        return;
+    }
+
     if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect\n");
     if (!display) display = wl_display_connect("gamescope-0");
     if (!display) {
@@ -100,7 +115,8 @@ static void gamescope_reshade_wl_server_connect() {
         wl_display_flush(display);
         int wl_display_error = wl_display_get_error(display);
         if (wl_display_error != 0) {
-            if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect wl_display_error: %d\n", wl_display_error);
+            if (config()->debug_ipc) 
+                log_debug("gamescope_reshade_wl_server_connect wl_display_error: %d\n", wl_display_error);
             gamescope_reshade_wl_server_disconnect();
             return;
         }
@@ -111,7 +127,8 @@ static void gamescope_reshade_wl_server_connect() {
             gamescope_reshade_effect_request_time = get_epoch_time_ms();
             gamescope_reshade_ipc_connected = true;
         } else {
-            if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect error %d on wl_display_flush\n", wl_result);
+            if (config()->debug_ipc) 
+                log_debug("gamescope_reshade_wl_server_connect error %d on wl_display_flush\n", wl_result);
             gamescope_reshade_wl_server_disconnect();
         }
 
@@ -157,7 +174,8 @@ static void wayland_cleanup() {
     gamescope_reshade_effect_request_time = 0;
 }
 
-void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, const void *data, int entries, size_t element_size, bool flush) {
+void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, const void *data, int entries, 
+                                                   size_t element_size, bool flush) {
     if (!reshade_object) return;
 
     struct wl_array array;
