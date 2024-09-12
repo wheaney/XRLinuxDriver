@@ -71,7 +71,7 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
 void virtual_display_handle_device_disconnect_func() {
     bool enabled = false;
     if (virtual_display_ipc_values) *virtual_display_ipc_values->enabled = enabled;
-    set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
+    set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), true);
 };
 
 void set_virtual_display_ipc_values() {

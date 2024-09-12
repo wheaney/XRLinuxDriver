@@ -53,7 +53,7 @@ void sideview_handle_config_line_func(void* config, char* key, char* value) {
 void sideview_handle_device_disconnect_func() {
     bool enabled = false;
     if (sideview_ipc_values) *sideview_ipc_values->enabled = enabled;
-    set_gamescope_reshade_effect_uniform_variable("sideview_enabled", &enabled, 1, sizeof(bool), false);
+    set_gamescope_reshade_effect_uniform_variable("sideview_enabled", &enabled, 1, sizeof(bool), true);
 };
 
 void set_sideview_ipc_values_from_config() {

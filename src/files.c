@@ -12,9 +12,11 @@ const char* XR_DRIVER_DIR = "xr_driver";
 const char* XDG_STATE_ENV_VAR = "XDG_STATE_HOME";
 const char* XDG_RUNTIME_ENV_VAR = "XDG_RUNTIME_DIR";
 const char* XDG_CONFIG_ENV_VAR = "XDG_CONFIG_HOME";
+const char* XDG_DATA_ENV_VAR = "XDG_DATA_HOME";
 const char* XDG_STATE_FALLBACK_DIR = "/.local/state";
 const char* XDG_CONFIG_FALLBACK_DIR = "/.config";
 const char* XDG_RUNTIME_FALLBACK_DIR = "/tmp";
+const char* XDG_DATA_FALLBACK_DIR = "/.local/share";
 
 // TODO - this uses the parent directories to determine the ownership of the new directory, which can be removed
 // when the driver is no longer running as root
@@ -85,7 +87,7 @@ FILE* get_or_create_file(const char *full_path, mode_t directory_mode, char *fil
     return fp;
 }
 
-char* get_xdg_file_path(char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
+char* get_xdg_file_path_for_app(char *app_name, char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
     struct stat st = {0};
 
     char* base_directory = getenv(xdg_env_var);
@@ -95,11 +97,15 @@ char* get_xdg_file_path(char *filename, const char *xdg_env_var, const char *xdg
         base_directory = (char*)concat(home, xdg_fallback_dir);
     }
 
-    int path_length = strlen(base_directory) + strlen(XR_DRIVER_DIR) + strlen(filename) + 3;
+    int path_length = strlen(base_directory) + strlen(app_name) + strlen(filename) + 3;
     char *full_path = (char*)malloc(path_length * sizeof(char));
-    snprintf(full_path, path_length, "%s/%s/%s", base_directory, XR_DRIVER_DIR, filename);
+    snprintf(full_path, path_length, "%s/%s/%s", base_directory, app_name, filename);
 
     return full_path;
+}
+
+char* get_xdg_file_path(char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
+    return get_xdg_file_path_for_app(XR_DRIVER_DIR, filename, xdg_env_var, xdg_fallback_dir);
 }
 
 char* get_state_file_path(char *filename) {

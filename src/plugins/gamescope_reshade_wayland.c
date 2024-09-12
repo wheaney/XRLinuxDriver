@@ -10,10 +10,12 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <unistd.h>
 #include <string.h>
 
 #define GAMESCOPE_RESHADE_INTERFACE_NAME "gamescope_reshade"
-#define GAMESCOPE_RESHADE_EFFECT_PATH "Sombrero.frag"
+#define GAMESCOPE_RESHADE_EFFECT_FILE "Sombrero.frag"
+#define GAMESCOPE_RESHADE_EFFECT_PATH "reshade/Shaders/" GAMESCOPE_RESHADE_EFFECT_FILE
 #define GAMESCOPE_RESHADE_WAIT_TIME_MS 500
 
 static struct wl_display *display = NULL;
@@ -22,6 +24,18 @@ static struct gamescope_reshade *reshade_object = NULL;
 static gamescope_reshade_effect_ready_callback effect_ready_callback = NULL;
 static uint64_t gamescope_reshade_effect_request_time = 0;
 static bool gamescope_reshade_ipc_connected = false;
+
+static char* sombrero_shader_file_path() {
+    static char* shader_file_path = NULL;
+    if (!shader_file_path)
+        shader_file_path = get_xdg_file_path_for_app("gamescope", GAMESCOPE_RESHADE_EFFECT_PATH, XDG_DATA_ENV_VAR, XDG_DATA_FALLBACK_DIR);
+
+    return shader_file_path;
+}
+
+static bool sombrero_file_exists() {
+    return access(sombrero_shader_file_path(), F_OK) != -1;
+}
 
 static void gamescope_reshade_wl_handle_global(void *data, struct wl_registry *registry,
                        uint32_t name, const char *interface, uint32_t version) {
@@ -91,7 +105,7 @@ static void gamescope_reshade_wl_server_connect() {
             return;
         }
 
-        gamescope_reshade_set_effect(reshade_object, GAMESCOPE_RESHADE_EFFECT_PATH);
+        gamescope_reshade_set_effect(reshade_object, GAMESCOPE_RESHADE_EFFECT_FILE);
         int wl_result = wl_display_flush(display);
         if (wl_result >= 0) {
             gamescope_reshade_effect_request_time = get_epoch_time_ms();
@@ -179,7 +193,7 @@ static void _effect_ready_callback(void *data,
                                    struct gamescope_reshade *gamescope_reshade,
                                    const char *effect_path) {
     if (config()->debug_ipc) log_debug("_effect_ready_callback: %s\n", effect_path);
-    if (effect_ready_callback && equal(effect_path, GAMESCOPE_RESHADE_EFFECT_PATH)) {
+    if (effect_ready_callback && equal(effect_path, GAMESCOPE_RESHADE_EFFECT_FILE)) {
         effect_ready_callback();
         effect_ready_callback = NULL;
     }
@@ -201,7 +215,7 @@ static void _gamescope_reshade_effect_ready() {
 }
 
 void gamescope_reshade_wl_handle_state_func() {
-    if (device_present()) {
+    if (device_present() && sombrero_file_exists()) {
         if (!gamescope_reshade_ipc_connected) {
             gamescope_reshade_wl_server_connect();
             if (gamescope_reshade_ipc_connected) {
