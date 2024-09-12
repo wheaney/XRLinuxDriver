@@ -19,7 +19,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libjson-c-dev \
     python3 \
-    python3-yaml
+    python3-yaml \
+    libwayland-dev
 
 WORKDIR /source
 
