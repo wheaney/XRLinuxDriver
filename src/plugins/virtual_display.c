@@ -142,7 +142,7 @@ void set_virtual_display_ipc_values() {
 
         if (is_gamescope_reshade_ipc_connected()) {
             // don't set the "flush" flag here, we'll let the IMU data trigger the flush
-            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
+            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), true);
             set_gamescope_reshade_effect_uniform_variable("display_zoom", &display_zoom, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->sbs_display_distance, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
@@ -155,6 +155,9 @@ void set_virtual_display_ipc_values() {
             set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
+        } else {
+            bool gamescope_enabled = false;
+            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &gamescope_enabled, 1, sizeof(bool), true);
         }
     } else {
         virtual_display_handle_device_disconnect_func();

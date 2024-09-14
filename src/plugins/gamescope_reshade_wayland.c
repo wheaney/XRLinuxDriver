@@ -27,12 +27,41 @@ __attribute__((weak)) struct wl_proxy *wl_proxy_create(struct wl_proxy *factory,
 #define GAMESCOPE_RESHADE_EFFECT_PATH "reshade/Shaders/" GAMESCOPE_RESHADE_EFFECT_FILE
 #define GAMESCOPE_RESHADE_WAIT_TIME_MS 500
 
+static gamescope_reshade_wayland_config *gamescope_config;
 static struct wl_display *display = NULL;
 static struct wl_registry *registry = NULL;
 static struct gamescope_reshade *reshade_object = NULL;
 static gamescope_reshade_effect_ready_callback effect_ready_callback = NULL;
 static uint64_t gamescope_reshade_effect_request_time = 0;
 static bool gamescope_reshade_ipc_connected = false;
+
+void *gamescope_reshade_wayland_default_config_func() {
+    gamescope_reshade_wayland_config *config = calloc(1, sizeof(gamescope_reshade_wayland_config));
+    config->disabled = false;
+
+    return config;
+};
+
+void gamescope_reshade_wayland_handle_config_line_func(void* config, char* key, char* value) {
+    gamescope_reshade_wayland_config* temp_config = (gamescope_reshade_wayland_config*) config;
+
+    if (equal(key, "gamescope_reshade_wayland_disabled")) {
+        boolean_config(key, value, &temp_config->disabled);
+    }
+};
+
+void gamescope_reshade_wayland_set_config_func(void* config) {
+    if (!config) return;
+    gamescope_reshade_wayland_config* temp_config = (gamescope_reshade_wayland_config*) config;
+
+    if (gamescope_config) {
+        if (gamescope_config->disabled != temp_config->disabled)
+            log_message("Gamescope ReShade integration has been %s\n", temp_config->disabled ? "disabled" : "enabled");
+
+        free(gamescope_config);
+    }
+    gamescope_config = temp_config;
+};
 
 static char* sombrero_shader_file_path() {
     static char* shader_file_path = NULL;
@@ -79,7 +108,7 @@ static void gamescope_reshade_wl_server_disconnect() {
 }
 
 static void gamescope_reshade_wl_server_connect() {
-    if (gamescope_reshade_ipc_connected) return;
+    if (gamescope_config->disabled || gamescope_reshade_ipc_connected) return;
 
     if (wl_proxy_create == NULL) {
         if (config()->debug_ipc) 
@@ -139,7 +168,7 @@ static void gamescope_reshade_wl_server_connect() {
 }
 
 static bool gamescope_reshade_wl_setup_ipc() {
-    if (gamescope_reshade_ipc_connected) gamescope_reshade_wl_server_connect();
+    gamescope_reshade_wl_server_connect();
 
     return true;
 }
@@ -233,7 +262,7 @@ static void _gamescope_reshade_effect_ready() {
 }
 
 void gamescope_reshade_wl_handle_state_func() {
-    if (device_present() && sombrero_file_exists()) {
+    if (device_present() && sombrero_file_exists() && !gamescope_config->disabled) {
         if (!gamescope_reshade_ipc_connected) {
             gamescope_reshade_wl_server_connect();
             if (gamescope_reshade_ipc_connected) {
@@ -268,6 +297,9 @@ void gamescope_reshade_wl_reset_imu_data_func() {
 
 const plugin_type gamescope_reshade_wayland_plugin = {
     .id = "gamescope_reshade_wayland",
+    .default_config = gamescope_reshade_wayland_default_config_func,
+    .handle_config_line = gamescope_reshade_wayland_handle_config_line_func,
+    .set_config = gamescope_reshade_wayland_set_config_func,
     .setup_ipc = gamescope_reshade_wl_setup_ipc,
     .handle_state = gamescope_reshade_wl_handle_state_func,
     .handle_imu_data = gamescope_reshade_wl_handle_imu_data_func,

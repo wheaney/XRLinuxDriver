@@ -5,6 +5,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+struct gamescope_reshade_wayland_config_t {
+    bool disabled;
+};
+typedef struct gamescope_reshade_wayland_config_t gamescope_reshade_wayland_config;
+
 typedef void (*gamescope_reshade_effect_ready_callback)();
 
 bool is_gamescope_reshade_ipc_connected();
