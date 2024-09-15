@@ -237,7 +237,6 @@ const char *virtual_display_texcoord_x_limits_r_ipc_name = "texcoord_x_limits_r"
 const char *virtual_display_lens_vector_ipc_name = "lens_vector";
 const char *virtual_display_lens_vector_r_ipc_name = "lens_vector_r";
 const char *virtual_display_curved_display_ipc_name = "curved_display";
-const char *virtual_display_implicit_layer_ipc_name = "vulkan_implicit_layer";
 
 bool virtual_display_setup_ipc_func() {
     bool debug = config()->debug_ipc;
