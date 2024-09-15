@@ -84,6 +84,7 @@ void set_virtual_display_ipc_values() {
                             vd_config->follow_mode_enabled &&
                             vd_config->passthrough_smooth_follow_enabled);
         float display_zoom = state()->sbs_mode_enabled ? vd_config->sbs_display_size : vd_config->display_zoom;
+        float display_north_offset = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
         float look_ahead_constant = vd_config->enabled ? 
                                         (vd_config->look_ahead_override == 0 ?
                                             device->look_ahead_constant :
@@ -136,7 +137,7 @@ void set_virtual_display_ipc_values() {
             *virtual_display_ipc_values->enabled                = enabled && !is_gamescope_reshade_ipc_connected();
             *virtual_display_ipc_values->display_zoom           = display_zoom;
             *virtual_display_ipc_values->sbs_mode_stretched     = sbs_mode_stretched;
-            *virtual_display_ipc_values->display_north_offset   = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
+            *virtual_display_ipc_values->display_north_offset   = display_north_offset;
             *virtual_display_ipc_values->curved_display         = vd_config->curved_display;
             *virtual_display_ipc_values->half_fov_z_rads        = half_fov_z_rads;
             *virtual_display_ipc_values->half_fov_y_rads        = half_fov_y_rads;
@@ -154,7 +155,7 @@ void set_virtual_display_ipc_values() {
             set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), true);
             set_gamescope_reshade_effect_uniform_variable("display_zoom", &display_zoom, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->sbs_display_distance, 1, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("display_north_offset", &display_north_offset, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
