@@ -197,6 +197,7 @@ static void wayland_cleanup() {
     // set this early so other plugins can check if it's connected and change runtime variables
     // before the actual connection is closed
     gamescope_reshade_ipc_connected = false;
+    state()->is_gamescope_reshade_ipc_connected = false;
     plugins.handle_ipc_change();
     
     gamescope_reshade_wl_server_disconnect();
@@ -267,6 +268,7 @@ void gamescope_reshade_wl_handle_state_func() {
             gamescope_reshade_wl_server_connect();
             if (gamescope_reshade_ipc_connected) {
                 if (config()->debug_ipc) log_debug("gamescope_reshade_wl_handle_state_func connected to gamescope\n");
+                state()->is_gamescope_reshade_ipc_connected = true;
                 plugins.handle_ipc_change();
 
                 add_gamescope_effect_ready_listener(_gamescope_reshade_effect_ready);

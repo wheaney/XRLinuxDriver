@@ -54,6 +54,8 @@ void write_state(driver_state_type *state) {
         fprintf(fp, "sbs_mode_enabled=%s\n", state->sbs_mode_enabled ? "true" : "false");
         if (state->breezy_desktop_smooth_follow_enabled)
             fprintf(fp, "breezy_desktop_smooth_follow_enabled=true\n");
+        if (state->is_gamescope_reshade_ipc_connected)
+            fprintf(fp, "is_gamescope_reshade_ipc_connected=true\n");
         fprintf(fp, "firmware_update_recommended=%s\n", state->firmware_update_recommended ? "true" : "false");
     }
 

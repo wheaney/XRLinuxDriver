@@ -26,6 +26,7 @@ struct driver_state_t {
     float breezy_desktop_follow_threshold;
     float breezy_desktop_display_distance;
     bool firmware_update_recommended;
+    bool is_gamescope_reshade_ipc_connected;
 
     int registered_features_count;
     char** registered_features;
