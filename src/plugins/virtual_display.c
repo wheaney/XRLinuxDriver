@@ -107,17 +107,25 @@ void set_virtual_display_ipc_values() {
         float texcoord_x_limits_r[2] = {0.0, 1.0};
         float lens_vector[3] = {device->lens_distance_ratio, 0.0, 0.0};
         float lens_vector_r[3] = {device->lens_distance_ratio, 0.0, 0.0};
+
+        // gamescope's texture will always be full width (no black bars)
+        bool sbs_mode_full_width = is_gamescope_reshade_ipc_connected() || vd_config->sbs_mode_stretched;
+
+        // if using vkBasalt as an implicit layer and the content is full screen, it must have been stretched,
+        // if this is true it tells the shader to consider the real width of the content to be half of the texture width
+        bool sbs_mode_stretched = !is_gamescope_reshade_ipc_connected() && vd_config->sbs_mode_stretched;
+
         if (state()->sbs_mode_enabled) {
             lens_vector[1] = device->lens_distance_ratio / 3.0;
             lens_vector_r[1] = -lens_vector[1];
             if (vd_config->sbs_content) {
                 texcoord_x_limits[1] = 0.5;
                 texcoord_x_limits_r[0] = 0.5;
-                if (!vd_config->sbs_mode_stretched) {
+                if (!sbs_mode_full_width) {
                     texcoord_x_limits[0] = 0.25;
                     texcoord_x_limits_r[1] = 0.75;
                 }
-            } else if (!vd_config->sbs_mode_stretched) {
+            } else if (!sbs_mode_full_width) {
                 texcoord_x_limits[0] = 0.25;
                 texcoord_x_limits[1] = 0.75;
                 texcoord_x_limits_r[0] = 0.25;
@@ -127,11 +135,12 @@ void set_virtual_display_ipc_values() {
         if (virtual_display_ipc_values) {
             *virtual_display_ipc_values->enabled                = enabled && !is_gamescope_reshade_ipc_connected();
             *virtual_display_ipc_values->display_zoom           = display_zoom;
+            *virtual_display_ipc_values->sbs_mode_stretched     = sbs_mode_stretched;
             *virtual_display_ipc_values->display_north_offset   = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
-            memcpy(virtual_display_ipc_values->look_ahead_cfg, look_ahead_cfg, sizeof(look_ahead_cfg));
             *virtual_display_ipc_values->curved_display         = vd_config->curved_display;
             *virtual_display_ipc_values->half_fov_z_rads        = half_fov_z_rads;
             *virtual_display_ipc_values->half_fov_y_rads        = half_fov_y_rads;
+            memcpy(virtual_display_ipc_values->look_ahead_cfg, look_ahead_cfg, sizeof(look_ahead_cfg));
             memcpy(virtual_display_ipc_values->fov_half_widths, fov_half_widths, sizeof(fov_half_widths));
             memcpy(virtual_display_ipc_values->fov_widths, fov_widths, sizeof(fov_widths));
             memcpy(virtual_display_ipc_values->texcoord_x_limits, texcoord_x_limits, sizeof(texcoord_x_limits));
@@ -144,6 +153,7 @@ void set_virtual_display_ipc_values() {
             // don't set the "flush" flag here, we'll let the IMU data trigger the flush
             set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), true);
             set_gamescope_reshade_effect_uniform_variable("display_zoom", &display_zoom, 1, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->sbs_display_distance, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
@@ -215,9 +225,9 @@ const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
 const char *virtual_display_look_ahead_cfg_ipc_name = "look_ahead_cfg";
 const char *virtual_display_display_zoom_ipc_name = "display_zoom";
 const char *virtual_display_display_north_offset_ipc_name = "display_north_offset";
-const char *virtual_display_sbs_enabled_name = "sbs_enabled";
-const char *virtual_display_sbs_content_name = "sbs_content";
-const char *virtual_display_sbs_mode_stretched_name = "sbs_mode_stretched";
+const char *virtual_display_sbs_enabled_ipc_name = "sbs_enabled";
+const char *virtual_display_sbs_content_ipc_name = "sbs_content";
+const char *virtual_display_sbs_mode_stretched_ipc_name = "sbs_mode_stretched";
 const char *virtual_display_half_fov_z_rads_ipc_name = "half_fov_z_rads";
 const char *virtual_display_half_fov_y_rads_ipc_name = "half_fov_y_rads";
 const char *virtual_display_fov_half_widths_ipc_name = "fov_half_widths";
@@ -227,6 +237,7 @@ const char *virtual_display_texcoord_x_limits_r_ipc_name = "texcoord_x_limits_r"
 const char *virtual_display_lens_vector_ipc_name = "lens_vector";
 const char *virtual_display_lens_vector_r_ipc_name = "lens_vector_r";
 const char *virtual_display_curved_display_ipc_name = "curved_display";
+const char *virtual_display_implicit_layer_ipc_name = "vulkan_implicit_layer";
 
 bool virtual_display_setup_ipc_func() {
     bool debug = config()->debug_ipc;
@@ -235,9 +246,9 @@ bool virtual_display_setup_ipc_func() {
     setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
     setup_ipc_value(virtual_display_display_zoom_ipc_name, (void**) &virtual_display_ipc_values->display_zoom, sizeof(float), debug);
     setup_ipc_value(virtual_display_display_north_offset_ipc_name, (void**) &virtual_display_ipc_values->display_north_offset, sizeof(float), debug);
-    setup_ipc_value(virtual_display_sbs_enabled_name, (void**) &virtual_display_ipc_values->sbs_enabled, sizeof(bool), debug);
-    setup_ipc_value(virtual_display_sbs_content_name, (void**) &virtual_display_ipc_values->sbs_content, sizeof(bool), debug);
-    setup_ipc_value(virtual_display_sbs_mode_stretched_name, (void**) &virtual_display_ipc_values->sbs_mode_stretched, sizeof(bool), debug);
+    setup_ipc_value(virtual_display_sbs_enabled_ipc_name, (void**) &virtual_display_ipc_values->sbs_enabled, sizeof(bool), debug);
+    setup_ipc_value(virtual_display_sbs_content_ipc_name, (void**) &virtual_display_ipc_values->sbs_content, sizeof(bool), debug);
+    setup_ipc_value(virtual_display_sbs_mode_stretched_ipc_name, (void**) &virtual_display_ipc_values->sbs_mode_stretched, sizeof(bool), debug);
     setup_ipc_value(virtual_display_half_fov_z_rads_ipc_name, (void**) &virtual_display_ipc_values->half_fov_z_rads, sizeof(float), debug);
     setup_ipc_value(virtual_display_half_fov_y_rads_ipc_name, (void**) &virtual_display_ipc_values->half_fov_y_rads, sizeof(float), debug);
     setup_ipc_value(virtual_display_fov_half_widths_ipc_name, (void**) &virtual_display_ipc_values->fov_half_widths, sizeof(float) * 2, debug);
