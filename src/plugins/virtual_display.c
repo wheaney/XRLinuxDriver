@@ -85,15 +85,11 @@ void set_virtual_display_ipc_values() {
                             vd_config->passthrough_smooth_follow_enabled);
         float display_zoom = state()->sbs_mode_enabled ? vd_config->sbs_display_size : vd_config->display_zoom;
         float display_north_offset = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
-        float look_ahead_constant = vd_config->enabled ? 
-                                        (vd_config->look_ahead_override == 0 ?
-                                            device->look_ahead_constant :
-                                            vd_config->look_ahead_override) : 
-                                        0.0;
-        float look_ahead_ftm =  vd_config->enabled ? 
-                                    (vd_config->look_ahead_override == 0 ? 
-                                        device->look_ahead_frametime_multiplier : 
-                                        0.0) :
+        float look_ahead_constant = vd_config->look_ahead_override == 0 ?
+                                        device->look_ahead_constant :
+                                        vd_config->look_ahead_override;
+        float look_ahead_ftm =  vd_config->look_ahead_override == 0 ? 
+                                    device->look_ahead_frametime_multiplier : 
                                     0.0;
         float look_ahead_cfg[4] = {look_ahead_constant, look_ahead_ftm, device->look_ahead_scanline_adjust, device->look_ahead_ms_cap};
 

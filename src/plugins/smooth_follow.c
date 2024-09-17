@@ -111,11 +111,11 @@ static void update_smooth_follow_params() {
     }
     device_properties_type* device = device_checkout();
     if (device != NULL) {
-        float half_fov = device->fov * 0.9 / 2.0;
+        float half_fov = device->fov / 2.0;
         if (virtual_display_follow) {
             *sf_params = loose_follow_params;
             float display_size = state()->sbs_mode_enabled ? sf_config->sbs_display_size : sf_config->virtual_display_size;
-            float device_fov_threshold = half_fov * display_size / display_distance;
+            float device_fov_threshold = device->fov * display_size / display_distance;
 
             sf_params->lower_angle_threshold = device_fov_threshold;
             sf_params->upper_angle_threshold = device_fov_threshold * 2.0;
@@ -124,8 +124,11 @@ static void update_smooth_follow_params() {
             bool widescreen = state()->sbs_mode_enabled && is_gamescope_reshade_ipc_connected();
             float threshold = sf_params->lower_angle_threshold;
             if (sf_config->sideview_follow_threshold) threshold = sf_config->sideview_follow_threshold;
-            float display_size = sf_config->sideview_display_size * (widescreen ? 2.0 : 1.0);
-            threshold += half_fov * (display_size / display_distance - 1.0);
+            float display_size = fmax(1.0, sf_config->sideview_display_size * (widescreen ? 2.0 : 1.0));
+
+            // this calculation tends to fall short for sizes > 1.0, so increase by 25%
+            threshold += half_fov * (display_size  - 1.0) * 1.25;
+
             threshold = fmax(sf_params->lower_angle_threshold, threshold);
 
             sf_params->lower_angle_threshold = threshold;
