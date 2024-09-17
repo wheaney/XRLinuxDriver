@@ -4,6 +4,7 @@
 #include "imu.h"
 #include "ipc.h"
 #include "logging.h"
+#include "plugins/gamescope_reshade_wayland.h"
 #include "plugins/smooth_follow.h"
 #include "runtime_context.h"
 #include "state.h"
@@ -98,7 +99,8 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
 static bool smooth_follow_enabled=false;
 static imu_quat_type *snap_back_to_center = NULL;
 static bool snap_back_capture_next = false;
-void handle_config_and_state_update() {
+static bool was_sbs_mode_enabled = false;
+static void update_smooth_follow_params() {
     if (!sf_params) sf_params = calloc(1, sizeof(smooth_follow_params));
     bool virtual_display_follow = sf_config->virtual_display_enabled && sf_config->virtual_display_follow_enabled;
     bool smooth_follow = sf_config->sideview_enabled && sf_config->sideview_follow_enabled;
@@ -109,39 +111,43 @@ void handle_config_and_state_update() {
     }
     device_properties_type* device = device_checkout();
     if (device != NULL) {
+        float half_fov = device->fov * 0.9 / 2.0;
         if (virtual_display_follow) {
             *sf_params = loose_follow_params;
             float display_size = state()->sbs_mode_enabled ? sf_config->sbs_display_size : sf_config->virtual_display_size;
-            float device_fov_threshold = device->fov * 0.9 * display_size / display_distance;
+            float device_fov_threshold = half_fov * display_size / display_distance;
 
-            sf_params->lower_angle_threshold = device_fov_threshold / 2.0;
-            sf_params->upper_angle_threshold = device_fov_threshold;
+            sf_params->lower_angle_threshold = device_fov_threshold;
+            sf_params->upper_angle_threshold = device_fov_threshold * 2.0;
         } else if (smooth_follow) {
             *sf_params = sticky_params;
+            bool widescreen = state()->sbs_mode_enabled && is_gamescope_reshade_ipc_connected();
             float threshold = sf_params->lower_angle_threshold;
             if (sf_config->sideview_follow_threshold) threshold = sf_config->sideview_follow_threshold;
-            threshold += fmax(0.0, device->fov * (sf_config->sideview_display_size / display_distance - 1.0));
+            float display_size = sf_config->sideview_display_size * (widescreen ? 2.0 : 1.0);
+            threshold += half_fov * (display_size / display_distance - 1.0);
+            threshold = fmax(sf_params->lower_angle_threshold, threshold);
 
             sf_params->lower_angle_threshold = threshold;
             sf_params->upper_angle_threshold = threshold;
             sf_params->return_to_angle = threshold;
         } else if (breezy_desktop_follow) {
             *sf_params = sticky_params;
-            if (state()) {
-                display_distance = 1.0;
-                float threshold = sf_params->lower_angle_threshold;
-                if (state()->breezy_desktop_display_distance) display_distance = state()->breezy_desktop_display_distance;
-                if (state()->breezy_desktop_follow_threshold) threshold = state()->breezy_desktop_follow_threshold;
-                threshold += fmax(0.0, device->fov * (1.0 / display_distance - 1.0));
-                
-                sf_params->lower_angle_threshold = threshold;
-                sf_params->upper_angle_threshold = threshold;
-                sf_params->return_to_angle = threshold;
-            }
+            display_distance = 1.0;
+            float threshold = sf_params->lower_angle_threshold;
+            if (state()->breezy_desktop_display_distance) display_distance = state()->breezy_desktop_display_distance;
+            if (state()->breezy_desktop_follow_threshold) threshold = state()->breezy_desktop_follow_threshold;
+            threshold += half_fov * (1.0 / display_distance - 1.0);
+            threshold = fmax(sf_params->lower_angle_threshold, threshold);
+            
+            sf_params->lower_angle_threshold = threshold;
+            sf_params->upper_angle_threshold = threshold;
+            sf_params->return_to_angle = threshold;
         }
     }
     device_checkin(device);
 
+    was_sbs_mode_enabled = state()->sbs_mode_enabled;
     bool was_smooth_follow_enabled = smooth_follow_enabled;
     smooth_follow_enabled = false;
     if (is_smooth_follow_granted() && (virtual_display_follow || smooth_follow)) {
@@ -180,7 +186,7 @@ void smooth_follow_set_config_func(void* config) {
     }
 
     sf_config = temp_config;
-    handle_config_and_state_update();
+    update_smooth_follow_params();
 }
 
 follow_state_type follow_state = FOLLOW_STATE_NONE;
@@ -324,7 +330,7 @@ void smooth_follow_handle_control_flag_line_func(char* key, char* value) {
             state()->breezy_desktop_smooth_follow_enabled = !state()->breezy_desktop_smooth_follow_enabled;
         }
 
-        // these will be applied to the thresholds on the next call to handle_config_and_state_update()
+        // these will be applied to the thresholds on the next call to update_smooth_follow_params()
         if (equal(key, "breezy_desktop_follow_threshold")) {
             float_config(key, value, &state()->breezy_desktop_follow_threshold);
         }
@@ -335,7 +341,13 @@ void smooth_follow_handle_control_flag_line_func(char* key, char* value) {
         if (was_enabled != state()->breezy_desktop_smooth_follow_enabled)
             log_message("Breezy Desktop follow has been %s\n", state()->breezy_desktop_smooth_follow_enabled ? "enabled" : "disabled");
         
-        handle_config_and_state_update();
+        update_smooth_follow_params();
+    }
+}
+
+static void smooth_follow_handle_state_func() {
+    if (was_sbs_mode_enabled != state()->sbs_mode_enabled) {
+        update_smooth_follow_params();
     }
 }
 
@@ -345,6 +357,8 @@ const plugin_type smooth_follow_plugin = {
     .handle_config_line = smooth_follow_handle_config_line_func,
     .handle_control_flag_line = smooth_follow_handle_control_flag_line_func,
     .set_config = smooth_follow_set_config_func,
+    .handle_state = smooth_follow_handle_state_func,
+    .handle_ipc_change = update_smooth_follow_params,
     .modify_screen_center = smooth_follow_modify_screen_center_func,
-    .handle_device_connect = handle_config_and_state_update
+    .handle_device_connect = update_smooth_follow_params
 };
