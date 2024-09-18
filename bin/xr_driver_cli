@@ -109,7 +109,7 @@ then
         if [ -n "$2" ]; then
             config_value="$2"
         fi
-    elif [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
+    elif [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ] || [ "$1" == "--get-hardware-id" ]; then
         config_type="string"
         config_key="hardware_id"
         config_file="/dev/shm/xr_driver_state"
@@ -219,4 +219,5 @@ Options:
   -sbsdd, --sbs-display-distance [display_distance]
   --request-token [email]
   --verify-token [token]
-  --refresh-license"
+  --refresh-license
+  --get-hardware-id"
