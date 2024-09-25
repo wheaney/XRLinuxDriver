@@ -61,8 +61,6 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
 
     if (equal(key, "external_mode")) {
         temp_config->enabled = equal(value, "breezy_desktop") && is_productivity_granted();
-    } else if (equal(key, "look_ahead")) {
-        float_config(key, value, &temp_config->look_ahead_override);
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
         float_config(key, value, &temp_config->display_zoom);
     } else if (equal(key, "sbs_display_distance")) {
@@ -101,14 +99,9 @@ void do_write_config_data(int fd) {
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         enabled = !config()->disabled && bd_config->enabled ? BOOL_TRUE : BOOL_FALSE;
-        const float look_ahead_constant =   bd_config->look_ahead_override == 0 ?
-                                                device->look_ahead_constant :
-                                                bd_config->look_ahead_override;
-        const float look_ahead_frametime_multiplier =   bd_config->look_ahead_override == 0 ?
-                                                            device->look_ahead_frametime_multiplier : 0.0;
         float look_ahead_cfg[4] = {
-            look_ahead_constant,
-            look_ahead_frametime_multiplier,
+            device->look_ahead_constant,
+            device->look_ahead_frametime_multiplier,
             device->look_ahead_scanline_adjust,
             device->look_ahead_ms_cap
         };
