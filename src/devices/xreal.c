@@ -74,6 +74,10 @@ const device_properties_type xreal_air_properties = {
     .firmware_update_recommended        = false
 };
 
+static pthread_mutex_t device_driver_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t device_driver_mcu_exited_cond = PTHREAD_COND_INITIALIZER;
+static bool device_driver_mcu_exited = false;
+
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
 static bool mcu_enabled = false;
@@ -162,15 +166,28 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
 };
 
 void *poll_imu_func(void *arg) {
+    if (config()->debug_threads) log_debug("poll_imu_func, starting\n");
+
     while (connected && (!mcu_enabled || glasses_controller) && device_imu_read(glasses_imu, 1) == DEVICE_IMU_ERROR_NO_ERROR);
 
+    if (config()->debug_threads) log_debug("poll_imu_func, disconnect detected %d %d %d\n", connected, mcu_enabled, glasses_controller != NULL);
+
+    pthread_mutex_lock(&device_driver_mutex);
+    while (!device_driver_mcu_exited) pthread_cond_wait(&device_driver_mcu_exited_cond, &device_driver_mutex);
     device_imu_close(glasses_imu);
+    pthread_mutex_unlock(&device_driver_mutex);
+
     if (glasses_imu) free(glasses_imu);
     glasses_imu = NULL;
+
+    if (config()->debug_threads) log_debug("poll_imu_func, exiting\n");
 };
 
 bool sbs_mode_change_requested = false;
 void *poll_controller_func(void *arg) {
+    if (config()->debug_threads) log_debug("poll_controller_func, starting\n");
+    device_driver_mcu_exited = false;
+
     while (connected && glasses_imu && mcu_enabled && device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR) {
         if (sbs_mode_change_requested) {
             device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
@@ -184,12 +201,23 @@ void *poll_controller_func(void *arg) {
         sleep(1);
     }
 
+    if (config()->debug_threads) log_debug("poll_controller_func, disconnect detected %d %d %d\n", connected, mcu_enabled, glasses_controller != NULL);
+
+    pthread_mutex_lock(&device_driver_mutex);
     device_mcu_close(glasses_controller);
+    device_driver_mcu_exited = true;
+    pthread_cond_signal(&device_driver_mcu_exited_cond);
+    pthread_mutex_unlock(&device_driver_mutex);
+
     if (glasses_controller) free(glasses_controller);
     glasses_controller = NULL;
+
+    if (config()->debug_threads) log_debug("poll_controller_func, exiting\n");
 };
 
 void xreal_block_on_device() {
+    if (config()->debug_threads) log_debug("xreal_block_on_device, starting\n");
+
     // we'll hold onto our device refcount until we're done blocking and cleaning up
     device_properties_type* device = device_checkout();
     if (device != NULL) {
@@ -200,15 +228,21 @@ void xreal_block_on_device() {
         pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
 
         connected &= wait_for_imu_start();
+        bool imu_alive = true;
         while (connected) {
             sleep(1);
-            connected &= glasses_imu && (!mcu_enabled || glasses_controller) && is_imu_alive();
+            imu_alive = is_imu_alive();
+            connected &= glasses_imu && (!mcu_enabled || glasses_controller) && imu_alive;
         }
+
+        if (config()->debug_threads) log_debug("xreal_block_on_device, disconnect detected %d %d %d %d\n", glasses_imu != NULL, mcu_enabled, glasses_controller != NULL, imu_alive);
 
         pthread_join(imu_thread, NULL);
         pthread_join(controller_thread, NULL);
     }
     device_checkin(device);
+
+    if (config()->debug_threads) log_debug("xreal_block_on_device, exiting\n");
 };
 
 int get_display_mode_index(int display_mode, const int* display_modes) {
