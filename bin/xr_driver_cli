@@ -56,6 +56,13 @@ then
         if [ -n "$2" ]; then
             config_value="$2"
         fi
+    elif [ "$1" == "--external-mode" ] || [ "$1" == "-om" ]; then
+        config_type="string"
+        config_key="external_mode"
+    elif [ "$1" == "--disable-external" ] || [ "$1" == "-de" ]; then
+        config_type="string"
+        config_key="external_mode"
+        config_value="none"
     elif [ "$1" == "--virtual-display" ] || [ "$1" == "-vd" ]; then
         config_type="string"
         config_key="output_mode"
@@ -205,6 +212,8 @@ Options:
   -m, --use-mouse
   -ms, --mouse-sensitivity [sensitivity_value]
   -z, --display-zoom [zoom_value]
+  -om, --output-mode
+  -de, --disable-external
   -vd, --virtual-display
   -bd, --breezy-desktop
   -sv, --sideview
