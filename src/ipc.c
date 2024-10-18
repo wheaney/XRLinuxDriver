@@ -13,7 +13,7 @@
 
 const char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
-const char *display_res_ipc_name = "display_res";
+const char *display_res_ipc_name = "display_resolution";
 const char *disabled_ipc_name = "disabled";
 const char *date_ipc_name = "keepalive_date";
 const char *imu_data_ipc_name = "imu_quat_data";

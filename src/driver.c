@@ -178,7 +178,7 @@ void setup_ipc() {
         ipc_values->date[2]               = 0.0;
         ipc_values->date[3]               = 0.0;
 
-        set_gamescope_reshade_effect_uniform_variable("display_res", ipc_values->display_res, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("display_resolution", ipc_values->display_res, 2, sizeof(float), false);
         set_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), false);
     }
     device_checkin(device);
