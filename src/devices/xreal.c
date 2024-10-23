@@ -3,6 +3,7 @@
 #include "device_mcu.h"
 #include "driver.h"
 #include "imu.h"
+#include "logging.h"
 #include "outputs.h"
 #include "runtime_context.h"
 #include "strings.h"
