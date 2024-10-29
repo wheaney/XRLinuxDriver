@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+if [ -x "$(command -v udevadm)" ]; then
+    udevadm control --reload-rules
+    udevadm trigger
+fi
+
+USER=$(who | grep -F '(:0)' | head -n1 | cut -d' ' -f1)
+if [ -n USER ] && [ -x "$(command -v systemctl)" ]; then
+    XDG_RUNTIME_DIR=/run/user/$(id -u $USER)
+    echo "Setting up the systemd service for $USER $XDG_RUNTIME_DIR"
+    OUTPUT=$(su -l --shell /bin/sh -c "export XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR; systemctl --user daemon-reload && systemctl --user restart xr-driver" $USER 2>&1)
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "Command failed with exit code $EXIT_CODE. Output was:"
+        echo "$OUTPUT"
+    fi
+else
+    echo "Unable to detect user, skipping systemd service restart"
+fi
+
+exit 0
