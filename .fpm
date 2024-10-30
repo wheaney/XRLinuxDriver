@@ -1,0 +1,16 @@
+--name xr-driver 
+--description "Linux service for interacting with XR devices"
+--iteration 1
+--url https://github.com/wheaney/XRLinuxDriver
+--maintainer "Wayne Heaney <wayne at xronlinux dot com>"
+--license mit 
+-s dir 
+-f
+--before-install ./fpm/preinstall
+--after-install ./fpm/postinstall
+--after-upgrade ./fpm/postupgrade
+--before-remove ./fpm/preuninstall
+--chdir build/xr_driver
+bin/xrDriver=/usr/bin/xrDriver
+bin/xr_driver_cli=/usr/bin/xr_driver_cli
+systemd/xr-driver.service=/usr/lib/systemd/user/xr-driver.service

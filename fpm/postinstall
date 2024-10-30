@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+if ! lsmod | grep -q uinput; then
+    echo "Setting up uinput kernel module"
+    modprobe uinput
+fi
+
+if [ -x "$(command -v udevadm)" ]; then
+    udevadm control --reload-rules
+    udevadm trigger
+fi
+
+# Try multiple methods to detect the real user
+SUDO_USER="${SUDO_USER:-}"
+DBUS_USER="${DBUS_SESSION_BUS_ADDRESS%%,*}"
+DBUS_USER="${DBUS_USER#unix:user=}"
+X11_USER=$(who | grep -F '(:0)' | head -n1 | cut -d' ' -f1)
+
+# Try each method in order of preference
+REAL_USER="${SUDO_USER:-${X11_USER:-$DBUS_USER}}"
+
+if [ -n "$REAL_USER" ] && [ -x "$(command -v systemctl)" ]; then
+    REAL_UID=$(id -u "$REAL_USER")
+    XDG_RUNTIME_DIR="/run/user/$REAL_UID"
+    echo "Setting up the systemd service for $REAL_USER ($XDG_RUNTIME_DIR)"
+    OUTPUT=$(su -l --shell /bin/sh -c "export XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR; systemctl --user daemon-reload && systemctl --user start xr-driver" "$REAL_USER" 2>&1)
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "Command failed with exit code $EXIT_CODE. Output was:"
+        echo "$OUTPUT"
+        exit $EXIT_CODE
+    fi
+else
+    echo "Unable to detect user, skipping systemd service restart"
+    echo "Debug info: SUDO_USER=$SUDO_USER, X11_USER=$X11_USER, DBUS_USER=$DBUS_USER"
+fi
+
+exit 0

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# exit when any command fails
+set -e
+
+USER=${SUDO_USER:-$USER}
+GROUP=$(id -gn $USER)
+
+source bin/inject_ua
+
+if [ -z "$UA_API_SECRET" ] && [ -z "$UA_API_SECRET_INTENTIONALLY_EMPTY" ]; then
+  echo "UA_API_SECRET isn't set. If this is intentional, set UA_API_SECRET_INTENTIONALLY_EMPTY to a non-empty value."
+  exit 1
+fi
+
+ARCH=$(uname -m)
+echo "Building for $ARCH"
+
+# build the driver
+BUILD_PATH=build
+if [ ! -d "$BUILD_PATH" ]; then
+  mkdir $BUILD_PATH
+fi
+
+pushd $BUILD_PATH
+cmake ..
+make
+
+# create package
+PACKAGE_DIR=xr_driver
+PACKAGE_BIN_DIR=$PACKAGE_DIR/bin
+mkdir -p $PACKAGE_BIN_DIR
+
+# copy bin files
+mv xrDriver $PACKAGE_BIN_DIR
+cp ../bin/xr_driver_cli $PACKAGE_BIN_DIR
+
+# copy the systemd files needed to run our service
+cp -r ../systemd $PACKAGE_DIR
+sed -i -e '/ExecStart/c\ExecStart=xrDriver' \
+    -e '/WantedBy/c\WantedBy=default.target' \
+    -e '/Environment/d' \
+    $PACKAGE_DIR/systemd/xr-driver.service
+cp -r ../udev $PACKAGE_DIR
+
+# copy the shared library files
+if [ ! -d "$PACKAGE_DIR/lib" ]; then
+  mkdir $PACKAGE_DIR/lib
+fi
+cp ../lib/$ARCH/*.so $PACKAGE_DIR/lib || true
+
+popd
+
+exit 0
