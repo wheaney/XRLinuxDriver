@@ -6,6 +6,7 @@
 -f
 --after-install ./fpm/postinstall
 --after-upgrade ./fpm/postupgrade
+--before-remove ./fpm/preuninstall
 --chdir build/xr_driver
 bin/xrDriver=/usr/bin/xrDriver
 bin/xr_driver_cli=/usr/bin/xr_driver_cli

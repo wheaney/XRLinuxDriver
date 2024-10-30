@@ -27,7 +27,7 @@ if [[ "$1" == "x86_64" || -z "$1" ]]; then
 
     lib_args=$(libs_to_fpm_args "build/xr_driver/lib")
     udev_args=$(udev_files_to_fpm_args "build/xr_driver/udev")
-    fpm --architecture x86_64 --version 1.1.0 --iteration 1 \
+    fpm --architecture x86_64 --version 1.1.0 --iteration 3 \
         -t deb \
         --no-auto-depends \
         --depends libssl3 \
@@ -40,7 +40,7 @@ if [[ "$1" == "x86_64" || -z "$1" ]]; then
         $lib_args $udev_args
 
     # this fails without my fix in https://github.com/jordansissel/fpm/pull/2082
-    fpm --architecture x86_64 --version 1.1.0 --iteration 1 \
+    fpm --architecture x86_64 --version 1.1.0 --iteration 3 \
         -t rpm \
         --no-auto-depends \
         --depends openssl-libs \
@@ -59,7 +59,7 @@ if [[ "$1" == "aarch64" || -z "$1"  ]]; then
 
     lib_args=$(libs_to_fpm_args "build/xr_driver/lib")
     udev_args=$(udev_files_to_fpm_args "build/xr_driver/udev")
-    fpm --architecture aarch64 --version 1.1.0 --iteration 1 \
+    fpm --architecture aarch64 --version 1.1.0 --iteration 3 \
         -t deb \
         --no-auto-depends \
         --depends libssl3 \
@@ -72,7 +72,7 @@ if [[ "$1" == "aarch64" || -z "$1"  ]]; then
         $lib_args $udev_args
 
     # this fails without my fix in https://github.com/jordansissel/fpm/pull/2082
-    fpm --architecture aarch64 --version 1.1.0 --iteration 1 \
+    fpm --architecture aarch64 --version 1.1.0 --iteration 3 \
         -t rpm \
         --no-auto-depends \
         --depends openssl-libs \
