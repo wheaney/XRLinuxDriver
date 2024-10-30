@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Try multiple methods to detect the real user
+SUDO_USER="${SUDO_USER:-}"
+DBUS_USER="${DBUS_SESSION_BUS_ADDRESS%%,*}"
+DBUS_USER="${DBUS_USER#unix:user=}"
+X11_USER=$(who | grep -F '(:0)' | head -n1 | cut -d' ' -f1)
+
+# Try each method in order of preference
+REAL_USER="${SUDO_USER:-${X11_USER:-$DBUS_USER}}"
+
+if [ -n "$REAL_USER" ]; then
+    REAL_UID=$(id -u "$REAL_USER")
+    USER_HOME=$(getent passwd $REAL_USER | cut -d: -f6)
+
+    if [ -f "$USER_HOME/.local/bin/breezy_gnome_uninstall" ]; then
+        echo "Uninstalling old Breezy GNOME setup"
+        $USER_HOME/.local/bin/breezy_gnome_uninstall
+    fi
+    
+    if [ -f "$USER_HOME/.local/bin/breezy_vulkan_uninstall" ]; then
+        echo "Uninstalling old Breezy Vulkan setup"
+        $USER_HOME/.local/bin/breezy_vulkan_uninstall
+    fi
+    
+    if [ -f "$USER_HOME/.local/bin/xr_driver_uninstall" ]; then
+        echo "Uninstalling old XR Driver setup"
+        $USER_HOME/.local/bin/xr_driver_uninstall
+    fi
+else
+    echo "Unable to detect user, skipping xr_driver_uninstall check"
+    echo "Debug info: SUDO_USER=$SUDO_USER, X11_USER=$X11_USER, DBUS_USER=$DBUS_USER"
+fi
+
+exit 0

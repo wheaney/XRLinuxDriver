@@ -20,6 +20,9 @@ function udev_files_to_fpm_args {
     echo $fpm_args
 }
 
+# parse the version from the CMakeLists.txt file
+version=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+
 # Run containers for each architecture
 if [[ "$1" == "x86_64" || -z "$1" ]]; then
     sudo rm -rf build/
@@ -27,7 +30,7 @@ if [[ "$1" == "x86_64" || -z "$1" ]]; then
 
     lib_args=$(libs_to_fpm_args "build/xr_driver/lib")
     udev_args=$(udev_files_to_fpm_args "build/xr_driver/udev")
-    fpm --architecture x86_64 --version 1.1.0 --iteration 3 \
+    fpm --architecture x86_64 --version $version \
         -t deb \
         --no-auto-depends \
         --depends libssl3 \
@@ -40,7 +43,7 @@ if [[ "$1" == "x86_64" || -z "$1" ]]; then
         $lib_args $udev_args
 
     # this fails without my fix in https://github.com/jordansissel/fpm/pull/2082
-    fpm --architecture x86_64 --version 1.1.0 --iteration 3 \
+    fpm --architecture x86_64 --version $version \
         -t rpm \
         --no-auto-depends \
         --depends openssl-libs \
@@ -59,7 +62,7 @@ if [[ "$1" == "aarch64" || -z "$1"  ]]; then
 
     lib_args=$(libs_to_fpm_args "build/xr_driver/lib")
     udev_args=$(udev_files_to_fpm_args "build/xr_driver/udev")
-    fpm --architecture aarch64 --version 1.1.0 --iteration 3 \
+    fpm --architecture aarch64 --version $version \
         -t deb \
         --no-auto-depends \
         --depends libssl3 \
@@ -72,7 +75,7 @@ if [[ "$1" == "aarch64" || -z "$1"  ]]; then
         $lib_args $udev_args
 
     # this fails without my fix in https://github.com/jordansissel/fpm/pull/2082
-    fpm --architecture aarch64 --version 1.1.0 --iteration 3 \
+    fpm --architecture aarch64 --version $version \
         -t rpm \
         --no-auto-depends \
         --depends openssl-libs \
