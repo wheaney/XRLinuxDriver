@@ -20,7 +20,8 @@ RUN apt-get update && apt-get install -y \
     libjson-c-dev \
     python3 \
     python3-yaml \
-    libwayland-dev
+    libwayland-dev \
+    libgsl-dev
 
 WORKDIR /source
 

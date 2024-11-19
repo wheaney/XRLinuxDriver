@@ -6,20 +6,19 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-enum calibration_state_t {
-    NOT_CALIBRATED,
-    CALIBRATED,
-    CALIBRATING,
-    WAITING_ON_USER
-};
-typedef enum calibration_state_t calibration_state_type;
-
 struct driver_state_t {
     uint32_t heartbeat;
     char* connected_device_brand;
     char* connected_device_model;
-    calibration_setup_type calibration_setup;
-    calibration_state_type calibration_state;
+
+    bool magnet_supported;
+    magnet_calibration_type magnet_calibration_type;
+    bool using_magnet;
+    bool magnet_stale;
+    bool magnet_calibrating;
+    bool gyro_calibrating;
+    bool accel_calibrating;
+
     bool sbs_mode_supported;
     bool sbs_mode_enabled;
     bool breezy_desktop_smooth_follow_enabled;
@@ -47,6 +46,8 @@ typedef enum sbs_control_t sbs_control_type;
 struct control_flags_t {
     bool recenter_screen;
     bool recalibrate;
+    bool calibrate_magnet;
+    bool disable_magnet;
     bool force_quit;
     sbs_control_type sbs_mode;
 };

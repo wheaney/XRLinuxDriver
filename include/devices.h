@@ -5,11 +5,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum calibration_setup_t {
-    CALIBRATION_SETUP_AUTOMATIC,
-    CALIBRATION_SETUP_INTERACTIVE
+enum magnet_calibration_t {
+    MAGNET_CALIBRATION_UNSUPPORTED = 0,
+    MAGNET_CALIBRATION_NONE = 1,
+    MAGNET_CALIBRATION_FIGURE_EIGHT = 2
 };
-typedef enum calibration_setup_t calibration_setup_type;
+typedef enum magnet_calibration_t magnet_calibration_type;
 
 struct device_properties_t {
     char* brand;
@@ -21,7 +22,9 @@ struct device_properties_t {
     uint8_t usb_bus;
     uint8_t usb_address;
 
-    calibration_setup_type calibration_setup;
+    bool magnet_supported;
+    magnet_calibration_type magnet_calibration_type;
+    bool magnet_stale;
 
     // resolution width and height
     int resolution_w;
@@ -33,7 +36,9 @@ struct device_properties_t {
     // ratio representing (from the center of the axes of rotation): lens distance / perceived display distance
     float lens_distance_ratio;
 
-    int calibration_wait_s;
+    int gyro_calibration_wait_s;
+    int accel_calibration_wait_s;
+    int magnet_calibration_wait_s;
 
     int imu_cycles_per_s;
 
@@ -72,6 +77,12 @@ typedef bool (*device_is_sbs_mode_func)();
 // set SBS mode on device, return true on success
 typedef bool (*device_set_sbs_mode_func)(bool enabled);
 
+// kick off different calibration processes
+typedef void (*device_calibrate_magnet_func)();
+typedef void (*device_disable_magnet_func)();
+typedef void (*device_calibrate_gyro_func)();
+typedef void (*device_calibrate_accel_func)();
+
 // whether the driver is currently holding open a connection to the device
 typedef bool (*is_connected_func)();
 
@@ -85,6 +96,10 @@ struct device_driver_t {
     block_on_device_func block_on_device_func;
     device_is_sbs_mode_func device_is_sbs_mode_func;
     device_set_sbs_mode_func device_set_sbs_mode_func;
+    device_calibrate_magnet_func device_calibrate_magnet_func;
+    device_disable_magnet_func device_disable_magnet_func;
+    device_calibrate_gyro_func device_calibrate_gyro_func;
+    device_calibrate_accel_func device_calibrate_accel_func;
     is_connected_func is_connected_func;
     disconnect_func disconnect_func;
 };

@@ -14,15 +14,10 @@
 #include <sys/inotify.h>
 #include <sys/time.h>
 
-const char *calibration_setup_strings[2] = {
-    "AUTOMATIC",
-    "INTERACTIVE"
-};
-const char *calibration_state_strings[4] = {
-    "NOT_CALIBRATED",
-    "CALIBRATED",
-    "CALIBRATING",
-    "WAITING_ON_USER"
+const char *magnet_calibration_type_strings[3] = {
+    "UNSUPPORTED",
+    "NONE",
+    "FIGURE_EIGHT"
 };
 
 const char* state_files_directory = "/dev/shm";
@@ -48,8 +43,8 @@ void write_state(driver_state_type *state) {
     if (state->connected_device_model && state->connected_device_brand) {
         fprintf(fp, "connected_device_brand=%s\n", state->connected_device_brand);
         fprintf(fp, "connected_device_model=%s\n", state->connected_device_model);
-        fprintf(fp, "calibration_setup=%s\n", calibration_setup_strings[state->calibration_setup]);
-        fprintf(fp, "calibration_state=%s\n", calibration_state_strings[state->calibration_state]);
+        fprintf(fp, "gyro_calibrating=%s\n", state->gyro_calibrating ? "true" : "false");
+        fprintf(fp, "accel_calibrating=%s\n", state->accel_calibrating ? "true" : "false");
         fprintf(fp, "sbs_mode_supported=%s\n", state->sbs_mode_supported ? "true" : "false");
         fprintf(fp, "sbs_mode_enabled=%s\n", state->sbs_mode_enabled ? "true" : "false");
         if (state->breezy_desktop_smooth_follow_enabled)
@@ -57,6 +52,13 @@ void write_state(driver_state_type *state) {
         if (state->is_gamescope_reshade_ipc_connected)
             fprintf(fp, "is_gamescope_reshade_ipc_connected=true\n");
         fprintf(fp, "firmware_update_recommended=%s\n", state->firmware_update_recommended ? "true" : "false");
+        if (state->magnet_supported) {
+            fprintf(fp, "magnet_supported=true\n");
+            fprintf(fp, "magnet_calibrating=%s\n", state->magnet_calibrating ? "true" : "false");
+            fprintf(fp, "magnet_calibration_type=%s\n", magnet_calibration_type_strings[state->magnet_calibration_type]);
+            fprintf(fp, "using_magnet=%s\n", state->using_magnet ? "true" : "false");
+            fprintf(fp, "magnet_stale=%s\n", state->magnet_stale ? "true" : "false");
+        }
     }
 
     fclose(fp);
@@ -78,6 +80,10 @@ void read_control_flags(FILE *fp, control_flags_type *flags) {
                 flags->recenter_screen = strcmp(value, "true") == 0;
             } else if (strcmp(key, "recalibrate") == 0) {
                 flags->recalibrate = strcmp(value, "true") == 0;
+            } else if (strcmp(key, "calibrate_magnet") == 0) {
+                flags->calibrate_magnet = strcmp(value, "true") == 0;
+            } else if (strcmp(key, "disable_magnet") == 0) {
+                flags->disable_magnet = strcmp(value, "true") == 0;
             } else if (strcmp(key, "sbs_mode") == 0) {
                 if (strcmp(value, "unset") == 0) {
                     flags->sbs_mode = SBS_CONTROL_UNSET;
@@ -103,7 +109,7 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
     struct timeval tv;
     gettimeofday(&tv, NULL);
     state->heartbeat = tv.tv_sec;
-    state->calibration_setup = CALIBRATION_SETUP_AUTOMATIC;
+    state->magnet_supported = false;
     state->sbs_mode_supported = false;
     state->sbs_mode_enabled = false;
     state->firmware_update_recommended = false;
@@ -125,7 +131,9 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
             free_and_clear(&state->connected_device_model);
             state->connected_device_model = strdup(device->model);
         }
-        state->calibration_setup = device->calibration_setup;
+        state->magnet_supported = device->magnet_supported;
+        state->magnet_calibration_type = device->magnet_calibration_type;
+        state->magnet_stale = device->magnet_stale;
         state->sbs_mode_supported = device->sbs_mode_supported;
     }
 

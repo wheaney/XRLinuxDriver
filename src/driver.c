@@ -45,12 +45,10 @@
 device_driver_type *device_driver;
 ipc_values_type *ipc_values;
 
-bool glasses_calibrated=false;
-long int glasses_calibration_started_sec=0;
+long int glasses_calibration_completed_sec=0;
 bool force_quit=false;
 control_flags_type *control_flags;
 
-bool captured_screen_center=false;
 imu_quat_type screen_center;
 imu_quat_type screen_center_conjugate;
 
@@ -58,62 +56,113 @@ static bool is_driver_connected() {
     return device_driver != NULL && device_driver->is_connected_func();
 }
 
-void reset_calibration(bool reset_device) {
-    glasses_calibration_started_sec=0;
-    glasses_calibrated=false;
-    captured_screen_center=false;
-    control_flags->recalibrate=false;
-    state()->calibration_state = CALIBRATING;
+void reset_calibration(bool gyro, bool accel, bool magnet) {
+    device_properties_type* device = device_checkout();
+    if (device != NULL) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        time_t now = tv.tv_sec;
 
-    if (reset_device && is_driver_connected()) {
-        if (config()->debug_device) log_debug("reset_calibration, device_driver->disconnect_func(true)\n");
-        device_driver->disconnect_func(true);
-    } else log_message("Waiting on device calibration\n");
+        control_flags->recalibrate=false;
+        control_flags->calibrate_magnet=false;
+
+        bool calibrating_any = false;
+        if (gyro) {
+            state()->gyro_calibrating=true;
+            if (device_driver && device_driver->device_calibrate_gyro_func) {
+                pthread_t calibrate_gyro_thread;
+                pthread_create(&calibrate_gyro_thread, NULL, device_driver->device_calibrate_gyro_func, NULL);
+                pthread_detach(calibrate_gyro_thread);
+            }
+                
+            if (device->gyro_calibration_wait_s > 0) {
+                time_t next_completion = now + device->gyro_calibration_wait_s;
+                if (next_completion > glasses_calibration_completed_sec)
+                    glasses_calibration_completed_sec = next_completion;
+            }
+            calibrating_any = true;
+        }
+
+        if (accel) {
+            state()->accel_calibrating=true;
+            if (device_driver && device_driver->device_calibrate_accel_func) {
+                pthread_t calibrate_accel_thread;
+                pthread_create(&calibrate_accel_thread, NULL, device_driver->device_calibrate_accel_func, NULL);
+                pthread_detach(calibrate_accel_thread);
+            }
+
+            if (device->accel_calibration_wait_s > 0) {
+                time_t next_completion = now + device->accel_calibration_wait_s;
+                if (next_completion > glasses_calibration_completed_sec)
+                    glasses_calibration_completed_sec = next_completion;
+            }
+                
+            calibrating_any = true;
+        }
+
+        if (magnet && device->magnet_supported) {
+            state()->magnet_calibrating=true;
+            if (device_driver && device_driver->device_calibrate_magnet_func) {
+                pthread_t calibrate_magnet_thread;
+                pthread_create(&calibrate_magnet_thread, NULL, device_driver->device_calibrate_magnet_func, NULL);
+                pthread_detach(calibrate_magnet_thread);
+            }
+
+            if (device->magnet_calibration_wait_s > 0) {
+                time_t next_completion = now + device->magnet_calibration_wait_s;
+                if (next_completion > glasses_calibration_completed_sec)
+                    glasses_calibration_completed_sec = next_completion;
+            }
+            calibrating_any = true;
+        }
+
+        if (calibrating_any) {
+            if (ipc_values) reset_imu_data(ipc_values);
+
+            if (glasses_calibration_completed_sec > now) log_message("Waiting on device calibration\n");
+        }
+    }
+    device_checkin(device);
+}
+
+static void capture_screen_center(imu_quat_type quat) {
+    screen_center = quat;
+    screen_center_conjugate = conjugate(screen_center);
 }
 
 void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
     static int multi_tap = 0;
+    static bool was_calibrating = false;
 
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
         if (config()->debug_device && imu_counter == 0)
             log_debug("driver_handle_imu_event - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
-            
+        
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        bool glasses_calibrated = tv.tv_sec > glasses_calibration_completed_sec;
         if (glasses_calibrated) {
-            if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
+            if (was_calibrating) {
+                state()->gyro_calibrating=false;
+                state()->accel_calibrating=false;
+                state()->magnet_calibrating=false;
+                log_message("Device calibration complete\n");
+            }
+
+            if (was_calibrating || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
                 if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected.\n");
                 log_message("Centering screen\n");
 
-                screen_center = quat;
-                screen_center_conjugate = conjugate(screen_center);
-                captured_screen_center=true;
+                capture_screen_center(quat);
                 control_flags->recenter_screen=false;
             } else {
-                screen_center = plugins.modify_screen_center(timestamp_ms, quat, screen_center);
-                screen_center_conjugate = conjugate(screen_center);
+                capture_screen_center(plugins.modify_screen_center(timestamp_ms, quat, screen_center));
             }
-        } else {
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-
-            if (glasses_calibration_started_sec == 0) {
-                // defaults used for mouse/joystick while waiting on calibration
-                imu_quat_type tmp_screen_center = { .w = 1.0, .x = 0.0, .y = 0.0, .z = 0.0 };
-                screen_center = tmp_screen_center;
-                screen_center_conjugate = conjugate(screen_center);
-
-                glasses_calibration_started_sec=tv.tv_sec;
-                if (ipc_values) reset_imu_data(ipc_values);
-            } else {
-                glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
-                if (glasses_calibrated) {
-                    state()->calibration_state = CALIBRATED;
-                    log_message("Device calibration complete\n");
-                }
-            }
-        }
+        } else if (!was_calibrating) capture_screen_center(quat);
+        was_calibrating = !glasses_calibrated;
 
         // be resilient to bad values that may come from device drivers
         if (!isnan(quat.w)) {
@@ -128,7 +177,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
                 if (multi_tap == MT_RESET_CALIBRATION) log_message("Triple-tap detected. ");
                 log_message("Kicking off calibration\n");
-                reset_calibration(true);
+                reset_calibration(true, true, false);
             }
 
             handle_imu_update(timestamp_ms, quat, euler_velocities, glasses_calibrated, ipc_values);
@@ -227,7 +276,7 @@ void *block_on_device_thread_func(void *arg) {
                 log_message("Device connected, redirecting input to %s...\n", config()->output_mode);
 
                 setup_ipc();
-                reset_calibration(false);
+                reset_calibration(true, true, false);
                 *ipc_values->disabled = false;
                 plugins.handle_device_connect();
                 init_outputs();
@@ -404,8 +453,7 @@ void *manage_state_thread_func(void *arg) {
     // in case any state changed during the last sleep()
     write_state(state());
 
-    if (config()->debug_threads)
-        log_debug("Exiting write_state thread; force_quit: %d\n", force_quit);
+    if (config()->debug_threads) log_debug("Exiting write_state thread; force_quit: %d\n", force_quit);
 }
 
 void handle_control_flags_update() {
@@ -424,6 +472,15 @@ void handle_control_flags_update() {
                 log_error("Error setting requested SBS mode\n");
             }
         }
+
+        if (control_flags->calibrate_magnet)
+            reset_calibration(false, false, true);
+
+        if (control_flags->disable_magnet && device_driver->device_disable_magnet_func) {
+            device_driver->device_disable_magnet_func();
+            state()->using_magnet = false;
+        }
+
         if (control_flags->force_quit) {
             log_message("Force quit requested, exiting\n");
             force_quit = true;
@@ -517,7 +574,6 @@ void handle_device_update(connected_device_type* usb_device) {
         if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
         *device_driver = *usb_device->driver;
         connected_device = usb_device->device;
-        state()->calibration_state = NOT_CALIBRATED;
         set_device_and_checkout(connected_device);
         init_multi_tap(connected_device->imu_cycles_per_s);
 

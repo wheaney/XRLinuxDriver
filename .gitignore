@@ -11,3 +11,5 @@ xrDriver
 
 /include/custom_banner_config.h
 /custom_banner_config.yml
+lib/x86_64/libgsl.so*
+lib/x86_64/libgslcblas.so*

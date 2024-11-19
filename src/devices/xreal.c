@@ -2,6 +2,7 @@
 #include "device_imu.h"
 #include "device_mcu.h"
 #include "driver.h"
+#include "files.h"
 #include "imu.h"
 #include "logging.h"
 #include "outputs.h"
@@ -59,12 +60,15 @@ const device_properties_type xreal_air_properties = {
     .model                              = NULL,
     .hid_vendor_id                      = 0,
     .hid_product_id                     = 0,
-    .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
+    .magnet_supported                   = true,
+    .magnet_calibration_type            = MAGNET_CALIBRATION_FIGURE_EIGHT,
     .resolution_w                       = 1920,
     .resolution_h                       = 1080,
     .fov                                = 46.0,
     .lens_distance_ratio                = 0.025,
-    .calibration_wait_s                 = 15,
+    .gyro_calibration_wait_s            = 20,
+    .accel_calibration_wait_s           = 20,
+    .magnet_calibration_wait_s          = 10,
     .imu_cycles_per_s                   = FORCED_CYCLES_PER_S,
     .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / FORCED_CYCLE_TIME_MS),
     .look_ahead_constant                = 10.0,
@@ -117,7 +121,6 @@ bool xreal_device_connect() {
     connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
     if (connected) {
         device_imu_clear(glasses_imu);
-        device_imu_calibrate(glasses_imu, 1000, true, true, false);
 
         glasses_controller = calloc(1, sizeof(device_mcu_type));
         mcu_enabled = device_mcu_open(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
@@ -166,22 +169,39 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
     return NULL;
 };
 
+static const char* calibration_file_prefix = "xreal_calibration_v";
+static char* calibration_file_path(device_properties_type* device) {
+    int calibration_filename_length = strlen(calibration_file_prefix) + 3; // version padded to 3 digits
+    
+    char* calibration_file_path = malloc(calibration_filename_length + 1);
+    snprintf(calibration_file_path, calibration_filename_length, "%s%03d", calibration_file_prefix, XREAL_IMU_CALIBRATION_VERSION);
+    char* path = get_state_file_path(calibration_file_path);
+
+    free(calibration_file_path);
+    return path;
+}
+
 void *poll_imu_func(void *arg) {
-    if (config()->debug_threads) log_debug("poll_imu_func, starting\n");
+    device_properties_type* device = device_checkout();
+    if (device != NULL) {
+        if (config()->debug_threads) log_debug("poll_imu_func, starting\n");
 
-    while (connected && (!mcu_enabled || glasses_controller) && device_imu_read(glasses_imu, 1) == DEVICE_IMU_ERROR_NO_ERROR);
+        while (connected && (!mcu_enabled || glasses_controller) && device_imu_read(glasses_imu, 1) == DEVICE_IMU_ERROR_NO_ERROR);
+        device_imu_save_calibration(glasses_imu, calibration_file_path(device));
 
-    if (config()->debug_threads) log_debug("poll_imu_func, disconnect detected %d %d %d\n", connected, mcu_enabled, glasses_controller != NULL);
+        if (config()->debug_threads) log_debug("poll_imu_func, disconnect detected %d %d %d\n", connected, mcu_enabled, glasses_controller != NULL);
 
-    pthread_mutex_lock(&device_driver_mutex);
-    while (!device_driver_mcu_exited) pthread_cond_wait(&device_driver_mcu_exited_cond, &device_driver_mutex);
-    device_imu_close(glasses_imu);
-    pthread_mutex_unlock(&device_driver_mutex);
+        pthread_mutex_lock(&device_driver_mutex);
+        while (!device_driver_mcu_exited) pthread_cond_wait(&device_driver_mcu_exited_cond, &device_driver_mutex);
+        device_imu_close(glasses_imu);
+        pthread_mutex_unlock(&device_driver_mutex);
 
-    if (glasses_imu) free(glasses_imu);
-    glasses_imu = NULL;
+        if (glasses_imu) free(glasses_imu);
+        glasses_imu = NULL;
 
-    if (config()->debug_threads) log_debug("poll_imu_func, exiting\n");
+        if (config()->debug_threads) log_debug("poll_imu_func, exiting\n");
+    }
+    device_checkin(device);
 };
 
 bool sbs_mode_change_requested = false;
@@ -229,6 +249,14 @@ void xreal_block_on_device() {
         pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
 
         connected &= wait_for_imu_start();
+        if (connected && 
+            device_imu_load_calibration(glasses_imu, calibration_file_path(device)) == DEVICE_IMU_ERROR_NO_ERROR) {
+            if (config()->debug_device) log_debug("xreal_block_on_device, loaded calibration\n");
+
+            // if the saved calibration included magnetometer data, it may need to be recalibrated
+            device->magnet_stale = state()->using_magnet = device_imu_using_magnet(glasses_imu);
+        } else if (config()->debug_device) log_debug("xreal_block_on_device, no calibration loaded\n");
+
         bool imu_alive = true;
         while (connected) {
             sleep(1);
@@ -292,6 +320,24 @@ bool xreal_device_set_sbs_mode(bool enable) {
     return true;
 };
 
+void xreal_calibrate_magnet() {
+    if (connected && glasses_imu) {
+        device_properties_type* device = device_checkout();
+        if (config()->debug_device) log_debug("xreal_calibrate_magnet\n");
+        device_imu_calibrate(glasses_imu, device->magnet_calibration_wait_s * 1000, false, false, true);
+        state()->using_magnet = true;
+        if (config()->debug_device) log_debug("xreal_calibrate_magnet, complete\n");
+        device_checkin(device);
+    }
+}
+
+void xreal_disable_magnet() {
+    if (connected && glasses_imu) {
+        if (config()->debug_device) log_debug("xreal_disable_magnet\n");
+        device_imu_reset_calibration(glasses_imu, false, false, true);
+    }
+}
+
 bool xreal_is_connected() {
     return connected;
 };
@@ -306,6 +352,8 @@ const device_driver_type xreal_driver = {
     .block_on_device_func               = xreal_block_on_device,
     .device_is_sbs_mode_func            = xreal_device_is_sbs_mode,
     .device_set_sbs_mode_func           = xreal_device_set_sbs_mode,
+    .device_calibrate_magnet_func       = xreal_calibrate_magnet,
+    .device_disable_magnet_func         = xreal_disable_magnet,
     .is_connected_func                  = xreal_is_connected,
     .disconnect_func                    = xreal_disconnect
 };
