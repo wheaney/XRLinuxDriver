@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(xrDriver VERSION 1.1.0 LANGUAGES C)
 
+option(XRLINUXDRIVER_ALLOW_SUBMODULES "Allow CMake to automagically download submodules" ON)
+
 configure_file(include/version.h.in version.h)
 include_directories(${PROJECT_BINARY_DIR})
 
@@ -40,8 +42,11 @@ pkg_check_modules(JSONC REQUIRED json-c)
 pkg_check_modules(CURL REQUIRED libcurl)
 pkg_check_modules(LIBWAYLAND_CLIENT REQUIRED wayland-client)
 
-execute_process(COMMAND git submodule update --init --recursive
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+if (XRLINUXDRIVER_ALLOW_SUBMODULES)
+    execute_process(COMMAND git submodule update --init --recursive
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
 
 # Set the library directory based on architecture
