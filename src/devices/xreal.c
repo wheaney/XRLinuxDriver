@@ -169,39 +169,53 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
     return NULL;
 };
 
-static const char* calibration_file_prefix = "xreal_calibration_v";
-static char* calibration_file_path(device_properties_type* device) {
-    int calibration_filename_length = strlen(calibration_file_prefix) + 3; // version padded to 3 digits
-    
-    char* calibration_file_path = malloc(calibration_filename_length + 1);
-    snprintf(calibration_file_path, calibration_filename_length, "%s%03d", calibration_file_prefix, XREAL_IMU_CALIBRATION_VERSION);
-    char* path = get_state_file_path(calibration_file_path);
+static const char* calibration_file_prefix = "xreal_calibration_";
+static const char* calibration_file_version_prefix = "_v";
+static void calibration_file_path(device_imu_type* device, char** path) {
+    if (device->serial_number == NULL) {
+        *path = NULL;
+        return;
+    }
 
-    free(calibration_file_path);
-    return path;
+    char* sanitized_serial = sanitize_filename(device->serial_number);
+    int calibration_filename_length = 
+        strlen(calibration_file_prefix) + 
+        strlen(sanitized_serial) +
+        strlen(calibration_file_version_prefix) + 
+        3; // version padded to 3 digits
+    
+    char* file_name = malloc(calibration_filename_length + 1);
+    snprintf(file_name, calibration_filename_length + 1, "%s%s%s%03d", 
+        calibration_file_prefix, sanitized_serial, calibration_file_version_prefix, XREAL_IMU_CALIBRATION_VERSION);
+    *path = get_state_file_path(file_name);
+
+    free(file_name);
+    free(sanitized_serial);
 }
 
 void *poll_imu_func(void *arg) {
-    device_properties_type* device = device_checkout();
-    if (device != NULL) {
-        if (config()->debug_threads) log_debug("poll_imu_func, starting\n");
+    if (config()->debug_threads) log_debug("poll_imu_func, starting\n");
 
-        while (connected && (!mcu_enabled || glasses_controller) && device_imu_read(glasses_imu, 1) == DEVICE_IMU_ERROR_NO_ERROR);
-        device_imu_save_calibration(glasses_imu, calibration_file_path(device));
+    while (connected && (!mcu_enabled || glasses_controller) && device_imu_read(glasses_imu, 1) == DEVICE_IMU_ERROR_NO_ERROR);
 
-        if (config()->debug_threads) log_debug("poll_imu_func, disconnect detected %d %d %d\n", connected, mcu_enabled, glasses_controller != NULL);
-
-        pthread_mutex_lock(&device_driver_mutex);
-        while (!device_driver_mcu_exited) pthread_cond_wait(&device_driver_mcu_exited_cond, &device_driver_mutex);
-        device_imu_close(glasses_imu);
-        pthread_mutex_unlock(&device_driver_mutex);
-
-        if (glasses_imu) free(glasses_imu);
-        glasses_imu = NULL;
-
-        if (config()->debug_threads) log_debug("poll_imu_func, exiting\n");
+    char* cal_file_path;
+    calibration_file_path(glasses_imu, &cal_file_path);
+    if (cal_file_path != NULL) {
+        device_imu_save_calibration(glasses_imu, cal_file_path);
+        free(cal_file_path);
     }
-    device_checkin(device);
+
+    if (config()->debug_threads) log_debug("poll_imu_func, disconnect detected %d %d %d\n", connected, mcu_enabled, glasses_controller != NULL);
+
+    pthread_mutex_lock(&device_driver_mutex);
+    while (!device_driver_mcu_exited) pthread_cond_wait(&device_driver_mcu_exited_cond, &device_driver_mutex);
+    device_imu_close(glasses_imu);
+    pthread_mutex_unlock(&device_driver_mutex);
+
+    if (glasses_imu) free(glasses_imu);
+    glasses_imu = NULL;
+
+    if (config()->debug_threads) log_debug("poll_imu_func, exiting\n");
 };
 
 bool sbs_mode_change_requested = false;
@@ -249,13 +263,21 @@ void xreal_block_on_device() {
         pthread_create(&controller_thread, NULL, poll_controller_func, NULL);
 
         connected &= wait_for_imu_start();
-        if (connected && 
-            device_imu_load_calibration(glasses_imu, calibration_file_path(device)) == DEVICE_IMU_ERROR_NO_ERROR) {
-            if (config()->debug_device) log_debug("xreal_block_on_device, loaded calibration\n");
+        if (connected) {
+            char* cal_file_path;
+            calibration_file_path(glasses_imu, &cal_file_path);
+            if (cal_file_path != NULL) {
+                if (config()->debug_device) log_debug("xreal_block_on_device, attempting to load calibration from %s\n", cal_file_path);
+                if (device_imu_load_calibration(glasses_imu, cal_file_path) == DEVICE_IMU_ERROR_NO_ERROR) {
+                    if (config()->debug_device) log_debug("xreal_block_on_device, loaded calibration\n");
 
-            // if the saved calibration included magnetometer data, it may need to be recalibrated
-            device->magnet_stale = state()->using_magnet = device_imu_using_magnet(glasses_imu);
-        } else if (config()->debug_device) log_debug("xreal_block_on_device, no calibration loaded\n");
+                    // if the saved calibration included magnetometer data, it may need to be recalibrated
+                    device->magnet_stale = state()->using_magnet = device_imu_using_magnet(glasses_imu);
+                } else if (config()->debug_device) log_debug("xreal_block_on_device, no calibration loaded\n");
+
+                free(cal_file_path);
+            }
+        }
 
         bool imu_alive = true;
         while (connected) {
@@ -324,7 +346,7 @@ void xreal_calibrate_magnet() {
     if (connected && glasses_imu) {
         device_properties_type* device = device_checkout();
         if (config()->debug_device) log_debug("xreal_calibrate_magnet\n");
-        device_imu_calibrate(glasses_imu, device->magnet_calibration_wait_s * 1000, false, false, true);
+        device_imu_calibrate(glasses_imu, device->magnet_calibration_wait_s * EXPECTED_CYCLES_PER_S, false, false, true);
         state()->using_magnet = true;
         if (config()->debug_device) log_debug("xreal_calibrate_magnet, complete\n");
         device_checkin(device);

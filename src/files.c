@@ -134,3 +134,22 @@ FILE* get_or_create_config_file(char *filename, char *mode, char **full_path, bo
     *full_path = get_config_file_path(filename);
     return get_or_create_file(*full_path, 0777, mode, created);
 }
+
+char* sanitize_filename(const char* input) {
+    if (!input) return NULL;
+    
+    char* sanitized = malloc(strlen(input) + 1);
+    if (!sanitized) return NULL;
+    
+    int j = 0;
+    for (int i = 0; i < strlen(input); i++) {
+        // Allow alphanumeric chars and some safe symbols
+        if (isalnum(input[i]) || input[i] == '-' || input[i] == '_') {
+            sanitized[j++] = input[i];
+        } else {
+            sanitized[j++] = '_'; // Replace unsafe chars with underscore
+        }
+    }
+    sanitized[j] = '\0';
+    return sanitized;
+}

@@ -29,3 +29,4 @@ FILE* get_or_create_runtime_file(char *filename, char *mode, char **full_path, b
 
 FILE* get_or_create_config_file(char *filename, char *mode, char **full_path, bool *created);
 
+char* sanitize_filename(const char* input);
