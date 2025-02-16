@@ -23,6 +23,7 @@ driver_config_type *default_config() {
     config->use_roll_axis = false;
     config->mouse_sensitivity = 30;
     config->output_mode = strdup(mouse_output_mode);
+    config->multi_tap_enabled = false;
 
     config->debug_threads = false;
     config->debug_joystick = false;
@@ -110,6 +111,8 @@ driver_config_type* parse_config_file(FILE *fp) {
             int_config(key, value, &config->mouse_sensitivity);
         } else if (equal(key, "output_mode")) {
             string_config(key, value, &config->output_mode);
+        } else if (equal(key, "multi_tap_enabled")) {
+            boolean_config(key, value, &config->multi_tap_enabled);
         }
 
         plugins.handle_config_line(plugin_configs, key, value);

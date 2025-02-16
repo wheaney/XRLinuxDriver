@@ -8,6 +8,7 @@ struct driver_config_t {
     bool use_roll_axis;
     int mouse_sensitivity;
     char *output_mode;
+    bool multi_tap_enabled;
 
     bool debug_threads;
     bool debug_joystick;

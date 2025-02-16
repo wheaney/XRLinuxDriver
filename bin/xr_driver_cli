@@ -111,6 +111,12 @@ then
     elif [ "$1" == "--smooth-follow-disable" ] || [ "$1" == "-sfd" ]; then
         config_key="sideview_smooth_follow_enabled"
         config_value="false"
+    elif [ "$1" == "--multi-tap-enable" ] || [ "$1" == "-mte" ]; then
+        config_key="multi_tap_enabled"
+        config_value="true"
+    elif [ "$1" == "--multi-tap-disable" ] || [ "$1" == "-mtd" ]; then
+        config_key="multi_tap_enabled"
+        config_value="false"
     elif [ "$1" == "--smooth-follow-threshold" ] || [ "$1" == "-sft" ]; then
         config_key="sideview_follow_threshold"
         if [ -n "$2" ]; then
@@ -211,6 +217,8 @@ Options:
   -j, --use-joystick
   -m, --use-mouse
   -ms, --mouse-sensitivity [sensitivity_value]
+  -mte, --multi-tap-enable
+  -mtd, --multi-tap-disable
   -z, --display-zoom [zoom_value]
   -em, --external-mode
   -de, --disable-external

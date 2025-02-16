@@ -122,9 +122,13 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
 
             imu_euler_type euler = quaternion_to_euler(quat);
             imu_euler_type euler_velocities = get_euler_velocities(euler, device->imu_cycles_per_s);
-            multi_tap = detect_multi_tap(euler_velocities,
-                                        timestamp_ms,
-                                        config()->debug_multi_tap);
+            
+            if (config()->multi_tap_enabled) {
+                multi_tap = detect_multi_tap(euler_velocities,
+                                            timestamp_ms,
+                                            config()->debug_multi_tap);
+            }
+
             if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
                 if (multi_tap == MT_RESET_CALIBRATION) log_message("Triple-tap detected. ");
                 log_message("Kicking off calibration\n");
