@@ -43,12 +43,7 @@ const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
 // VITURE rotations seem to be about 6 degrees (about y axis) off of actual,
 // which results in slight twisting about the x axis when looking left/right.
 // Use this quaternion to adjust the rotation to balance out the error.
-const imu_quat_type adjustment_quat = {
-    .w = 0.996,
-    .x = 0,
-    .y = 0.05235,
-    .z = 0
-};
+const imu_quat_type adjustment_quat = device_pitch_adjustment(7.0) // 6.0);
 
 const device_properties_type viture_one_properties = {
     .brand                              = "VITURE",

@@ -27,4 +27,5 @@ imu_quat_type conjugate(imu_quat_type q);
 imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2);
 imu_quat_type euler_to_quaternion(imu_euler_type euler);
 imu_euler_type quaternion_to_euler(imu_quat_type q);
+imu_quat_type device_pitch_adjustment(float adjustment_degrees);
 bool quat_equal(imu_quat_type q1, imu_quat_type q2);

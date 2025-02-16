@@ -73,6 +73,52 @@ imu_euler_type quaternion_to_euler(imu_quat_type q) {
     return euler;
 }
 
+imu_quat_type euler_to_quaternion(imu_euler_type euler) {
+    // Convert degrees to radians
+    float roll = degree_to_radian(euler.roll);
+    float pitch = degree_to_radian(euler.pitch);
+    float yaw = degree_to_radian(euler.yaw);
+
+    // Compute the half angles
+    float cx = cos(roll * 0.5f);
+    float cy = cos(pitch * 0.5f);
+    float cz = cos(yaw * 0.5f);
+    float sx = sin(roll * 0.5f);
+    float sy = sin(pitch * 0.5f);
+    float sz = sin(yaw * 0.5f);
+
+    // Compute the quaternion components
+    imu_quat_type q = {
+        .x = sx * cy * cz - cx * sy * sz,
+        .y = cx * sy * cz + sx * cy * sz,
+        .z = cx * cy * sz + sx * sy * cz,
+        .w = cx * cy * cz - sx * sy * sz
+    };
+
+    return normalize_quaternion(q);
+}
+
+imu_quat_type device_pitch_adjustment(float adjustment_degrees) {
+    float half = degree_to_radian(adjustment_degrees) * 0.5f;
+    imu_quat_type q = {
+        .w = cosf(half),
+        .x = 0.0f,
+        .y = sinf(half),
+        .z = 0.0f
+    };
+    return q;
+}
+
+imu_quat_type device_pitch_adjustment(float adjustment_degrees) {
+    imu_euler_type euler = {
+        .roll = 0.0,
+        .pitch = adjustment_degrees,
+        .yaw = 0.0
+    };
+
+    return euler_to_quaternion(euler);
+}
+
 bool quat_equal(imu_quat_type q1, imu_quat_type q2) {
     return q1.w == q2.w && q1.x == q2.x && q1.y == q2.y && q1.z == q2.z;
 }
