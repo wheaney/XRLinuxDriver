@@ -39,7 +39,7 @@ const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
     VITURE_PRO_MODEL_NAME,
 };
 
-const float VITURE_ONE_PITCH_ADJUSTMENT = 7.0;
+const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
 const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
 static imu_quat_type adjustment_quat;
 
