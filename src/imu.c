@@ -109,16 +109,6 @@ imu_quat_type device_pitch_adjustment(float adjustment_degrees) {
     return q;
 }
 
-imu_quat_type device_pitch_adjustment(float adjustment_degrees) {
-    imu_euler_type euler = {
-        .roll = 0.0,
-        .pitch = adjustment_degrees,
-        .yaw = 0.0
-    };
-
-    return euler_to_quaternion(euler);
-}
-
 bool quat_equal(imu_quat_type q1, imu_quat_type q2) {
     return q1.w == q2.w && q1.x == q2.x && q1.y == q2.y && q1.z == q2.z;
 }
