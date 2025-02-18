@@ -52,7 +52,7 @@ const device_properties_type viture_one_properties = {
     .resolution_w                       = 1920,
     .resolution_h                       = 1080,
     .fov                                = 40.0,
-    .lens_distance_ratio                = 0.025,
+    .lens_distance_ratio                = 0.05,
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
     .imu_buffer_size                    = 1,
@@ -160,7 +160,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 log_message("VITURE: Found supported device %f %f %f %f\n", adjustment_quat.w, adjustment_quat.x, adjustment_quat.y, adjustment_quat.z);
 
                 if (equal(VITURE_PRO_MODEL_NAME, device->model)) {
-                    device->fov = 45.0;
+                    device->fov = 43.0;
                     adjustment_quat = device_pitch_adjustment(VITURE_PRO_PITCH_ADJUSTMENT);
                 } else {
                     adjustment_quat = device_pitch_adjustment(VITURE_ONE_PITCH_ADJUSTMENT);
