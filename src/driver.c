@@ -88,8 +88,8 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
 
                 screen_center = quat;
                 screen_center_conjugate = conjugate(screen_center);
-                captured_screen_center=true;
-                control_flags->recenter_screen=false;
+                captured_screen_center = true;
+                control_flags->recenter_screen = false;
             } else {
                 screen_center = plugins.modify_screen_center(timestamp_ms, quat, screen_center);
                 screen_center_conjugate = conjugate(screen_center);
@@ -427,6 +427,7 @@ void handle_control_flags_update() {
             if (change_requested && !device_driver->device_set_sbs_mode_func(requesting_enabled)) {
                 log_error("Error setting requested SBS mode\n");
             }
+            control_flags->sbs_mode = SBS_CONTROL_UNSET;
         }
         if (control_flags->force_quit) {
             log_message("Force quit requested, exiting\n");
@@ -435,6 +436,8 @@ void handle_control_flags_update() {
             if (config()->debug_device) log_debug("handle_control_flags_update, device_driver->disconnect_func(true)\n");
             device_driver->disconnect_func(true);
             evaluate_block_on_device_ready();
+
+            control_flags->force_quit = false;
         }
     }
     device_checkin(device);
@@ -590,6 +593,10 @@ int main(int argc, const char** argv) {
     state()->registered_features = features;
 
     control_flags = calloc(1, sizeof(control_flags_type));
+    control_flags->recenter_screen = false;
+    control_flags->recalibrate = false;
+    control_flags->force_quit = false;
+    control_flags->sbs_mode = SBS_CONTROL_UNSET;
 
     plugins.start();
     write_state(state());

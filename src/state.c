@@ -64,11 +64,6 @@ void write_state(driver_state_type *state) {
 }
 
 void read_control_flags(FILE *fp, control_flags_type *flags) {
-    flags->recenter_screen = false;
-    flags->recalibrate = false;
-    flags->force_quit = false;
-    flags->sbs_mode = SBS_CONTROL_UNSET;
-
     if (fp) {
         char line[1024];
         while (fgets(line, sizeof(line), fp) != NULL) {
