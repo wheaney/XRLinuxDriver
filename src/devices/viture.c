@@ -71,6 +71,13 @@ const int frequency_enum_to_value[] = {
     [IMU_FREQUENCE_240] = 240
 };
 
+const char* frequency_to_string[] = {
+    [IMU_FREQUENCE_60] = "60Hz",
+    [IMU_FREQUENCE_90] = "90Hz",
+    [IMU_FREQUENCE_120] = "120Hz",
+    [IMU_FREQUENCE_240] = "240Hz"
+};
+
 static float float_from_imu_data(uint8_t *data)
 {
 	float value = 0;
@@ -157,8 +164,6 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 device->hid_product_id = product_id;
                 device->model = (char *)viture_supported_models[i];
 
-                log_message("VITURE: Found supported device %f %f %f %f\n", adjustment_quat.w, adjustment_quat.x, adjustment_quat.y, adjustment_quat.z);
-
                 if (equal(VITURE_PRO_MODEL_NAME, device->model)) {
                     device->fov = 43.0;
                     adjustment_quat = device_pitch_adjustment(VITURE_PRO_PITCH_ADJUSTMENT);
@@ -204,6 +209,8 @@ bool viture_device_connect() {
             if (imu_freq < IMU_FREQUENCE_60 || imu_freq > IMU_FREQUENCE_240) {
                 imu_freq = IMU_FREQUENCE_60;
             }
+
+            if (config()->debug_device) log_debug("VITURE: IMU frequency set to %s\n", frequency_to_string[imu_freq]);
 
             // use the current value in case the frequency we requested isn't supported
             device->imu_cycles_per_s = frequency_enum_to_value[imu_freq];
