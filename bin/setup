@@ -30,7 +30,7 @@ To enable this, install the appropriate library. It's typically provided by the 
 fi
 
 USER=${SUDO_USER:-$USER}
-GROUP=$(id -gn $USER)
+GROUP=$(id -g $USER)
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 
 function create_and_chown() {
