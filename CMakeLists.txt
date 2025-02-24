@@ -42,6 +42,7 @@ pkg_check_modules(LIBWAYLAND_CLIENT REQUIRED wayland-client)
 
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
 
 # Set the library directory based on architecture
