@@ -233,7 +233,7 @@ void breezy_desktop_set_config_func(void* config) {
 
     if (has_started) {
         write_config_data();
-        breezy_desktop_reset_imu_data_func();
+        if (state()->calibration_state == CALIBRATING) breezy_desktop_reset_imu_data_func();
     }
 };
 
