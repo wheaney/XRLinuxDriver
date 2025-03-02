@@ -74,7 +74,7 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     }
 };
 
-const uint8_t DATA_LAYOUT_VERSION = 3;
+const uint8_t DATA_LAYOUT_VERSION = 4;
 #define BOOL_TRUE 1
 #define BOOL_FALSE 0
 
@@ -195,6 +195,17 @@ void breezy_desktop_write_imu_data(float *values) {
             do_write_config_data(fd);
         }
         lseek(fd, CONFIG_DATA_END_OFFSET, SEEK_SET);
+
+        uint8_t smooth_follow_enabled = BOOL_FALSE;
+        if (state()->breezy_desktop_smooth_follow_enabled && state()->smooth_follow_origin) {
+            smooth_follow_enabled = BOOL_TRUE;
+            write(fd, &smooth_follow_enabled, sizeof(uint8_t));
+            write(fd, state()->smooth_follow_origin, sizeof(float) * 4);
+        } else {
+            write(fd, &smooth_follow_enabled, sizeof(uint8_t));
+            float zero[4] = {0.0, 0.0, 0.0, 0.0};
+            write(fd, zero, sizeof(float) * 4);
+        }
         write(fd, &epoch_ms, sizeof(uint64_t));
         write(fd, values, sizeof(float) * NUM_IMU_VALUES);
 

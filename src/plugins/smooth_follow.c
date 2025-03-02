@@ -292,6 +292,11 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
     uint32_t elapsed_ms = timestamp_ms - last_timestamp_ms;
     last_timestamp_ms = timestamp_ms;
 
+    if (snap_back_to_center && state()->smooth_follow_origin) {
+        // capture how far we are from the original screen center
+        *state()->smooth_follow_origin = multiply_quaternions(conjugate(*snap_back_to_center), quat);
+    }
+
     // smooth follow has been disabled, slerp the screen back to its original center
     if (!smooth_follow_enabled && snap_back_to_center) {
         if (start_snap_back_timestamp_ms == -1) {
@@ -307,6 +312,9 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
             // we've reached our destination, clear this out to stop slerping
             free(snap_back_to_center);
             snap_back_to_center = NULL;
+            free(state()->smooth_follow_origin);
+            state()->smooth_follow_origin = NULL;
+
             start_snap_back_timestamp_ms = -1;
         }
 
@@ -318,6 +326,8 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
         snap_back_capture_next = false;
         snap_back_to_center = calloc(1, sizeof(imu_quat_type));
         *snap_back_to_center = screen_center;
+        state()->smooth_follow_origin = calloc(1, sizeof(imu_quat_type));
+        *state()->smooth_follow_origin = quat;
     }
 
     return slerp(screen_center, quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
