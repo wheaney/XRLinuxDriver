@@ -196,15 +196,18 @@ void breezy_desktop_write_imu_data(float *values) {
         }
         lseek(fd, CONFIG_DATA_END_OFFSET, SEEK_SET);
 
+        // the enabled state flag will switch off as soon as requested, but the smooth_follow_origin may continue
+        // to change as the screen slerps back to the origin, so the checks for these are different
         uint8_t smooth_follow_enabled = BOOL_FALSE;
-        if (state()->breezy_desktop_smooth_follow_enabled && state()->smooth_follow_origin) {
+        if (state()->breezy_desktop_smooth_follow_enabled) {
             smooth_follow_enabled = BOOL_TRUE;
-            write(fd, &smooth_follow_enabled, sizeof(uint8_t));
-            write(fd, state()->smooth_follow_origin, sizeof(float) * 4);
+        }
+        write(fd, &smooth_follow_enabled, sizeof(uint8_t));
+
+        if (state()->smooth_follow_origin_ready && state()->smooth_follow_origin) {
+            write(fd, state()->smooth_follow_origin, sizeof(float) * NUM_IMU_VALUES);
         } else {
-            write(fd, &smooth_follow_enabled, sizeof(uint8_t));
-            float zero[4] = {0.0, 0.0, 0.0, 0.0};
-            write(fd, zero, sizeof(float) * 4);
+            write(fd, values, sizeof(float) * NUM_IMU_VALUES);
         }
         write(fd, &epoch_ms, sizeof(uint64_t));
         write(fd, values, sizeof(float) * NUM_IMU_VALUES);

@@ -25,10 +25,8 @@
 
 #define MS_PER_SEC 1000
 #define IMU_CHECKPOINT_MS MS_PER_SEC / 4
-#define GYRO_BUFFERS_COUNT 5 // quat values: x, y, z, w, timestamp
 
-buffer_type **quat_stage_1_buffer;
-buffer_type **quat_stage_2_buffer;
+imu_buffer_type *imu_buffer;
 
 static int last_imu_checkpoint_ms = 0;
 static imu_quat_type last_imu_checkpoint_quat = {.x = 0.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};
@@ -303,64 +301,25 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
             }
 
             if (imu_calibrated) {
-                if (quat_stage_1_buffer == NULL || quat_stage_2_buffer == NULL) {
-                    quat_stage_1_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-                    quat_stage_2_buffer = calloc(GYRO_BUFFERS_COUNT, sizeof(buffer_type*));
-                    for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
-                        quat_stage_1_buffer[i] = create_buffer(device->imu_buffer_size);
-                        quat_stage_2_buffer[i] = create_buffer(device->imu_buffer_size);
-                        if (quat_stage_1_buffer[i] == NULL || quat_stage_2_buffer[i] == NULL) {
-                            log_error("Error allocating memory\n");
-                            exit(1);
-                        }
+                if (imu_buffer == NULL) {
+                    imu_buffer = create_imu_buffer(device->imu_buffer_size);
+                    if (imu_buffer == NULL) {
+                        log_error("Error allocating memory\n");
+                        exit(1);
                     }
                 }
 
-                // the oldest values are zero/unset if the buffer hasn't been filled yet, so we check prior to doing a
-                // push/pop, to know if the values that are returned will be relevant to our calculations
-                bool was_full = is_full(quat_stage_1_buffer[0]);
-                float stage_1_quat_w = push(quat_stage_1_buffer[0], quat.w);
-                float stage_1_quat_x = push(quat_stage_1_buffer[1], quat.x);
-                float stage_1_quat_y = push(quat_stage_1_buffer[2], quat.y);
-                float stage_1_quat_z = push(quat_stage_1_buffer[3], quat.z);
+                imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, quat, (float)timestamp_ms);
 
-                // TODO - timestamp_ms can only get as large as 2^24 before it starts to lose precision as a float,
-                //        which is less than 5 hours of usage. Update this to just send two delta times, t0-t1 and t1-t2.
-                float stage_1_ts = push(quat_stage_1_buffer[4], (float)timestamp_ms);
+                if (response && response->ready) {
+                    pthread_mutex_lock(ipc_values->imu_data_mutex);
 
-                if (was_full) {
-                    was_full = is_full(quat_stage_2_buffer[0]);
-                    float stage_2_quat_w = push(quat_stage_2_buffer[0], stage_1_quat_w);
-                    float stage_2_quat_x = push(quat_stage_2_buffer[1], stage_1_quat_x);
-                    float stage_2_quat_y = push(quat_stage_2_buffer[2], stage_1_quat_y);
-                    float stage_2_quat_z = push(quat_stage_2_buffer[3], stage_1_quat_z);
-                    float stage_2_ts = push(quat_stage_2_buffer[4], stage_1_ts);
+                    memcpy(ipc_values->imu_data, response->data, sizeof(float) * 16);
+                    set_gamescope_reshade_effect_uniform_variable("imu_quat_data", ipc_values->imu_data, 16, sizeof(float), true);
 
-                    if (was_full) {
-                        pthread_mutex_lock(ipc_values->imu_data_mutex);
-
-                        // write to shared memory for anyone using the same ipc prefix to consume
-                        ipc_values->imu_data[0] = quat.x;
-                        ipc_values->imu_data[1] = quat.y;
-                        ipc_values->imu_data[2] = quat.z;
-                        ipc_values->imu_data[3] = quat.w;
-                        ipc_values->imu_data[4] = stage_1_quat_x;
-                        ipc_values->imu_data[5] = stage_1_quat_y;
-                        ipc_values->imu_data[6] = stage_1_quat_z;
-                        ipc_values->imu_data[7] = stage_1_quat_w;
-                        ipc_values->imu_data[8] = stage_2_quat_x;
-                        ipc_values->imu_data[9] = stage_2_quat_y;
-                        ipc_values->imu_data[10] = stage_2_quat_z;
-                        ipc_values->imu_data[11] = stage_2_quat_w;
-                        ipc_values->imu_data[12] = (float)timestamp_ms;
-                        ipc_values->imu_data[13] = stage_1_ts;
-                        ipc_values->imu_data[14] = stage_2_ts;
-
-                        set_gamescope_reshade_effect_uniform_variable("imu_quat_data", ipc_values->imu_data, 16, sizeof(float), true);
-
-                        pthread_mutex_unlock(ipc_values->imu_data_mutex);
-                    }
+                    pthread_mutex_unlock(ipc_values->imu_data_mutex);
                 }
+                free(response);
             }
         }
 

@@ -1,3 +1,4 @@
+#include "buffer.h"
 #include "config.h"
 #include "features/breezy_desktop.h"
 #include "features/smooth_follow.h"
@@ -97,8 +98,11 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
 }
 
 static bool smooth_follow_enabled=false;
+follow_state_type follow_state = FOLLOW_STATE_NONE;
+uint32_t last_timestamp_ms = -1;
 static imu_quat_type *snap_back_to_center = NULL;
 static bool snap_back_capture_next = false;
+uint32_t start_snap_back_timestamp_ms = -1;
 static bool was_sbs_mode_enabled = false;
 static void update_smooth_follow_params() {
     if (!sf_params) sf_params = calloc(1, sizeof(smooth_follow_params));
@@ -160,10 +164,16 @@ static void update_smooth_follow_params() {
         if (!was_smooth_follow_enabled) {
             // we'll capture the screen center on the next modify_screen_center call, before it changes
             snap_back_capture_next = true;
+            start_snap_back_timestamp_ms = -1;
         }
     } else if (was_smooth_follow_enabled && snap_back_to_center) {
         // we'll want to return as close to the original center as possible
         *sf_params = sticky_params;
+    }
+
+    if (smooth_follow_enabled && !was_smooth_follow_enabled) {
+        last_timestamp_ms = -1;
+        follow_state = FOLLOW_STATE_NONE;
     }
 }
 
@@ -192,7 +202,6 @@ void smooth_follow_set_config_func(void* config) {
     update_smooth_follow_params();
 }
 
-follow_state_type follow_state = FOLLOW_STATE_NONE;
 uint32_t follow_wait_time_start_ms = -1;
 follow_state_type next_state_for_angle(float angle_degrees) {
     if (isnan(angle_degrees) || angle_degrees < sf_params->return_to_angle ||
@@ -273,8 +282,7 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
     return from;
 }
 
-uint32_t last_timestamp_ms = -1;
-uint32_t start_snap_back_timestamp_ms = -1;
+imu_buffer_type *smooth_follow_imu_buffer = NULL;
 imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center) {
     if (!smooth_follow_enabled && !snap_back_to_center || !sf_params) {
         return screen_center;
@@ -292,9 +300,26 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
     uint32_t elapsed_ms = timestamp_ms - last_timestamp_ms;
     last_timestamp_ms = timestamp_ms;
 
-    if (snap_back_to_center && state()->smooth_follow_origin) {
-        // capture how far we are from the original screen center
-        *state()->smooth_follow_origin = multiply_quaternions(conjugate(*snap_back_to_center), quat);
+    if (snap_back_to_center) {
+        if (!smooth_follow_imu_buffer) {
+            device_properties_type* device = device_checkout();
+            if (device != NULL) smooth_follow_imu_buffer = create_imu_buffer(device->imu_buffer_size);
+            device_checkin(device);
+        }
+
+        if (smooth_follow_imu_buffer) {
+            // capture how far we are from the original screen center
+            imu_buffer_response_type* response = push_to_imu_buffer(
+                smooth_follow_imu_buffer, 
+                multiply_quaternions(conjugate(*snap_back_to_center), quat),
+                timestamp_ms
+            );
+            state()->smooth_follow_origin_ready = response && response->ready;
+            if (state()->smooth_follow_origin_ready) {
+                memcpy(state()->smooth_follow_origin, response->data, sizeof(float) * 16);
+            }
+            free(response);
+        }
     }
 
     // smooth follow has been disabled, slerp the screen back to its original center
@@ -307,12 +332,15 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
         
         // our return-to-angle is so small it will never hit the target, kill the snap-back slerp after 2 seconds
         if (follow_state == FOLLOW_STATE_NONE || elapsed_snap_back_ms > 2000) {
+            follow_state = FOLLOW_STATE_NONE;
             result = *snap_back_to_center;
 
             // we've reached our destination, clear this out to stop slerping
             free(snap_back_to_center);
             snap_back_to_center = NULL;
+
             free(state()->smooth_follow_origin);
+            state()->smooth_follow_origin_ready = false;
             state()->smooth_follow_origin = NULL;
 
             start_snap_back_timestamp_ms = -1;
@@ -326,8 +354,9 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
         snap_back_capture_next = false;
         snap_back_to_center = calloc(1, sizeof(imu_quat_type));
         *snap_back_to_center = screen_center;
-        state()->smooth_follow_origin = calloc(1, sizeof(imu_quat_type));
-        *state()->smooth_follow_origin = quat;
+
+        if (!state()->smooth_follow_origin) state()->smooth_follow_origin = calloc(16, sizeof(float));
+        state()->smooth_follow_origin_ready = false;
     }
 
     return slerp(screen_center, quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));

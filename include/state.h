@@ -25,7 +25,8 @@ struct driver_state_t {
     bool sbs_mode_enabled;
     bool breezy_desktop_smooth_follow_enabled;
     float breezy_desktop_follow_threshold;
-    imu_quat_type *smooth_follow_origin;
+    float *smooth_follow_origin;
+    bool smooth_follow_origin_ready;
     float breezy_desktop_display_distance;
     bool firmware_update_recommended;
     bool is_gamescope_reshade_ipc_connected;
