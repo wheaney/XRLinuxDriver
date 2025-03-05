@@ -1,4 +1,5 @@
 #include "buffer.h"
+#include "logging.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

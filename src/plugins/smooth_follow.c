@@ -18,9 +18,20 @@
 
 typedef enum {
     FOLLOW_STATE_NONE,
+    FOLLOW_STATE_INIT,
     FOLLOW_STATE_WAITING,
     FOLLOW_STATE_SLERPING
 } follow_state_type;
+
+const smooth_follow_params init_params = {
+    .lower_angle_threshold = 2.0,
+    .upper_angle_threshold = 2.0,
+    .delay_ms = 0,
+    .return_to_angle = 2.0,
+
+    // moves 99.9% of the way to the center in 1 second
+    .interpolation_ratio_ms = 1-pow(1 - 0.999, 1.0/1000.0)
+};
 
 const smooth_follow_params sticky_params = {
     .lower_angle_threshold = 0.5,
@@ -173,7 +184,8 @@ static void update_smooth_follow_params() {
 
     if (smooth_follow_enabled && !was_smooth_follow_enabled) {
         last_timestamp_ms = -1;
-        follow_state = FOLLOW_STATE_NONE;
+        *sf_params = init_params;
+        follow_state = FOLLOW_STATE_INIT;
     }
 }
 
@@ -204,22 +216,30 @@ void smooth_follow_set_config_func(void* config) {
 
 uint32_t follow_wait_time_start_ms = -1;
 follow_state_type next_state_for_angle(float angle_degrees) {
-    if (isnan(angle_degrees) || angle_degrees < sf_params->return_to_angle ||
-        follow_state != FOLLOW_STATE_SLERPING && angle_degrees < sf_params->lower_angle_threshold) {
-        follow_state = FOLLOW_STATE_NONE;
-    } else if (angle_degrees > sf_params->lower_angle_threshold &&
-               angle_degrees < sf_params->upper_angle_threshold &&
-               sf_params->delay_ms > 0) {
-        if (follow_state == FOLLOW_STATE_NONE) {
-            follow_state = FOLLOW_STATE_WAITING;
-            follow_wait_time_start_ms = get_time_ms();
-        } else if (follow_state == FOLLOW_STATE_WAITING) {
-            if (get_time_ms() - follow_wait_time_start_ms > sf_params->delay_ms) {
-                follow_state = FOLLOW_STATE_SLERPING;
-            }
+    if (follow_state == FOLLOW_STATE_INIT) {
+        // double the return-to-angle so the movement will be more aggressive towards the center than usual
+        if (!isnan(angle_degrees) && angle_degrees < sf_params->return_to_angle * 2.0) {
+            follow_state = FOLLOW_STATE_NONE;
+            update_smooth_follow_params();
         }
     } else {
-        follow_state = FOLLOW_STATE_SLERPING;
+        if (isnan(angle_degrees) || angle_degrees < sf_params->return_to_angle ||
+            follow_state != FOLLOW_STATE_SLERPING && angle_degrees < sf_params->lower_angle_threshold) {
+            follow_state = FOLLOW_STATE_NONE;
+        } else if (angle_degrees > sf_params->lower_angle_threshold &&
+                angle_degrees < sf_params->upper_angle_threshold &&
+                sf_params->delay_ms > 0) {
+            if (follow_state == FOLLOW_STATE_NONE) {
+                follow_state = FOLLOW_STATE_WAITING;
+                follow_wait_time_start_ms = get_time_ms();
+            } else if (follow_state == FOLLOW_STATE_WAITING) {
+                if (get_time_ms() - follow_wait_time_start_ms > sf_params->delay_ms) {
+                    follow_state = FOLLOW_STATE_SLERPING;
+                }
+            }
+        } else {
+            follow_state = FOLLOW_STATE_SLERPING;
+        }
     }
 
     return follow_state;
@@ -251,7 +271,8 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
     float a_compliment = 1 - a;
     imu_quat_type result;
     float half_angle = acos(cosTheta);
-    if (next_state_for_angle(radian_to_degree(2 * half_angle)) == FOLLOW_STATE_SLERPING) {
+    follow_state_type next_state = next_state_for_angle(radian_to_degree(2 * half_angle));
+    if (next_state == FOLLOW_STATE_SLERPING || next_state == FOLLOW_STATE_INIT) {
         // our return-to-angle gives us a margin around the center of the target, and we want to stop when
         // we hit that margin, not the center. if we don't factor that margin into the target, then we may still
         // be slerping pretty quickly when we hit the return-to-angle, then stop very abruptly. the below factors
