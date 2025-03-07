@@ -74,6 +74,9 @@ void *smooth_follow_default_config_func() {
     config->virtual_display_size = 1.0;
     config->sbs_display_distance = 1.0;
     config->sbs_display_size = 1.0;
+    config->track_roll = false;
+    config->track_pitch = true;
+    config->track_yaw = true;
 
     return config;
 };
@@ -105,6 +108,12 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         float_config(key, value, &temp_config->sbs_display_distance);
     } else if (equal(key, "sbs_display_size")) {
         float_config(key, value, &temp_config->sbs_display_size);
+    } else if (equal(key, "smooth_follow_track_roll")) {
+        boolean_config(key, value, &temp_config->track_roll);
+    } else if (equal(key, "smooth_follow_track_pitch")) {
+        boolean_config(key, value, &temp_config->track_pitch);
+    } else if (equal(key, "smooth_follow_track_yaw")) {
+        boolean_config(key, value, &temp_config->track_yaw);
     }
 }
 
@@ -255,8 +264,18 @@ float percent_adjust(float multiplier, float percent, bool inverse) {
 
 // ported and modified from https://github.com/g-truc/glm/blob/master/glm/ext/quaternion_common.inl
 // if slerping threshold is met, this returns a quaternion that's "a" percent of the way between "from" and "to"
-imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
-    imu_quat_type target = to;
+imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {    
+    imu_euler_type from_euler = quaternion_to_euler(from);
+    imu_euler_type to_euler = quaternion_to_euler(to);
+    
+    // ignore tracking preferences if smooth_follow_enabled is false, since we want to fully return to
+    // the original center
+    imu_euler_type target_euler;
+    target_euler.roll = (sf_config->track_roll || !smooth_follow_enabled ? to_euler : from_euler).roll;
+    target_euler.pitch = (sf_config->track_pitch || !smooth_follow_enabled ? to_euler : from_euler).pitch;
+    target_euler.yaw = (sf_config->track_yaw || !smooth_follow_enabled ? to_euler : from_euler).yaw;
+    
+    imu_quat_type target = euler_to_quaternion(target_euler);
     float cosTheta = from.w * target.w + from.x * target.x + from.y * target.y + from.z * target.z;
     if (cosTheta < 0) {
         imu_quat_type tmp = {

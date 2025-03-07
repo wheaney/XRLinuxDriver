@@ -20,6 +20,10 @@ struct smooth_follow_config_t {
     float virtual_display_size;
     float sbs_display_distance;
     float sbs_display_size;
+
+    bool track_roll;
+    bool track_pitch; // vertical
+    bool track_yaw; // horizontal
 };
 typedef struct smooth_follow_config_t smooth_follow_config;
 
