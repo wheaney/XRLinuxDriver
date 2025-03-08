@@ -264,18 +264,28 @@ float percent_adjust(float multiplier, float percent, bool inverse) {
 
 // ported and modified from https://github.com/g-truc/glm/blob/master/glm/ext/quaternion_common.inl
 // if slerping threshold is met, this returns a quaternion that's "a" percent of the way between "from" and "to"
-imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {    
-    imu_euler_type from_euler = quaternion_to_euler(from);
-    imu_euler_type to_euler = quaternion_to_euler(to);
-    
-    // ignore tracking preferences if smooth_follow_enabled is false, since we want to fully return to
-    // the original center
-    imu_euler_type target_euler;
-    target_euler.roll = (sf_config->track_roll || !smooth_follow_enabled ? to_euler : from_euler).roll;
-    target_euler.pitch = (sf_config->track_pitch || !smooth_follow_enabled ? to_euler : from_euler).pitch;
-    target_euler.yaw = (sf_config->track_yaw || !smooth_follow_enabled ? to_euler : from_euler).yaw;
-    
-    imu_quat_type target = euler_to_quaternion(target_euler);
+imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
+    imu_quat_type target = to;
+    if (snap_back_to_center && smooth_follow_enabled) {
+        // snap_back_to_center helps us understand the user's frame of reference, so by adjusting
+        // from and to we can modify them from that frame of reference and get more accurate axis adjustments
+        imu_quat_type from_rel = multiply_quaternions(conjugate(*snap_back_to_center), from);
+        imu_quat_type to_rel = multiply_quaternions(conjugate(*snap_back_to_center), to);
+
+        imu_euler_type from_euler = quaternion_to_euler(from_rel);
+        imu_euler_type to_euler = quaternion_to_euler(to_rel);
+        
+        // ignore tracking preferences if smooth_follow_enabled is false, since we want to fully return to
+        // the original center
+        imu_euler_type target_euler;
+        target_euler.roll = (sf_config->track_roll || !smooth_follow_enabled ? to_euler : from_euler).roll;
+        target_euler.pitch = (sf_config->track_pitch || !smooth_follow_enabled ? to_euler : from_euler).pitch;
+        target_euler.yaw = (sf_config->track_yaw || !smooth_follow_enabled ? to_euler : from_euler).yaw;
+
+        // the result is relative to snap_back_to_center, so we need to reapply it
+        target = multiply_quaternions(*snap_back_to_center, euler_to_quaternion(target_euler));
+    }
+
     float cosTheta = from.w * target.w + from.x * target.x + from.y * target.y + from.z * target.z;
     if (cosTheta < 0) {
         imu_quat_type tmp = {
@@ -287,8 +297,6 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
         target = tmp;
         cosTheta = -cosTheta;
     }
-    float a_compliment = 1 - a;
-    imu_quat_type result;
     float half_angle = acos(cosTheta);
     follow_state_type next_state = next_state_for_angle(radian_to_degree(2 * half_angle));
     if (next_state == FOLLOW_STATE_SLERPING || next_state == FOLLOW_STATE_INIT) {
@@ -306,16 +314,17 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
         // half of the remaining angle to the target
         half_angle -= target_half_angle;
 
+        float a_compliment = 1 - a;
         float sin_of_angle = sin(half_angle);
         float from_weight = percent_adjust(sin(a_compliment * half_angle) / sin_of_angle, target_percent, false);
         float target_weight = percent_adjust(sin(a * half_angle) / sin_of_angle, target_percent, true);
-        imu_quat_type tmp = {
+        imu_quat_type result = {
             .w = from_weight * from.w + target_weight * target.w,
             .x = from_weight * from.x + target_weight * target.x,
             .y = from_weight * from.y + target_weight * target.y,
             .z = from_weight * from.z + target_weight * target.z
         };
-        result = tmp;
+
         return result;
     }
 
