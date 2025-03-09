@@ -90,33 +90,6 @@ static float float_from_imu_data(uint8_t *data)
 	return value;
 }
 
-// VITURE seems to need yaw/roll/pitch ordering
-// used https://github.com/mrdoob/three.js/blob/dev/src/math/Quaternion.js#L222 as reference
-imu_quat_type zxy_euler_to_quaternion(imu_euler_type euler) {
-    // Convert degrees to radians
-    float roll = degree_to_radian(euler.roll);
-    float pitch = degree_to_radian(euler.pitch);
-    float yaw = degree_to_radian(euler.yaw);
-
-    // Compute the half angles
-    float cx = cos(roll * 0.5f);
-    float cy = cos(pitch * 0.5f);
-    float cz = cos(yaw * 0.5f);
-    float sx = sin(roll * 0.5f);
-    float sy = sin(pitch * 0.5f);
-    float sz = sin(yaw * 0.5f);
-
-    // Compute the quaternion components
-    imu_quat_type q = {
-        .x = sx * cy * cz - cx * sy * sz,
-        .y = cx * sy * cz + sx * cy * sz,
-        .z = cx * cy * sz + sx * sy * cz,
-        .w = cx * cy * cz - sx * sy * sz
-    };
-
-    return normalize_quaternion(q);
-}
-
 static bool old_firmware_version = true;
 static bool connected = false;
 static bool initialized = false;
@@ -139,7 +112,7 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
             .pitch = euler_pitch,
             .yaw = euler_yaw
         };
-        quat = zxy_euler_to_quaternion(euler);
+        quat = euler_to_quaternion_zxy(euler);
     }
 
     quat = multiply_quaternions(quat, adjustment_quat);

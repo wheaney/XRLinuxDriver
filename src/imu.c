@@ -50,30 +50,57 @@ imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2) {
     return normalize_quaternion(q);
 }
 
-imu_euler_type quaternion_to_euler(imu_quat_type q) {
-    imu_euler_type euler;
+imu_quat_type euler_to_quaternion_xyz(imu_euler_type euler) {
+    // Convert degrees to radians
+    float roll = degree_to_radian(euler.roll);
+    float pitch = degree_to_radian(euler.pitch);
+    float yaw = degree_to_radian(euler.yaw);
 
-    // roll (x-axis rotation)
-    double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-    double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-    euler.roll = atan2(sinr_cosp, cosr_cosp) * (180.0 / M_PI);
+    // Compute the half angles
+    float cx = cos(roll * 0.5f);
+    float cy = cos(pitch * 0.5f);
+    float cz = cos(yaw * 0.5f);
+    float sx = sin(roll * 0.5f);
+    float sy = sin(pitch * 0.5f);
+    float sz = sin(yaw * 0.5f);
 
-    // pitch (y-axis rotation)
-    double sinp = 2 * (q.w * q.y - q.z * q.x);
-    if (fabs(sinp) >= 1)
-        euler.pitch = copysign(M_PI / 2, sinp) * (180.0 / M_PI); // use 90 degrees if out of range
-    else
-        euler.pitch = asin(sinp) * (180.0 / M_PI);
+    // Compute the quaternion components
+    imu_quat_type q = {
+        .x = sx * cy * cz + cx * sy * sz,
+        .y = cx * sy * cz - sx * cy * sz,
+        .z = cx * cy * sz + sx * sy * cz,
+        .w = cx * cy * cz - sx * sy * sz
+    };
 
-    // yaw (z-axis rotation)
-    double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-    double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-    euler.yaw = atan2(siny_cosp, cosy_cosp) * (180.0 / M_PI);
-
-    return euler;
+    return normalize_quaternion(q);
 }
 
-imu_quat_type euler_to_quaternion(imu_euler_type euler) {
+imu_quat_type euler_to_quaternion_zyx(imu_euler_type euler) {
+    // Convert degrees to radians
+    float roll = degree_to_radian(euler.roll);
+    float pitch = degree_to_radian(euler.pitch);
+    float yaw = degree_to_radian(euler.yaw);
+
+    // Compute the half angles
+    float cx = cos(roll * 0.5f);
+    float cy = cos(pitch * 0.5f);
+    float cz = cos(yaw * 0.5f);
+    float sx = sin(roll * 0.5f);
+    float sy = sin(pitch * 0.5f);
+    float sz = sin(yaw * 0.5f);
+
+    // Compute the quaternion components
+    imu_quat_type q = {
+        .x = sx * cy * cz - cx * sy * sz,
+        .y = cx * sy * cz + sx * cy * sz,
+        .z = cx * cy * sz - sx * sy * cz,
+        .w = cx * cy * cz + sx * sy * sz
+    };
+
+    return normalize_quaternion(q);
+}
+
+imu_quat_type euler_to_quaternion_zxy(imu_euler_type euler) {
     // Convert degrees to radians
     float roll = degree_to_radian(euler.roll);
     float pitch = degree_to_radian(euler.pitch);
@@ -96,6 +123,92 @@ imu_quat_type euler_to_quaternion(imu_euler_type euler) {
     };
 
     return normalize_quaternion(q);
+}
+
+imu_euler_type quaternion_to_euler_xyz(imu_quat_type q) {
+    imu_euler_type euler;
+    
+    // Calculate roll (x-axis rotation)
+    float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
+    float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+    euler.roll = radian_to_degree(atan2f(sinr_cosp, cosr_cosp));
+    
+    // Calculate pitch (y-axis rotation)
+    float sinp = 2.0f * (q.w * q.y - q.z * q.x);
+    if (fabsf(sinp) >= 1.0f) {
+        // Use 90 degrees if out of range
+        euler.pitch = radian_to_degree(copysignf(M_PI / 2.0f, sinp));
+    } else {
+        euler.pitch = radian_to_degree(asinf(sinp));
+    }
+    
+    // Calculate yaw (z-axis rotation)
+    float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
+    float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+    euler.yaw = radian_to_degree(atan2f(siny_cosp, cosy_cosp));
+    
+    return euler;
+}
+
+imu_euler_type quaternion_to_euler_zyx(imu_quat_type q) {
+    imu_euler_type euler;
+    
+    // Calculate pitch (y-axis rotation)
+    float sinp = 2.0f * (q.w * q.y - q.z * q.x);
+    if (fabsf(sinp) >= 1.0f) {
+        // Use 90 degrees if out of range
+        euler.pitch = radian_to_degree(copysignf(M_PI / 2.0f, sinp));
+        
+        // Gimbal lock case
+        // In the gimbal lock case with pitch at +/-90 degrees,
+        // yaw and roll rotate around the same axis
+        // We can choose any convention; here we set roll to 0
+        // and calculate yaw
+        euler.roll = 0.0f;
+        float siny = 2.0f * (q.w * q.z + q.x * q.y);
+        float cosy = 2.0f * (q.w * q.x - q.y * q.z);
+        euler.yaw = radian_to_degree(atan2f(siny, cosy));
+    } else {
+        // Normal case
+        euler.pitch = radian_to_degree(asinf(sinp));
+        
+        // Calculate yaw (z-axis rotation)
+        float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
+        float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+        euler.yaw = radian_to_degree(atan2f(siny_cosp, cosy_cosp));
+        
+        // Calculate roll (x-axis rotation)
+        float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
+        float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+        euler.roll = radian_to_degree(atan2f(sinr_cosp, cosr_cosp));
+    }
+    
+    return euler;
+}
+
+imu_euler_type quaternion_to_euler_zxy(imu_quat_type q) {
+    imu_euler_type euler;
+    
+    // Calculate roll (x-axis rotation)
+    float sinr = 2.0f * (q.w * q.x + q.y * q.z);
+    float cosr = 1.0f - 2.0f * (q.x * q.x + q.z * q.z);
+    euler.roll = radian_to_degree(atan2f(sinr, cosr));
+    
+    // Calculate pitch (y-axis rotation)
+    float sinp = 2.0f * (q.w * q.y - q.x * q.z);
+    if (fabsf(sinp) >= 1.0f) {
+        // Use 90 degrees if out of range
+        euler.pitch = radian_to_degree(copysignf(M_PI / 2.0f, sinp));
+    } else {
+        euler.pitch = radian_to_degree(asinf(sinp));
+    }
+    
+    // Calculate yaw (z-axis rotation)
+    float siny = 2.0f * (q.w * q.z + q.x * q.y);
+    float cosy = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+    euler.yaw = radian_to_degree(atan2f(siny, cosy));
+    
+    return euler;
 }
 
 imu_quat_type device_pitch_adjustment(float adjustment_degrees) {

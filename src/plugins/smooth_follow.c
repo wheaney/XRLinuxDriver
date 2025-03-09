@@ -268,22 +268,19 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
     imu_quat_type target = to;
     if (snap_back_to_center && smooth_follow_enabled) {
         // snap_back_to_center helps us understand the user's frame of reference, so by adjusting
-        // from and to we can modify them from that frame of reference and get more accurate axis adjustments
-        imu_quat_type from_rel = multiply_quaternions(conjugate(*snap_back_to_center), from);
+        // the target, we can modify it from that frame of reference and get more accurate axis adjustments
         imu_quat_type to_rel = multiply_quaternions(conjugate(*snap_back_to_center), to);
-
-        imu_euler_type from_euler = quaternion_to_euler(from_rel);
-        imu_euler_type to_euler = quaternion_to_euler(to_rel);
+        imu_euler_type to_euler = quaternion_to_euler_zyx(to_rel);
         
         // ignore tracking preferences if smooth_follow_enabled is false, since we want to fully return to
         // the original center
         imu_euler_type target_euler;
-        target_euler.roll = (sf_config->track_roll || !smooth_follow_enabled ? to_euler : from_euler).roll;
-        target_euler.pitch = (sf_config->track_pitch || !smooth_follow_enabled ? to_euler : from_euler).pitch;
-        target_euler.yaw = (sf_config->track_yaw || !smooth_follow_enabled ? to_euler : from_euler).yaw;
+        target_euler.roll = (sf_config->track_roll || !smooth_follow_enabled) ? to_euler.roll : 0.0;
+        target_euler.pitch = (sf_config->track_pitch || !smooth_follow_enabled) ? to_euler.pitch : 0.0;
+        target_euler.yaw = (sf_config->track_yaw || !smooth_follow_enabled) ? to_euler.yaw : 0.0;
 
         // the result is relative to snap_back_to_center, so we need to reapply it
-        target = multiply_quaternions(*snap_back_to_center, euler_to_quaternion(target_euler));
+        target = multiply_quaternions(*snap_back_to_center, euler_to_quaternion_zyx(target_euler));
     }
 
     float cosTheta = from.w * target.w + from.x * target.x + from.y * target.y + from.z * target.z;

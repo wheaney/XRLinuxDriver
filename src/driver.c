@@ -120,7 +120,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             // adjust the current rotation by the conjugate of the screen placement quat
             quat = multiply_quaternions(screen_center_conjugate, quat);
 
-            imu_euler_type euler = quaternion_to_euler(quat);
+            imu_euler_type euler = quaternion_to_euler_xyz(quat);
             imu_euler_type euler_velocities = get_euler_velocities(euler, device->imu_cycles_per_s);
             
             if (config()->multi_tap_enabled) {
