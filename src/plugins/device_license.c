@@ -20,7 +20,7 @@
 
 #define SECONDS_PER_DAY 86400
 
-const char* DEVICE_LICENSE_FILE_NAME = "license.json";
+const char* DEVICE_LICENSE_FILE_NAME = "%.8s_license.json";
 const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
@@ -206,9 +206,17 @@ void refresh_license(bool force) {
     char** features = NULL;
 
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
-        if (get_hardware_id()) {
+        char* hw_id = get_hardware_id();
+        if (hw_id) {
             pthread_mutex_lock(&refresh_license_lock);
-            const char* device_license_path = get_state_file_path(DEVICE_LICENSE_FILE_NAME);
+
+            // prefix the license file name with the hardware id we can still have this one saved in 
+            // the case where it changes in the future, which can happen due to network interface ordering or
+            // startup sequence timing
+            char* file_name = malloc(strlen(hw_id) + strlen(DEVICE_LICENSE_FILE_NAME));
+            sprintf(file_name, DEVICE_LICENSE_FILE_NAME, hw_id);
+            const char* device_license_path = get_state_file_path(file_name);
+            free(file_name);
             const char* device_license_path_tmp = get_state_file_path(DEVICE_LICENSE_TEMP_FILE_NAME);
 
             int attempt = 0;

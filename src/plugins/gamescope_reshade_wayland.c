@@ -1,4 +1,3 @@
-
 #include "epoch.h"
 #include "files.h"
 #include "imu.h"
@@ -12,6 +11,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
 
 /**
  * The wayland-client library may not be present, so we create a weak reference to wl_proxy_create just
@@ -34,6 +34,7 @@ static struct gamescope_reshade *reshade_object = NULL;
 static gamescope_reshade_effect_ready_callback effect_ready_callback = NULL;
 static uint64_t gamescope_reshade_effect_request_time = 0;
 static bool gamescope_reshade_ipc_connected = false;
+static pthread_mutex_t wayland_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *gamescope_reshade_wayland_default_config_func() {
     gamescope_reshade_wayland_config *config = calloc(1, sizeof(gamescope_reshade_wayland_config));
@@ -88,7 +89,7 @@ bool is_gamescope_reshade_ipc_connected() {
     return gamescope_reshade_ipc_connected;
 }
 
-static void gamescope_reshade_wl_server_disconnect() {
+static void do_wl_server_disconnect() {
     gamescope_reshade_ipc_connected = false;
     if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_disconnect\n");
     if (effect_ready_callback) effect_ready_callback = NULL;
@@ -107,27 +108,29 @@ static void gamescope_reshade_wl_server_disconnect() {
     }
 }
 
-static void gamescope_reshade_wl_server_connect() {
-    if (gamescope_config->disabled || gamescope_reshade_ipc_connected) return;
+static bool do_wl_server_connect() {
+    if (gamescope_config->disabled || gamescope_reshade_ipc_connected) return false;
 
+    if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect\n");
     if (wl_proxy_create == NULL) {
-        if (config()->debug_ipc) 
+        if (config()->debug_ipc)
             log_debug("gamescope_reshade_wl_server_connect wayland-client library not present\n");
-        return;
+        return false;
     }
 
     if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect\n");
     if (!display) display = wl_display_connect("gamescope-0");
     if (!display) {
         if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect no display\n");
-        return;
+        return false;
     }
     
     if (!registry) registry = wl_display_get_registry(display);
     if (!registry) {
         if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect no registry\n");
         wl_display_disconnect(display);
-        return;
+        display = NULL;
+        return false;
     }
     
     if (!reshade_object) {
@@ -146,8 +149,8 @@ static void gamescope_reshade_wl_server_connect() {
         if (wl_display_error != 0) {
             if (config()->debug_ipc) 
                 log_debug("gamescope_reshade_wl_server_connect wl_display_error: %d\n", wl_display_error);
-            gamescope_reshade_wl_server_disconnect();
-            return;
+            do_wl_server_disconnect();
+            return false;
         }
 
         gamescope_reshade_set_effect(reshade_object, GAMESCOPE_RESHADE_EFFECT_FILE);
@@ -155,58 +158,82 @@ static void gamescope_reshade_wl_server_connect() {
         if (wl_result >= 0) {
             gamescope_reshade_effect_request_time = get_epoch_time_ms();
             gamescope_reshade_ipc_connected = true;
+            return true;
         } else {
             if (config()->debug_ipc) 
                 log_debug("gamescope_reshade_wl_server_connect error %d on wl_display_flush\n", wl_result);
-            gamescope_reshade_wl_server_disconnect();
+            do_wl_server_disconnect();
+            return false;
         }
-
     } else {
         if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect no reshade_object\n");
-        gamescope_reshade_wl_server_disconnect();
+        do_wl_server_disconnect();
+        return false;
     }
 }
 
 static bool gamescope_reshade_wl_setup_ipc() {
-    gamescope_reshade_wl_server_connect();
+    if (config()->debug_ipc) log_debug("gamescope_reshade_wl_setup_ipc\n");
+
+    pthread_mutex_lock(&wayland_mutex);
+    do_wl_server_connect();
+    pthread_mutex_unlock(&wayland_mutex);
 
     return true;
 }
 
-static bool enable_gamescope_effect() {
+static bool do_wl_enable_gamescope_effect() {
     if (!reshade_object) return false;
 
     if (config()->debug_ipc) log_debug("enable_gamescope_effect\n");
     gamescope_reshade_enable_effect(reshade_object);
     wl_display_flush(display);
-
     return true;
 }
 
-static void disable_gamescope_effect() {
-    if (!reshade_object) return;
+static bool do_wl_disable_gamescope_effect() {
+    if (!reshade_object) return false;
     
     if (config()->debug_ipc) log_debug("disable_gamescope_effect\n");
     gamescope_reshade_disable_effect(reshade_object);
     wl_display_flush(display);
+    
+    return true;
 }
 
-static void wayland_cleanup() {
-    disable_gamescope_effect();
+// must only be called from within the wayland mutex
+static void do_trigger_plugins_ipc_change() {
+    // we're sending control to outside plugins which may trigger other calls to set unifrom variables,
+    // so we have to unlock the mutex to be safe and prevent deadlocks
+    pthread_mutex_unlock(&wayland_mutex);
+    plugins.handle_ipc_change();
+    pthread_mutex_lock(&wayland_mutex);
+}
+
+static void do_wl_cleanup() {
+    do_wl_disable_gamescope_effect();
 
     // set this early so other plugins can check if it's connected and change runtime variables
     // before the actual connection is closed
     gamescope_reshade_ipc_connected = false;
     state()->is_gamescope_reshade_ipc_connected = false;
-    plugins.handle_ipc_change();
+    do_trigger_plugins_ipc_change();
     
-    gamescope_reshade_wl_server_disconnect();
+    do_wl_server_disconnect();
     gamescope_reshade_effect_request_time = 0;
 }
 
-void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, const void *data, int entries, 
-                                                   size_t element_size, bool flush) {
-    if (!reshade_object) return;
+static void wayland_cleanup() {
+    if (config()->debug_ipc) log_debug("wayland_cleanup\n");
+
+    pthread_mutex_lock(&wayland_mutex);
+    do_wl_cleanup();
+    pthread_mutex_unlock(&wayland_mutex);
+}
+
+static bool do_wl_set_uniform_variable(const char *variable_name, const void *data, int entries, 
+                                       size_t element_size, bool flush) {
+    if (!reshade_object) return false;
 
     struct wl_array array;
     wl_array_init(&array);
@@ -214,7 +241,7 @@ void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, co
     void *array_data = wl_array_add(&array, total_size);
     if (!array_data) {
         wl_array_release(&array);
-        return;
+        return false;
     }
     memcpy(array.data, data, total_size);
 
@@ -232,9 +259,11 @@ void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, co
 
         if (wl_result < 0) {
             log_error("Error %d on gamescope wl_display_flush\n", wl_result);
-            wayland_cleanup();
+            return false;
         }
     }
+    
+    return true;
 }
 
 static void _effect_ready_callback(void *data,
@@ -247,8 +276,8 @@ static void _effect_ready_callback(void *data,
     }
 }
 
-static void add_gamescope_effect_ready_listener(gamescope_reshade_effect_ready_callback callback) {
-    if (!reshade_object) return;
+static bool do_wl_add_gamescope_effect_ready_listener(gamescope_reshade_effect_ready_callback callback) {
+    if (!reshade_object) return false;
 
     effect_ready_callback = callback;
     static const struct gamescope_reshade_listener listener = {
@@ -256,28 +285,57 @@ static void add_gamescope_effect_ready_listener(gamescope_reshade_effect_ready_c
     };
 
     gamescope_reshade_add_listener(reshade_object, &listener, NULL);
+    
+    return true;
 }
 
 static void _gamescope_reshade_effect_ready() {
     gamescope_reshade_effect_request_time = 0;
 }
 
+void set_gamescope_reshade_effect_uniform_variable(const char *variable_name, const void *data, int entries, 
+                                                   size_t element_size, bool flush) {
+    if (!reshade_object) return;
+
+    pthread_mutex_lock(&wayland_mutex);
+    bool success = do_wl_set_uniform_variable(variable_name, data, entries, element_size, flush);
+    if (!success && flush) {
+        do_wl_cleanup();
+    }
+    pthread_mutex_unlock(&wayland_mutex);
+}
+
+void set_skippable_gamescope_reshade_effect_uniform_variable(const char *variable_name, const void *data, 
+                                                             int entries, size_t element_size, bool flush) {
+    // if already locked, just skip this call
+    if (!reshade_object || pthread_mutex_trylock(&wayland_mutex) != 0) return;
+
+    bool success = do_wl_set_uniform_variable(variable_name, data, entries, element_size, flush);
+    if (!success && flush) {
+        do_wl_cleanup();
+    }
+    pthread_mutex_unlock(&wayland_mutex);
+}
+
 void gamescope_reshade_wl_handle_state_func() {
+    pthread_mutex_lock(&wayland_mutex);
     if (device_present() && sombrero_file_exists() && !gamescope_config->disabled) {
         if (!gamescope_reshade_ipc_connected) {
-            gamescope_reshade_wl_server_connect();
+            do_wl_server_connect();
             if (gamescope_reshade_ipc_connected) {
                 if (config()->debug_ipc) log_debug("gamescope_reshade_wl_handle_state_func connected to gamescope\n");
                 state()->is_gamescope_reshade_ipc_connected = true;
-                plugins.handle_ipc_change();
 
-                add_gamescope_effect_ready_listener(_gamescope_reshade_effect_ready);
-                enable_gamescope_effect();
+                do_trigger_plugins_ipc_change();
+
+                do_wl_add_gamescope_effect_ready_listener(_gamescope_reshade_effect_ready);
+                do_wl_enable_gamescope_effect();
             }
         }
     } else {
-        if (gamescope_reshade_ipc_connected) wayland_cleanup();
+        if (gamescope_reshade_ipc_connected) do_wl_cleanup();
     }
+    pthread_mutex_unlock(&wayland_mutex);
 };
 
 void gamescope_reshade_wl_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, 
@@ -285,12 +343,14 @@ void gamescope_reshade_wl_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_t
                                                ipc_values_type *ipc_values) {
     if (!reshade_object) return;
     
+    pthread_mutex_lock(&wayland_mutex);
     if (gamescope_reshade_effect_request_time != 0 && 
             get_epoch_time_ms() - gamescope_reshade_effect_request_time > 
             GAMESCOPE_RESHADE_WAIT_TIME_MS) {
         log_error("gamescope effect_ready event never received, falling back to shared memory IPC\n");
-        wayland_cleanup();
+        do_wl_cleanup();
     }
+    pthread_mutex_unlock(&wayland_mutex);
 }
 
 void gamescope_reshade_wl_reset_imu_data_func() {

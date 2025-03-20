@@ -148,7 +148,7 @@ void set_virtual_display_ipc_values() {
 
         if (is_gamescope_reshade_ipc_connected()) {
             // don't set the "flush" flag here, we'll let the IMU data trigger the flush
-            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), true);
+            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("display_size", &display_zoom, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("display_north_offset", &display_north_offset, 1, sizeof(float), false);

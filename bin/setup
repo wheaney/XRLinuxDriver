@@ -99,6 +99,14 @@ if [ -e "$BIN_DIR/xr_driver_uninstall" ]; then
   UA_EVENT_NAME="update"
 fi
 
+if command -v jq >/dev/null 2>&1 && [ -e "$STATE_DIR/license.json" ]; then
+  HWID=$(jq -r '.license | fromjson | .hardwareId' "$STATE_DIR/license.json" | cut -c 1-8)
+  if [ "$HWID" != "null" ]; then
+    echo "Moving your license file to $STATE_DIR/${HWID}_license.json"
+    mv "$STATE_DIR/license.json" "$STATE_DIR/${HWID}_license.json"
+  fi
+fi
+
 current_path=$(pwd)
 if [[ "$current_path" == /tmp/* ]]; then
   target_dir=$(echo "$current_path" | sed -E 's|^(/tmp/[^/]+).*|\1|')

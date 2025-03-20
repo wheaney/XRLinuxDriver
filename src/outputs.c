@@ -297,7 +297,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                 ipc_values->date[1] = (float)(t->tm_mon + 1);
                 ipc_values->date[2] = (float)t->tm_mday;
                 ipc_values->date[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
-                set_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), false);
+                set_skippable_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), false);
             }
 
             if (imu_calibrated) {
@@ -315,7 +315,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                     pthread_mutex_lock(ipc_values->imu_data_mutex);
 
                     memcpy(ipc_values->imu_data, response->data, sizeof(float) * 16);
-                    set_gamescope_reshade_effect_uniform_variable("imu_quat_data", ipc_values->imu_data, 16, sizeof(float), true);
+                    set_skippable_gamescope_reshade_effect_uniform_variable("imu_quat_data", ipc_values->imu_data, 16, sizeof(float), true);
 
                     pthread_mutex_unlock(ipc_values->imu_data_mutex);
                 }
