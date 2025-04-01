@@ -7,6 +7,7 @@
 #include "strings.h"
 #include "wl_client/gamescope_reshade.h"
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -155,16 +156,15 @@ static bool do_wl_server_connect() {
 
         gamescope_reshade_set_effect(reshade_object, GAMESCOPE_RESHADE_EFFECT_FILE);
         int wl_result = wl_display_flush(display);
-        if (wl_result >= 0) {
-            gamescope_reshade_effect_request_time = get_epoch_time_ms();
-            gamescope_reshade_ipc_connected = true;
-            return true;
-        } else {
-            if (config()->debug_ipc) 
-                log_debug("gamescope_reshade_wl_server_connect error %d on wl_display_flush\n", wl_result);
+        if (wl_result < 0) {
+            log_error("gamescope_reshade_wl_server_connect error %d on wl_display_flush: %s\n", wl_result, strerror(errno));
             do_wl_server_disconnect();
             return false;
         }
+
+        gamescope_reshade_effect_request_time = get_epoch_time_ms();
+        gamescope_reshade_ipc_connected = true;
+        return true;
     } else {
         if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect no reshade_object\n");
         do_wl_server_disconnect();
@@ -201,13 +201,22 @@ static bool do_wl_disable_gamescope_effect() {
     return true;
 }
 
+static bool plugins_ipc_change_call_in_progress = false;
+
 // must only be called from within the wayland mutex
 static void do_trigger_plugins_ipc_change() {
+    // prevent recursive calls to this function
+    if (plugins_ipc_change_call_in_progress) return;
+
+    plugins_ipc_change_call_in_progress = true;
+
     // we're sending control to outside plugins which may trigger other calls to set unifrom variables,
     // so we have to unlock the mutex to be safe and prevent deadlocks
     pthread_mutex_unlock(&wayland_mutex);
     plugins.handle_ipc_change();
     pthread_mutex_lock(&wayland_mutex);
+
+    plugins_ipc_change_call_in_progress = false;
 }
 
 static void do_wl_cleanup() {
@@ -258,7 +267,7 @@ static bool do_wl_set_uniform_variable(const char *variable_name, const void *da
         }
 
         if (wl_result < 0) {
-            log_error("Error %d on gamescope wl_display_flush\n", wl_result);
+            log_error("Error %d on gamescope wl_display_flush: %s\n", wl_result, strerror(errno));
             return false;
         }
     }
