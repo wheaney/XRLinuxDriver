@@ -119,7 +119,6 @@ static bool do_wl_server_connect() {
         return false;
     }
 
-    if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect\n");
     if (!display) display = wl_display_connect("gamescope-0");
     if (!display) {
         if (config()->debug_ipc) log_debug("gamescope_reshade_wl_server_connect no display\n");
