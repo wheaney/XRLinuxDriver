@@ -30,7 +30,7 @@ void log_metric(char *event_name) {
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
             char url[1024];
-            snprintf(url, 1024, "https://www.google-analytics.com/mp/collect?api_secret=%s&measurement_id=%s", UA_API_SECRET, UA_MEASUREMENT_ID);
+            snprintf(url, 1024, "https://www.google-analytics.com/mp/collect?api_secret=%s&measurement_id=%s&aip=1", UA_API_SECRET, UA_MEASUREMENT_ID);
             curl_easy_setopt(curl, CURLOPT_URL, url);
 
             char post_data[1024];
