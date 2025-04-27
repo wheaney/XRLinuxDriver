@@ -122,6 +122,9 @@ then
         if [ -n "$2" ]; then
             config_value="$2"
         fi
+    elif [ "$1" == "--disable-metrics" ] || [ "$1" == "-dm" ]; then
+        config_key="metrics_disabled"
+        config_value="true"
     elif [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ] || [ "$1" == "--get-hardware-id" ]; then
         config_type="string"
         config_key="hardware_id"
@@ -234,6 +237,7 @@ Options:
   -sbs3d, --sbs-content-3d [true|false]
   -sbsds, --sbs-display-size [display_size]
   -sbsdd, --sbs-display-distance [display_distance]
+  -dm, --disable-metrics
   --request-token [email]
   --verify-token [token]
   --refresh-license

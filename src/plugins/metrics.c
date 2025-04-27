@@ -15,6 +15,8 @@ const char *UA_MEASUREMENT_ID = "G-Z94MXP18T6";
 const char *UA_CLIENT_ID="ARLinuxDriver";
 void log_metric(char *event_name) {
     #ifdef UA_API_SECRET
+        if (config()->metrics_disabled) return;
+
         CURL *curl;
         CURLcode res;
 

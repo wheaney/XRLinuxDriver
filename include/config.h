@@ -9,6 +9,7 @@ struct driver_config_t {
     int mouse_sensitivity;
     char *output_mode;
     bool multi_tap_enabled;
+    bool metrics_disabled;
 
     bool debug_threads;
     bool debug_joystick;

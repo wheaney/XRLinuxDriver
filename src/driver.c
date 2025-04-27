@@ -281,6 +281,9 @@ void update_config_from_file(FILE *fp) {
     if (output_mode_changed)
         log_message("Output mode has been changed to '%s'\n", new_config->output_mode);
 
+    if (config()->metrics_disabled != new_config->metrics_disabled)
+        log_message("Metrics have been %s\n", new_config->metrics_disabled ? "disabled" : "enabled");
+
     if (!config()->debug_joystick && new_config->debug_joystick)
         log_message("Joystick debugging has been enabled, to see it, use 'watch -n 0.1 cat $XDG_RUNTIME_DIR/xr_driver/joystick_debug' in bash\n");
     if (config()->debug_joystick && !new_config->debug_joystick)

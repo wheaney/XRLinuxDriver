@@ -2,6 +2,7 @@
 #include "logging.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <glob.h>
 #include <pthread.h>
 #include <sys/ipc.h>
@@ -10,6 +11,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 const char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
@@ -66,12 +69,14 @@ void setup_ipc_value(const char *name, void **shmemValue, size_t size, bool debu
     strcpy(path, sombrero_ipc_file_prefix);
     strcat(path, name);
 
-    FILE *ipc_file = fopen(path, "w");
-    if (ipc_file == NULL) {
+    mode_t old_umask = umask(0);
+    int fd = open(path, O_CREAT, 0666);
+    if (fd == -1) {
         log_error("Could not create IPC shared file\n");
         exit(1);
     }
-    fclose(ipc_file);
+    close(fd);
+    umask(old_umask);
 
     key_t key = ftok(path, 0);
     if (debug) log_debug("ipc_key, got key %d for path %s\n", key, path);
