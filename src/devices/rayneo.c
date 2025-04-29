@@ -27,21 +27,6 @@
 #define RAYNEO_ID_VENDOR 0x1bbb
 #define RAYNEO_ID_PRODUCT 0xaf50
 
-#define RAYNEO_BRAND_COUNT 2
-#define TCL_BRAND "TCL"
-#define TCL_MODEL_COUNT 2
-#define TCL_NXTWEAR_S_MODEL "NXTWEAR S"
-#define TCL_NXTWEAR_S_PLUS_MODEL "NXTWEAR S+"
-#define RAYNEO_BRAND "RayNeo"
-#define RAYNEO_MODEL_COUNT 2
-#define RAYNEO_AIR_2_MODEL "Air 2"
-#define RAYNEO_AIR_2_S_MODEL "Air 2s"
-static const char* brands[RAYNEO_BRAND_COUNT] = { TCL_BRAND, RAYNEO_BRAND };
-static const char* tcl_models[TCL_MODEL_COUNT] = { TCL_NXTWEAR_S_MODEL, TCL_NXTWEAR_S_PLUS_MODEL };
-static const char* rayneo_models[RAYNEO_MODEL_COUNT] = { RAYNEO_AIR_2_MODEL, RAYNEO_AIR_2_S_MODEL };
-static const int model_counts[RAYNEO_BRAND_COUNT] = { TCL_MODEL_COUNT, RAYNEO_MODEL_COUNT };
-static const char** models[RAYNEO_BRAND_COUNT] = { tcl_models, rayneo_models };
-
 #define STATE_EVENT_DEVICE_INFO 0x4000
 
 // RayNeo SDK is returning rotations relative to an east-up-south coordinate system,
@@ -54,8 +39,8 @@ static const imu_quat_type adjustment_quat = {
 };
 
 const device_properties_type rayneo_properties = {
-    .brand                              = TCL_BRAND,
-    .model                              = "—",
+    .brand                              = "",
+    .model                              = "",
     .hid_vendor_id                      = RAYNEO_ID_VENDOR,
     .hid_product_id                     = RAYNEO_ID_PRODUCT,
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
@@ -109,22 +94,22 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
         if (device_brand == NULL && device_model == NULL) {
             char device_type[64];
             GetDeviceType(device_type);
-            bool device_found = false;
-            for (int i = 0; i < RAYNEO_BRAND_COUNT && !device_found; i++) {
-                for (int j = 0; j < model_counts[i] && !device_found; j++) {
-                    const char* brand = brands[i];
-                    const char* model = models[i][j];
-                    char * device_name = malloc(strlen(brand) + strlen(model) + 2);
-                    strcpy(device_name, brand);
-                    strcat(device_name, " ");
-                    strcat(device_name, model);
+            if (config()->debug_device) log_debug("RayNeo driver, received device type: %s\n", device_type);
 
-                    if (strcmp(device_type, device_name) == 0) {
-                        device_brand = (char *)brand;
-                        device_model = (char *)model;
-                        device_found = true;
-                    }
+            bool device_found = false;
+            char* brand_part = strtok(device_type, " ");
+            char* model_part = strtok(NULL, " ");
+            if (brand_part && model_part) {
+                char* version_part = strtok(NULL, " ");
+                if (version_part) {
+                    char full_model_name[strlen(model_part) + strlen(version_part) + 2]; 
+                    snprintf(full_model_name, sizeof(full_model_name), "%s %s", model_part, version_part);
+                    device_model = strdup(full_model_name);
+                } else {
+                    device_model = strdup(model_part);
                 }
+                device_brand = strdup(brand_part);
+                device_found = true;
             }
             if (device_found) pthread_cond_signal(&device_name_cond);
         }
@@ -139,7 +124,7 @@ bool rayneo_device_connect() {
         if (!initialized) {
             RegisterIMUEventCallback(rayneo_imu_callback);
             RegisterStateEventCallback(rayneo_mcu_callback);
-            if (EstablishUsbConnection(0x1bbb, 0xaf50) == 0) {
+            if (EstablishUsbConnection(RAYNEO_ID_VENDOR, RAYNEO_ID_PRODUCT) == 0) {
                 NotifyDeviceConnected();
                 initialized = true;
             }
@@ -173,7 +158,7 @@ void rayneo_device_disconnect(bool forced) {
         }
         connected = false;
         device_brand = NULL;
-        device_model = NULL;
+        free_and_clear(&device_model);
     }
 };
 
