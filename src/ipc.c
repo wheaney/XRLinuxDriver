@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 const char *sombrero_ipc_file_prefix = "/tmp/shader_runtime_";
 
