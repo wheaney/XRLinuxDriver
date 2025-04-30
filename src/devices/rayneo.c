@@ -97,19 +97,27 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
             if (config()->debug_device) log_debug("RayNeo driver, received device type: %s\n", device_type);
 
             bool device_found = false;
-            char* brand_part = strtok(device_type, " ");
-            char* model_part = strtok(NULL, " ");
-            if (brand_part && model_part) {
-                char* version_part = strtok(NULL, " ");
-                if (version_part) {
-                    char full_model_name[strlen(model_part) + strlen(version_part) + 2]; 
-                    snprintf(full_model_name, sizeof(full_model_name), "%s %s", model_part, version_part);
-                    device_model = strdup(full_model_name);
-                } else {
-                    device_model = strdup(model_part);
+            if (strlen(device_type) > 0) {
+                char device_type_copy[64];
+                strncpy(device_type_copy, device_type, sizeof(device_type_copy) - 1);
+                device_type_copy[sizeof(device_type_copy) - 1] = '\0';
+                
+                char* brand_part = strtok(device_type_copy, " ");
+                char* model_part = strtok(NULL, " ");
+                if (brand_part && model_part && strlen(brand_part) > 0 && strlen(model_part) > 0) {
+                    device_brand = strdup(brand_part);
+                    char* version_part = strtok(NULL, " ");
+                    if (version_part && strlen(version_part) > 0) {
+                        device_model = malloc(strlen(model_part) + strlen(version_part) + 2);
+                        if (device_model) {
+                            sprintf(device_model, "%s %s", model_part, version_part);
+                            device_found = true;
+                        }
+                    } else {
+                        device_model = strdup(model_part);
+                        device_found = true;
+                    }
                 }
-                device_brand = strdup(brand_part);
-                device_found = true;
             }
             if (device_found) pthread_cond_signal(&device_name_cond);
         }
@@ -157,9 +165,9 @@ void rayneo_device_disconnect(bool forced) {
             initialized = false;
         }
         connected = false;
-        device_brand = NULL;
-        free_and_clear(&device_model);
     }
+    free_and_clear(&device_brand);
+    free_and_clear(&device_model);
 };
 
 device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
