@@ -181,7 +181,7 @@ static void _init_outputs() {
     device_checkin(device);
 
     evdev = libevdev_new();
-    if (is_joystick_mode(config())) {
+    if (config()->joystick_mode) {
         struct input_absinfo absinfo;
         absinfo.minimum = min_input;
         absinfo.maximum = max_input;
@@ -206,7 +206,7 @@ static void _init_outputs() {
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_TRIGGER, NULL));
 
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_A, NULL));
-    } else if (is_mouse_mode(config())) {
+    } else if (config()->mouse_mode) {
         libevdev_set_name(evdev, "XR virtual mouse");
 
         evdev_check("libevdev_enable_event_type", libevdev_enable_event_type(evdev, EV_REL));
@@ -219,7 +219,7 @@ static void _init_outputs() {
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_MIDDLE, NULL));
         evdev_check("libevdev_enable_event_code", libevdev_enable_event_code(evdev, EV_KEY, BTN_RIGHT, NULL));
     }
-    if (is_evdev_output_mode(config()))
+    if (config()->mouse_mode || config()->joystick_mode)
         evdev_check("libevdev_uinput_create_from_device", libevdev_uinput_create_from_device(evdev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput));
 }
 
@@ -328,17 +328,19 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
         // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
         // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
         // positive y.
-        int next_joystick_x = joystick_value(-velocities.yaw, joystick_max_degrees_per_s);
-        int next_joystick_y = joystick_value(velocities.pitch, joystick_max_degrees_per_s);
+        int x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
+        int y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
+        int next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
+        int next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
 
         if (uinput) {
-            if (is_joystick_mode(config())) {
+            if (config()->joystick_mode) {
                 int next_joystick_z = joystick_value(-velocities.roll, joystick_max_degrees_per_s);
                 libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
                 libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
                 if (config()->use_roll_axis)
                     libevdev_uinput_write_event(uinput, EV_ABS, ABS_RZ, next_joystick_z);
-            } else if (is_mouse_mode(config())) {
+            } else if (config()->mouse_mode) {
                 // keep track of the remainder (the amount that was lost with round()) for smoothing out mouse movements
                 static float mouse_x_remainder = 0.0;
                 static float mouse_y_remainder = 0.0;
@@ -346,11 +348,11 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
 
                 // smooth out the mouse values using the remainders left over from previous writes
                 float mouse_sensitivity_seconds = (float) config()->mouse_sensitivity / device->imu_cycles_per_s;
-                float next_x = -velocities.yaw * mouse_sensitivity_seconds + mouse_x_remainder;
+                float next_x = x_velocity * mouse_sensitivity_seconds + mouse_x_remainder;
                 int next_x_int = round(next_x);
                 mouse_x_remainder = next_x - next_x_int;
 
-                float next_y = velocities.pitch * mouse_sensitivity_seconds + mouse_y_remainder;
+                float next_y = y_velocity * mouse_sensitivity_seconds + mouse_y_remainder;
                 int next_y_int = round(next_y);
                 mouse_y_remainder = next_y - next_y_int;
 
@@ -362,11 +364,11 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                 libevdev_uinput_write_event(uinput, EV_REL, REL_Y, next_y_int);
                 if (config()->use_roll_axis)
                     libevdev_uinput_write_event(uinput, EV_REL, REL_Z, next_z_int);
-            } else if (!is_external_mode(config())) {
+            } else if (!config()->external_mode) {
                 log_error("Unsupported output mode: %s\n", config()->output_mode);
             }
 
-            if (is_evdev_output_mode(config()))
+            if (config()->mouse_mode || config()->joystick_mode)
                 libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
         }
 

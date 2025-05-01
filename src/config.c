@@ -20,7 +20,12 @@ driver_config_type *default_config() {
     }
 
     config->disabled = true;
+    config->mouse_mode = false;
+    config->joystick_mode = false;
+    config->external_mode = false;
     config->use_roll_axis = false;
+    config->vr_lite_invert_x = false;
+    config->vr_lite_invert_y = false;
     config->mouse_sensitivity = 30;
     config->output_mode = strdup(mouse_output_mode);
     config->multi_tap_enabled = false;
@@ -108,10 +113,17 @@ driver_config_type* parse_config_file(FILE *fp) {
             }
         } else if (equal(key, "use_roll_axis")) {
             config->use_roll_axis = true;
+        } else if (equal(key, "vr_lite_invert_x")) {
+            boolean_config(key, value, &config->vr_lite_invert_x);
+        } else if (equal(key, "vr_lite_invert_y")) {
+            boolean_config(key, value, &config->vr_lite_invert_y);
         } else if (equal(key, "mouse_sensitivity")) {
             int_config(key, value, &config->mouse_sensitivity);
         } else if (equal(key, "output_mode")) {
             string_config(key, value, &config->output_mode);
+            config->joystick_mode = strcmp(config->output_mode, joystick_output_mode) == 0;
+            config->mouse_mode = strcmp(config->output_mode, mouse_output_mode) == 0;
+            config->external_mode = strcmp(config->output_mode, external_only_output_mode) == 0;
         } else if (equal(key, "multi_tap_enabled")) {
             boolean_config(key, value, &config->multi_tap_enabled);
         } else if (equal(key, "metrics_disabled")) {
@@ -123,20 +135,4 @@ driver_config_type* parse_config_file(FILE *fp) {
     plugins.set_config(plugin_configs);
 
     return config;
-}
-
-bool is_joystick_mode(driver_config_type *config) {
-    return strcmp(config->output_mode, joystick_output_mode) == 0;
-}
-
-bool is_mouse_mode(driver_config_type *config) {
-    return strcmp(config->output_mode, mouse_output_mode) == 0;
-}
-
-bool is_external_mode(driver_config_type *config) {
-    return strcmp(config->output_mode, external_only_output_mode) == 0;
-}
-
-bool is_evdev_output_mode(driver_config_type *config) {
-    return is_mouse_mode(config) || is_joystick_mode(config);
 }

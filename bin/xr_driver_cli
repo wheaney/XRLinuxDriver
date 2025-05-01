@@ -26,6 +26,18 @@ then
         config_value="false"
     elif [ "$1" == "--status" ] || [ "$1" == "-s" ]; then
         config_key="disabled"
+    elif [ "$1" == "--vr-lite-invert-x-enable" ] || [ "$1" == "-invx" ]; then
+        config_key="vr_lite_invert_x"
+        config_value="true"
+    elif [ "$1" == "--vr-lite-invert-x-disable" ] || [ "$1" == "-invxd" ]; then
+        config_key="vr_lite_invert_x"
+        config_value="false"
+    elif [ "$1" == "--vr-lite-invert-y-enable" ] || [ "$1" == "-invy" ]; then
+        config_key="vr_lite_invert_y"
+        config_value="true"
+    elif [ "$1" == "--vr-lite-invert-y-disable" ] || [ "$1" == "-invyd" ]; then
+        config_key="vr_lite_invert_y"
+        config_value="false"
     elif [ "$1" == "--mouse-sensitivity" ] || [ "$1" == "-ms" ]; then
         config_key="mouse_sensitivity"
         config_type="string"
@@ -219,6 +231,10 @@ Options:
   -s, --status
   -j, --use-joystick
   -m, --use-mouse
+  -invx, --vr-lite-invert-x-enable
+  -invxd, --vr-lite-invert-x-disable
+  -invy, --vr-lite-invert-y-enable
+  -invyd, --vr-lite-invert-y-disable
   -ms, --mouse-sensitivity [sensitivity_value]
   -mte, --multi-tap-enable
   -mtd, --multi-tap-disable

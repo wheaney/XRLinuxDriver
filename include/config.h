@@ -5,7 +5,12 @@
 
 struct driver_config_t {
     bool disabled;
+    bool mouse_mode;
+    bool joystick_mode;
+    bool external_mode;
     bool use_roll_axis;
+    bool vr_lite_invert_x;
+    bool vr_lite_invert_y;
     int mouse_sensitivity;
     char *output_mode;
     bool multi_tap_enabled;
@@ -33,8 +38,3 @@ void boolean_config(char* key, char *value, bool *config_value);
 void float_config(char* key, char *value, float *config_value);
 void int_config(char* key, char *value, int *config_value);
 void string_config(char* key, char *value, char **config_value);
-
-bool is_joystick_mode(driver_config_type *config);
-bool is_mouse_mode(driver_config_type *config);
-bool is_external_mode(driver_config_type *config);
-bool is_evdev_output_mode(driver_config_type *config);

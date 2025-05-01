@@ -151,7 +151,6 @@ bool driver_disabled() {
 }
 
 void setup_ipc() {
-    bool not_external_only = config()->output_mode && !is_external_mode(config());
     if (!ipc_values) {
         if (config()->debug_ipc) log_debug("setup_ipc, enabling IPC\n");
         ipc_values = calloc(1, sizeof(*ipc_values));
