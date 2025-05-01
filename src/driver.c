@@ -268,10 +268,15 @@ void update_config_from_file(FILE *fp) {
     if (driver_reenabled)
         log_message("Driver has been re-enabled\n");
 
+    if (config()->vr_lite_invert_x != new_config->vr_lite_invert_x)
+        log_message("VR-Lite invert X-axis has been %s\n", new_config->vr_lite_invert_x ? "enabled" : "disabled");
+    if (config()->vr_lite_invert_y != new_config->vr_lite_invert_y)
+        log_message("VR-Lite invert Y-axis has been %s\n", new_config->vr_lite_invert_y ? "enabled" : "disabled");
+
     if (!config()->use_roll_axis && new_config->use_roll_axis)
-        log_message("Roll axis has been enabled\n");
+        log_message("VR-Lite roll axis has been enabled\n");
     if (config()->use_roll_axis && !new_config->use_roll_axis)
-        log_message("Roll axis has been disabled\n");
+        log_message("VR-Lite roll axis has been disabled\n");
 
     if (config()->mouse_sensitivity != new_config->mouse_sensitivity)
         log_message("Mouse sensitivity has changed to %d\n", new_config->mouse_sensitivity);
