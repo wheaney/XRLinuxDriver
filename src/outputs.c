@@ -5,6 +5,7 @@
 #include "files.h"
 #include "ipc.h"
 #include "logging.h"
+#include "memory.h"
 #include "outputs.h"
 #include "plugins.h"
 #include "plugins/gamescope_reshade_wayland.h"

@@ -1,6 +1,7 @@
 #include "curl.h"
 #include "files.h"
 #include "logging.h"
+#include "memory.h"
 #include "plugins/device_license.h"
 #include "runtime_context.h"
 #include "system.h"

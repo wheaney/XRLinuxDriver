@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "logging.h"
+#include "memory.h"
 #include "plugins.h"
 #include "state.h"
 #include "strings.h"

@@ -1,5 +1,6 @@
 #include "files.h"
 #include "logging.h"
+#include "memory.h"
 #include "state.h"
 #include "strings.h"
 #include "version.h"

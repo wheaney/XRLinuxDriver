@@ -5,6 +5,7 @@
 #include "imu.h"
 #include "ipc.h"
 #include "logging.h"
+#include "memory.h"
 #include "plugins/gamescope_reshade_wayland.h"
 #include "plugins/smooth_follow.h"
 #include "runtime_context.h"

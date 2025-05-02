@@ -2,12 +2,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-void free_and_clear(char **str_ptr) {
-    if (*str_ptr) {
-        free(*str_ptr);
-        *str_ptr = NULL;
-    }
-}
 bool equal(char *a, const char *b) {
     return strcmp(a, b) == 0;
 }

@@ -1,5 +1,6 @@
 #include "config.h"
 #include "logging.h"
+#include "memory.h"
 #include "plugins.h"
 #include "strings.h"
 

@@ -7,6 +7,7 @@
 #include "imu.h"
 #include "ipc.h"
 #include "logging.h"
+#include "memory.h"
 #include "multitap.h"
 #include "outputs.h"
 #include "plugins.h"
