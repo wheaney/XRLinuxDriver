@@ -61,11 +61,15 @@ const device_properties_type rayneo_properties = {
 };
 
 static uint32_t last_utilized_event_ts = 0;
-static bool connected = false;
-static bool initialized = false;
+
+// hardware connection - device is physically plugged in
+static bool hard_connected = false;
+// software connection - we're actively in communication, holding open a connection
+static bool soft_connected = false;
+
 static bool is_sbs_mode = false;
 void rayneo_imu_callback(const float acc[3], const float gyro[3], const float mag[3], uint64_t timestamp){
-    if (!connected || driver_disabled()) return;
+    if (!soft_connected || driver_disabled()) return;
 
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
     uint32_t elapsed_from_last_utilized = ts - last_utilized_event_ts;
@@ -89,7 +93,7 @@ static char* device_brand = NULL;
 static char* device_model = NULL;
 static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t length, const void* data) {
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
-    if (!connected) return;
+    if (!soft_connected) return;
     if (state == STATE_EVENT_DEVICE_INFO) {
         pthread_mutex_lock(&device_name_mutex);
         if (device_brand == NULL && device_model == NULL) {
@@ -129,45 +133,47 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
 }
 
 bool rayneo_device_connect() {
-    if (!connected) {
-        if (!initialized) {
+    if (!soft_connected) {
+        if (!hard_connected) {
             RegisterIMUEventCallback(rayneo_imu_callback);
             RegisterStateEventCallback(rayneo_mcu_callback);
             if (EstablishUsbConnection(RAYNEO_ID_VENDOR, RAYNEO_ID_PRODUCT) == 0) {
                 NotifyDeviceConnected();
-                initialized = true;
+                hard_connected = true;
             }
         }
-        if (initialized) {
+        if (hard_connected) {
             StartXR();
             OpenIMU();
 
             // this will trigger the STATE_EVENT_DEVICE_INFO event
             AcquireDeviceInfo();
 
-            connected = true;
+            soft_connected = true;
         } else {
             log_message("RayNeo driver, failed to establish a connection\n");
         }
     }
 
-    return connected;
+    return soft_connected;
 };
 
-void rayneo_device_disconnect(bool forced, bool is_device_present) {
-    if (connected) {
+void rayneo_device_disconnect(bool soft, bool is_device_present) {
+    if (soft_connected) {
         CloseIMU();
         StopXR();
-        if (!forced || !is_device_present) {
-            NotifyDeviceDisconnected();
-            ResetUsbConnection();
-            UnregisterIMUEventCallback(rayneo_imu_callback);
-            UnregisterStateEventCallback(rayneo_mcu_callback);
-            free_and_clear(&device_brand);
-            free_and_clear(&device_model);
-            initialized = false;
-        }
-        connected = false;
+        soft_connected = false;
+    }
+
+    bool retain_hard_connection = soft && is_device_present;
+    if (hard_connected && !retain_hard_connection) {
+        NotifyDeviceDisconnected();
+        ResetUsbConnection();
+        UnregisterIMUEventCallback(rayneo_imu_callback);
+        UnregisterStateEventCallback(rayneo_mcu_callback);
+        free_and_clear(&device_brand);
+        free_and_clear(&device_model);
+        hard_connected = false;
     }
 };
 
@@ -204,12 +210,12 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
 void rayneo_block_on_device() {
     device_properties_type* device = device_checkout();
     bool imu_started = false;
-    if (connected && device != NULL) imu_started = wait_for_imu_start();
-    while (connected && device != NULL && imu_started && is_imu_alive()) {
+    if (soft_connected && device != NULL) imu_started = wait_for_imu_start();
+    while (soft_connected && device != NULL && imu_started && is_imu_alive()) {
         sleep(1);
     }
 
-    if (connected) rayneo_device_disconnect(false, device != NULL);
+    if (soft_connected) rayneo_device_disconnect(false, device != NULL);
     device_checkin(device);
 };
 
@@ -229,7 +235,7 @@ bool rayneo_device_set_sbs_mode(bool enabled) {
 };
 
 bool rayneo_is_connected() {
-    return connected;
+    return soft_connected;
 };
 
 void rayneo_disconnect(bool forced) {

@@ -312,7 +312,7 @@ void update_config_from_file(FILE *fp) {
     update_config(config(), new_config);
 
     if (driver_newly_disabled && is_driver_connected()) {
-        if (new_config->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func()\n");
+        if (new_config->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
     }
 
@@ -517,7 +517,7 @@ void handle_device_update(connected_device_type* usb_device) {
     static device_properties_type* connected_device = NULL;
 
     if (connected_device != NULL) {
-        if (is_driver_connected()) {
+        if (device_driver != NULL) {
             if (config()->debug_device) log_debug("handle_device_update, device_driver->disconnect_func(false)\n");
             device_driver->disconnect_func(false);
         }

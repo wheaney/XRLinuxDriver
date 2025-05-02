@@ -209,8 +209,6 @@ void rokid_block_on_device() {
                 }
 
                 driver_handle_imu_event(timestamp, nwu_quat);
-            } else {
-                rokid_disconnect(false);
             }
         }
         cleanup();
