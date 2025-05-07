@@ -87,8 +87,8 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
     }
 }
 
-pthread_mutex_t device_name_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t device_name_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t device_name_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t device_name_cond = PTHREAD_COND_INITIALIZER;
 static char* device_brand = NULL;
 static char* device_model = NULL;
 static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t length, const void* data) {
