@@ -132,7 +132,9 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
     }
 }
 
+static pthread_mutex_t device_connection_mutex = PTHREAD_MUTEX_INITIALIZER;
 bool rayneo_device_connect() {
+    pthread_mutex_lock(&device_connection_mutex);
     if (!soft_connected) {
         if (!hard_connected) {
             RegisterIMUEventCallback(rayneo_imu_callback);
@@ -145,20 +147,22 @@ bool rayneo_device_connect() {
         if (hard_connected) {
             StartXR();
             OpenIMU();
+            
+            soft_connected = true;
 
             // this will trigger the STATE_EVENT_DEVICE_INFO event
             AcquireDeviceInfo();
-
-            soft_connected = true;
         } else {
             log_message("RayNeo driver, failed to establish a connection\n");
         }
     }
+    pthread_mutex_unlock(&device_connection_mutex);
 
     return soft_connected;
 };
 
 void rayneo_device_disconnect(bool soft, bool is_device_present) {
+    pthread_mutex_lock(&device_connection_mutex);
     if (soft_connected) {
         CloseIMU();
         StopXR();
@@ -175,6 +179,7 @@ void rayneo_device_disconnect(bool soft, bool is_device_present) {
         free_and_clear(&device_model);
         hard_connected = false;
     }
+    pthread_mutex_unlock(&device_connection_mutex);
 };
 
 device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
@@ -215,7 +220,7 @@ void rayneo_block_on_device() {
         sleep(1);
     }
 
-    if (soft_connected) rayneo_device_disconnect(false, device != NULL);
+    rayneo_device_disconnect(true, device != NULL);
     device_checkin(device);
 };
 
@@ -238,8 +243,8 @@ bool rayneo_is_connected() {
     return soft_connected;
 };
 
-void rayneo_disconnect(bool forced) {
-    rayneo_device_disconnect(forced, device_present());
+void rayneo_disconnect(bool soft) {
+    rayneo_device_disconnect(soft, device_present());
 };
 
 const device_driver_type rayneo_driver = {

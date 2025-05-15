@@ -211,7 +211,7 @@ void smooth_follow_set_config_func(void* config) {
 
         if (temp_config->sideview_enabled && 
                 sf_config->sideview_follow_enabled != temp_config->sideview_follow_enabled ||
-            sf_config->sideview_enabled != temp_config->sideview_enabled)
+            sf_config->sideview_enabled != temp_config->sideview_enabled && temp_config->sideview_follow_enabled)
             log_message("Sideview follow has been %s\n", temp_config->sideview_follow_enabled ? "enabled" : "disabled");
 
         if (temp_config->sideview_follow_threshold != sf_config->sideview_follow_threshold)

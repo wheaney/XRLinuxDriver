@@ -3,7 +3,7 @@
 #    docker run --rm -t -v ./:/source -v --platform linux/amd64 "xr-driver:amd64"
 #    docker run --rm -t -v ./:/source -v --platform linux/arm64 "xr-driver:arm64"
 
-FROM --platform=$TARGETPLATFORM debian:latest
+FROM --platform=$TARGETPLATFORM debian:stable-20250428-slim
 
 ARG TARGETPLATFORM
 RUN echo "Target platform: $TARGETPLATFORM"

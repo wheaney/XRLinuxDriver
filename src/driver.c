@@ -311,8 +311,8 @@ void update_config_from_file(FILE *fp) {
 
     update_config(config(), new_config);
 
-    if (driver_newly_disabled && is_driver_connected()) {
-        if (new_config->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func(true)\n");
+    if (config()->disabled && is_driver_connected()) {
+        if (config()->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
     }
 

@@ -152,17 +152,20 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
     return NULL;
 };
 
+static pthread_mutex_t viture_connection_mutex = PTHREAD_MUTEX_INITIALIZER;
 static void disconnect(bool soft) {
+    pthread_mutex_lock(&viture_connection_mutex);
     if (connected) {
         set_imu(false);
-
-        // VITURE SDK freezes if we attempt deinit() while it's still physically connected, so only do this if the device is no longer present
-        if (!soft || !device_present()) {
-            deinit();
-            initialized = false;
-        }
         connected = false;
     }
+
+    // VITURE SDK freezes if we attempt deinit() while it's still physically connected, so only do this if the device is no longer present
+    if (initialized && (!soft || !device_present())) {
+        deinit();
+        initialized = false;
+    }
+    pthread_mutex_unlock(&viture_connection_mutex);
 }
 
 bool viture_device_connect() {
@@ -216,7 +219,7 @@ void viture_block_on_device() {
             imu_state = get_imu_state();
         }
     }
-    disconnect(false);
+    disconnect(true);
     device_checkin(device);
 };
 
