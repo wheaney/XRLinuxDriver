@@ -11,6 +11,12 @@ enum calibration_setup_t {
 };
 typedef enum calibration_setup_t calibration_setup_type;
 
+// Standard display resolutions
+#define RESOLUTION_1080P_W 1920
+#define RESOLUTION_1080P_H 1080
+#define RESOLUTION_1200P_W 1920
+#define RESOLUTION_1200P_H 1200
+
 struct device_properties_t {
     char* brand;
     char* model;

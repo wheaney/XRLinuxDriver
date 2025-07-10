@@ -47,7 +47,8 @@ then
   # download and unzip the latest driver
   binary_path_arg="xrDriver-$ARCH.tar.gz"
   echo "Downloading to: ${tmp_dir}/$binary_path_arg"
-  curl -L -O $binary_download_url
+
+  curl -L "$binary_download_url" > "$binary_path_arg"
 else
   if [[ "$binary_path_arg" = /* ]]; then
     abs_path="$binary_path_arg"

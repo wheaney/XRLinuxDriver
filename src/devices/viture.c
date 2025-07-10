@@ -15,11 +15,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VITURE_ID_PRODUCT_COUNT 7
+#define VITURE_ID_PRODUCT_COUNT 10
 #define VITURE_ID_VENDOR 0x35ca
 #define VITURE_ONE_MODEL_NAME "One"
 #define VITURE_ONE_LITE_MODEL_NAME "One Lite"
 #define VITURE_PRO_MODEL_NAME "Pro"
+#define VITURE_LUMA_MODEL_NAME "Luma"
+#define VITURE_LUMA_PRO_MODEL_NAME "Luma Pro"
+
+const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
+const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
+
+const float VITURE_ONE_FOV = 40.0;
+const float VITURE_PRO_FOV = 43.0;
+const float VITURE_LUMA_FOV = 47.0;
+const float VITURE_LUMA_PRO_FOV = 49.0;
+
 const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x1011, // One
     0x1013, // One
@@ -28,6 +39,9 @@ const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x101b, // One Lite
     0x1019, // Pro
     0x101d, // Pro
+    0x1021, // Luma Pro
+    0x1031, // Luma
+    0x1041  // Luma Pro
 };
 const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
     VITURE_ONE_MODEL_NAME, 
@@ -37,10 +51,47 @@ const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
     VITURE_ONE_LITE_MODEL_NAME,
     VITURE_PRO_MODEL_NAME,
     VITURE_PRO_MODEL_NAME,
+    VITURE_LUMA_PRO_MODEL_NAME,
+    VITURE_LUMA_MODEL_NAME,
+    VITURE_LUMA_PRO_MODEL_NAME
+};
+const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
+    &VITURE_ONE_PITCH_ADJUSTMENT, // One
+    &VITURE_ONE_PITCH_ADJUSTMENT, // One
+    &VITURE_ONE_PITCH_ADJUSTMENT, // One
+    &VITURE_ONE_PITCH_ADJUSTMENT, // One Lite
+    &VITURE_ONE_PITCH_ADJUSTMENT, // One Lite
+    &VITURE_PRO_PITCH_ADJUSTMENT, // Pro
+    &VITURE_PRO_PITCH_ADJUSTMENT, // Pro
+    &VITURE_PRO_PITCH_ADJUSTMENT, // Luma Pro
+    &VITURE_PRO_PITCH_ADJUSTMENT, // Luma
+    &VITURE_PRO_PITCH_ADJUSTMENT  // Luma Pro
+};
+const float* viture_fovs[VITURE_ID_PRODUCT_COUNT] = {
+    &VITURE_ONE_FOV, // One
+    &VITURE_ONE_FOV, // One
+    &VITURE_ONE_FOV, // One
+    &VITURE_ONE_FOV, // One Lite
+    &VITURE_ONE_FOV, // One Lite
+    &VITURE_PRO_FOV, // Pro
+    &VITURE_PRO_FOV, // Pro
+    &VITURE_LUMA_PRO_FOV, // Luma Pro
+    &VITURE_LUMA_FOV, // Luma
+    &VITURE_LUMA_PRO_FOV  // Luma Pro
+};
+const int viture_resolution_heights[VITURE_ID_PRODUCT_COUNT] = {
+    RESOLUTION_1080P_H, // One
+    RESOLUTION_1080P_H, // One
+    RESOLUTION_1080P_H, // One
+    RESOLUTION_1080P_H, // One Lite
+    RESOLUTION_1080P_H, // One Lite
+    RESOLUTION_1080P_H, // Pro
+    RESOLUTION_1080P_H, // Pro
+    RESOLUTION_1200P_H, // Luma Pro
+    RESOLUTION_1200P_H, // Luma
+    RESOLUTION_1200P_H  // Luma Pro
 };
 
-const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
-const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
 static imu_quat_type adjustment_quat;
 
 const device_properties_type viture_one_properties = {
@@ -49,9 +100,9 @@ const device_properties_type viture_one_properties = {
     .hid_vendor_id                      = 0x35ca,
     .hid_product_id                     = 0x1011,
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
-    .resolution_w                       = 1920,
-    .resolution_h                       = 1080,
-    .fov                                = 40.0,
+    .resolution_w                       = RESOLUTION_1080P_W,
+    .resolution_h                       = RESOLUTION_1080P_H,
+    .fov                                = VITURE_ONE_FOV,
     .lens_distance_ratio                = 0.05,
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
@@ -136,13 +187,10 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
                 device->model = (char *)viture_supported_models[i];
+                device->resolution_h = viture_resolution_heights[i];
+                device->fov = *viture_fovs[i];
 
-                if (equal(VITURE_PRO_MODEL_NAME, device->model)) {
-                    device->fov = 43.0;
-                    adjustment_quat = device_pitch_adjustment(VITURE_PRO_PITCH_ADJUSTMENT);
-                } else {
-                    adjustment_quat = device_pitch_adjustment(VITURE_ONE_PITCH_ADJUSTMENT);
-                }
+                adjustment_quat = device_pitch_adjustment(*viture_pitch_adjustments[i]);
 
                 return device;
             }

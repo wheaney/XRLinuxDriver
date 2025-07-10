@@ -27,9 +27,6 @@ const int rokid_supported_id_product[ROKID_ID_PRODUCT_COUNT] = {
 #define RESOLUTION_3D_3840_1200_90HZ 4
 #define RESOLUTION_3D_3840_1200_60HZ 5
 
-#define RESOLUTION_H_1200P 1200
-#define RESOLUTION_H_1080P 1080
-
 // Rokid SDK is returning rotations relative to an east-up-south coordinate system,
 // this converts to to north-west-up, and applies a 5-degree offset based on factory device calibration
 static const imu_quat_type adjustment_quat = {
@@ -45,8 +42,8 @@ const device_properties_type rokid_one_properties = {
     .hid_vendor_id                      = ROKID_GLASS_VID,
     .hid_product_id                     = -1, // replaced by the supported_device() function
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
-    .resolution_w                       = 1920,
-    .resolution_h                       = RESOLUTION_H_1080P,
+    .resolution_w                       = RESOLUTION_1080P_W,
+    .resolution_h                       = RESOLUTION_1080P_H,
     .fov                                = 45,
     .lens_distance_ratio                = 0.02,
     .calibration_wait_s                 = 1,
@@ -97,9 +94,9 @@ static void handle_display_mode(device_properties_type* device, int display_mode
     sbs_mode_enabled = display_mode != RESOLUTION_2D_3840_1080_60HZ;
     if (sbs_mode_enabled) {
         if (display_mode != RESOLUTION_3D_3840_1080_60HZ) {
-            device->resolution_h = RESOLUTION_H_1200P;
+            device->resolution_h = RESOLUTION_1200P_H;
         } else {
-            device->resolution_h = RESOLUTION_H_1080P;
+            device->resolution_h = RESOLUTION_1080P_H;
         }
     }
 }
