@@ -40,9 +40,9 @@ const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x101b, // One Lite
     0x1019, // Pro
     0x101d, // Pro
-    0x1021, // Luma Pro
-    0x1031, // Luma
-    0x1041  // Luma Pro
+    0x1121, // Luma Pro
+    0x1131, // Luma
+    0x1141  // Luma Pro
 };
 const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
     VITURE_ONE_MODEL_NAME, 
