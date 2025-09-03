@@ -121,7 +121,7 @@ su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
 ###############################
 ### BEGIN sudo required section
 
-if ! lsmod | grep -q uinput; then
+if ! { lsmod | grep -q uinput || [[ -c /dev/uinput ]]; }; then
   echo "Setting up uinput kernel module"
   modprobe uinput
 fi
