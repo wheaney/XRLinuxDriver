@@ -93,6 +93,19 @@ const int viture_resolution_heights[VITURE_ID_PRODUCT_COUNT] = {
     RESOLUTION_1200P_H  // Luma Pro
 };
 
+const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
+    1, // One
+    1, // One
+    1, // One
+    1, // One Lite
+    1, // One Lite
+    1, // Pro
+    1, // Pro
+    5, // Luma Pro
+    5, // Luma
+    5  // Luma Pro
+};
+
 static imu_quat_type adjustment_quat;
 
 const device_properties_type viture_one_properties = {
@@ -190,6 +203,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 device->model = (char *)viture_supported_models[i];
                 device->resolution_h = viture_resolution_heights[i];
                 device->fov = *viture_fovs[i];
+                device->calibration_wait_s = viture_calibration_wait_s[i];
 
                 adjustment_quat = device_pitch_adjustment(*viture_pitch_adjustments[i]);
 
