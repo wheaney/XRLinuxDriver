@@ -225,3 +225,9 @@ imu_quat_type device_pitch_adjustment(float adjustment_degrees) {
 bool quat_equal(imu_quat_type q1, imu_quat_type q2) {
     return q1.w == q2.w && q1.x == q2.x && q1.y == q2.y && q1.z == q2.z;
 }
+
+float quat_small_angle_rad(imu_quat_type q1, imu_quat_type q2) {
+    float dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+    if (dot > 1.0f) dot = 1.0f; else if (dot < -1.0f) dot = -1.0f;
+    return 2.0f * acosf(fabsf(dot));
+}
