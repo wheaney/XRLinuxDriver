@@ -26,6 +26,8 @@
 
 #define MS_PER_SEC 1000
 #define IMU_CHECKPOINT_MS MS_PER_SEC / 4
+#define IMU_DEAD_ZONE_STABILITY_MS 500
+
 
 imu_buffer_type *imu_buffer;
 
@@ -316,11 +318,146 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, pose.orientation, (float)pose.timestamp_ms);
 
                 if (response && response->ready) {
+                    static bool dead_zone_initialized = false;
+                    static bool dead_zone_in_use = false;
+                    static bool dead_zone_slerping = false;
+                    static imu_quat_type dead_zone_quat = {0};
+                    static imu_quat_type slerp_start_quat = {0};
+                    static imu_quat_type slerp_end_quat = {0};
+                    static uint32_t dead_zone_checkpoint_ms = 0;
+                    static uint32_t slerp_start_timestamp_ms = 0;
+                    static int dead_zone_lower_threshold_counter = 0;
+                    static float dead_zone_lower_threshold_total_angle = 0;
+
+                    static float dead_zone_lower_threshold_deg = 0.0;
+                    static float dead_zone_lower_threshold_rad = 0.0;
+                    static float dead_zone_upper_threshold_rad = 0.0;
+                    static int dead_zone_lower_stability_ms = 0;
+                    static int dead_zone_slerp_ms = 0;
+                    if (config()->dead_zone_threshold_deg != dead_zone_lower_threshold_deg) {
+                        dead_zone_lower_threshold_deg = config()->dead_zone_threshold_deg;
+                        dead_zone_lower_threshold_rad = degree_to_radian(dead_zone_lower_threshold_deg);
+                        dead_zone_upper_threshold_rad = dead_zone_lower_threshold_rad * 3.0;
+                        dead_zone_lower_stability_ms = 100.0 / dead_zone_lower_threshold_deg;
+                        dead_zone_slerp_ms = 250 * dead_zone_lower_threshold_deg;
+
+                        log_message("dead zone data updated to lower threshold %.2f degrees, upper threshold %.2f degrees, stability time %d ms, slerp time %d ms\n",
+                                    dead_zone_lower_threshold_deg, radian_to_degree(dead_zone_upper_threshold_rad),
+                                    dead_zone_lower_stability_ms, dead_zone_slerp_ms);
+                    }
+
+                    if (dead_zone_lower_threshold_deg > 0.0) {
+                        if (!dead_zone_initialized) {
+                            dead_zone_initialized = true;
+                            dead_zone_quat = quat;
+                            dead_zone_checkpoint_ms = timestamp_ms;
+                        } else {
+                            float angle_rad = quat_small_angle_rad(dead_zone_slerping ? slerp_end_quat : dead_zone_quat, quat);
+                            uint32_t time_since_last_checkpoint_ms = timestamp_ms - dead_zone_checkpoint_ms;
+
+                            // if we exceed the outer threshold once, or the inner threshold a multiple times, break or reset the lock
+                            bool angle_threshold_met = angle_rad >= dead_zone_upper_threshold_rad;
+                            bool was_dead_zone_in_use = dead_zone_in_use;
+                            if (angle_threshold_met) {
+                                if (dead_zone_in_use) log_message("Large noise lock threshold exceeded, unlocking IMU output\n");
+                                dead_zone_in_use = false;
+                            }
+                            if (!angle_threshold_met) {
+                                dead_zone_lower_threshold_counter++;
+                                dead_zone_lower_threshold_total_angle += angle_rad;
+                                float avg_angle_rad = dead_zone_lower_threshold_total_angle / (float)dead_zone_lower_threshold_counter;
+                                if (avg_angle_rad >= dead_zone_lower_threshold_rad) {
+                                    if (time_since_last_checkpoint_ms >= dead_zone_lower_stability_ms) {
+                                        angle_threshold_met = true;
+                                        if (dead_zone_in_use) log_message("Small noise lock threshold exceeded, unlocking IMU output\n");
+                                    }
+                                } else if (dead_zone_in_use) {
+                                    dead_zone_checkpoint_ms = timestamp_ms;
+                                    dead_zone_lower_threshold_counter = 0;
+                                    dead_zone_lower_threshold_total_angle = 0;
+                                }
+                            }
+
+                            if (angle_threshold_met) {
+                                if (dead_zone_in_use || was_dead_zone_in_use) {
+                                    log_message("Beginning slerp\n");
+                                    slerp_start_quat = dead_zone_quat;
+                                    slerp_end_quat = quat;
+                                    dead_zone_slerping = true;
+                                    slerp_start_timestamp_ms = timestamp_ms;
+                                }
+                                dead_zone_lower_threshold_counter = 0;
+                                dead_zone_lower_threshold_total_angle = 0;
+                                dead_zone_checkpoint_ms = timestamp_ms;
+                                dead_zone_quat = quat;
+                            } else if (!dead_zone_in_use && time_since_last_checkpoint_ms >= IMU_DEAD_ZONE_STABILITY_MS) {
+                                log_message("IMU output stable, locking orientation\n");
+                                dead_zone_in_use = true;
+                                dead_zone_lower_threshold_counter = 0;
+                                dead_zone_lower_threshold_total_angle = 0;
+                                dead_zone_checkpoint_ms = timestamp_ms;
+
+                                // when the lock starts, capture the latest quat so it doesn't suddenly jump
+                                dead_zone_quat = quat;
+                            }
+
+                            if (dead_zone_slerping) {
+                                uint32_t slerp_progress_ms = timestamp_ms - slerp_start_timestamp_ms;
+                                if (slerp_progress_ms >= dead_zone_slerp_ms) {
+                                    log_message("Slerp finished\n");
+                                    dead_zone_slerping = false;
+                                    dead_zone_quat = quat;
+                                    dead_zone_lower_threshold_counter = 0;
+                                    dead_zone_lower_threshold_total_angle = 0;
+                                    dead_zone_checkpoint_ms = timestamp_ms;
+                                } else {
+                                    float t = (float)slerp_progress_ms / (float)dead_zone_slerp_ms;
+                                    float dot = slerp_start_quat.x * quat.x + slerp_start_quat.y * quat.y + slerp_start_quat.z * quat.z + slerp_start_quat.w * quat.w;
+                                    if (dot < 0.0f) {
+                                        dot = -dot;
+                                        quat.x = -quat.x;
+                                        quat.y = -quat.y;
+                                        quat.z = -quat.z;
+                                        quat.w = -quat.w;
+                                    }
+                                    float theta_0 = acosf(dot);
+                                    float theta = theta_0 * t;
+                                    float sin_theta = sinf(theta);
+                                    float sin_theta_0 = sinf(theta_0);
+
+                                    float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
+                                    float s1 = sin_theta / sin_theta_0;
+
+                                    dead_zone_quat.x = (s0 * slerp_start_quat.x) + (s1 * quat.x);
+                                    dead_zone_quat.y = (s0 * slerp_start_quat.y) + (s1 * quat.y);
+                                    dead_zone_quat.z = (s0 * slerp_start_quat.z) + (s1 * quat.z);
+                                    dead_zone_quat.w = (s0 * slerp_start_quat.w) + (s1 * quat.w);
+                                }
+                            }
+                        }
+
+                        if (dead_zone_in_use || dead_zone_slerping) {
+                            // Overwrite quaternions with locked orientation
+                            response->data[0] = dead_zone_quat.x;
+                            response->data[1] = dead_zone_quat.y;
+                            response->data[2] = dead_zone_quat.z;
+                            response->data[3] = dead_zone_quat.w;
+                            response->data[4] = dead_zone_quat.x;
+                            response->data[5] = dead_zone_quat.y;
+                            response->data[6] = dead_zone_quat.z;
+                            response->data[7] = dead_zone_quat.w;
+                            response->data[8] = dead_zone_quat.x;
+                            response->data[9] = dead_zone_quat.y;
+                            response->data[10] = dead_zone_quat.z;
+                            response->data[11] = dead_zone_quat.w;
+                            // timestamps left unchanged
+                        }
+                    }
+
                     pthread_mutex_lock(ipc_values->pose_orientation_mutex);
 
                     memcpy(ipc_values->pose_orientation, response->data, sizeof(float) * 16);
                     memcpy(ipc_values->pose_position, &pose.position, sizeof(float) * 3);
-
                     // trigger flush on just the last write
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", ipc_values->pose_orientation, 16, sizeof(float), false);
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_position", ipc_values->pose_position, 3, sizeof(float), true);
@@ -331,15 +468,22 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
             }
         }
 
-        // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
-        // maps to horizontal movements (x) and pitch maps to vertical (y) movements. Because the euler values use a NWU
-        // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
-        // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
-        // positive y.
-        int x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
-        int y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
-        int next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
-        int next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
+        int x_velocity;
+        int y_velocity;
+        int next_joystick_x;
+        int next_joystick_y;
+        bool do_joystick_debug = config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0;
+        if (uinput || do_joystick_debug) {
+            // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
+            // maps to horizontal movements (x) and pitch maps to vertical (y) movements. Because the euler values use a NWU
+            // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
+            // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
+            // positive y.
+            x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
+            y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
+            next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
+            next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
+        }
 
         if (uinput) {
             if (config()->joystick_mode) {
@@ -381,7 +525,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
         }
 
         // always use joystick debugging as it adds a helpful visual
-        if (config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0)
+        if (do_joystick_debug)
             joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
 
         prev_joystick_x = next_joystick_x;

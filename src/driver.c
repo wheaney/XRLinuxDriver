@@ -362,6 +362,9 @@ void update_config_from_file(FILE *fp) {
     if (config()->debug_device != new_config->debug_device)
         log_message("Device debugging has been %s\n", new_config->debug_device ? "enabled" : "disabled");
 
+    if (config()->dead_zone_threshold_deg != new_config->dead_zone_threshold_deg)
+        log_message("IMU dead zone threshold has been changed to %.2f degrees\n", new_config->dead_zone_threshold_deg);
+
     update_config(config(), new_config);
 
     if (config()->disabled && is_driver_connected()) {
