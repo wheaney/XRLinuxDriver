@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.1.5 LANGUAGES C)
+project(xrDriver VERSION 2.1.6 LANGUAGES C)
 
 configure_file(include/version.h.in version.h)
 include_directories(${PROJECT_BINARY_DIR})
