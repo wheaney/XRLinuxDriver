@@ -45,12 +45,38 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE_MCU_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
-#define XREAL_ID_PRODUCT_COUNT 4
+#define XREAL_ID_PRODUCT_COUNT 8
 #define XREAL_ID_VENDOR 0x3318
-#define XREAL_AIR_2_ULTRA_PID 0x0426
-#define XREAL_AIR_2_ULTRA_FOV 52.0
-const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {0x0424, 0x0428, 0x0432, XREAL_AIR_2_ULTRA_PID};
-const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {"Air", "Air 2", "Air 2 Pro", "Air 2 Ultra"};
+const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
+    0x0424, // XREAL Air
+    0x0428, // XREAL Air 2
+    0x0432, // XREAL Air 2 Pro
+    0x0426, // XREAL Air 2 Ultra
+    0x0435, // XREAL One Pro
+    0x0436, // XREAL One Pro
+    0x0437, // XREAL One
+    0x0438  // XREAL One
+};
+const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
+    45.0, // XREAL Air
+    45.0, // XREAL Air 2
+    45.0, // XREAL Air 2 Pro
+    52.0, // XREAL Air 2 Ultra
+    57.0, // XREAL One Pro
+    57.0, // XREAL One Pro
+    50.0, // XREAL One
+    50.0  // XREAL One
+};
+const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
+    "Air",
+    "Air 2",
+    "Air 2 Pro",
+    "Air 2 Ultra",
+    "One Pro",
+    "One Pro",
+    "One",
+    "One"
+};
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
@@ -154,9 +180,7 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
                 device->model = (char *)xreal_supported_models[i];
-                if (product_id == XREAL_AIR_2_ULTRA_PID) {
-                    device->fov = XREAL_AIR_2_ULTRA_FOV;
-                }
+                device->fov = xreal_fovs[i];
 
                 return device;
             }
