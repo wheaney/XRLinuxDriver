@@ -98,7 +98,7 @@ struct device_driver_t {
 typedef struct device_driver_t device_driver_type;
 
 struct connected_device_t {
-    device_driver_type* driver;
+    const device_driver_type* driver;
     device_properties_type* device;
 };
 

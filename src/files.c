@@ -20,7 +20,7 @@ const char* XDG_DATA_FALLBACK_DIR = "/.local/share";
 
 // TODO - this uses the parent directories to determine the ownership of the new directory, which can be removed
 // when the driver is no longer running as root
-FILE* get_or_create_file(const char *full_path, mode_t directory_mode, char *file_mode, bool *file_created) {
+FILE* get_or_create_file(const char *full_path, mode_t directory_mode, const char *file_mode, bool *file_created) {
     FILE *fp = fopen(full_path, file_mode ? file_mode : "r");
     if (fp == NULL) {
         char *copypath = strdup(full_path);
@@ -87,7 +87,7 @@ FILE* get_or_create_file(const char *full_path, mode_t directory_mode, char *fil
     return fp;
 }
 
-char* get_xdg_file_path_for_app(char *app_name, char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
+char* get_xdg_file_path_for_app(const char *app_name, const char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
     struct stat st = {0};
 
     char* base_directory = getenv(xdg_env_var);
@@ -104,33 +104,33 @@ char* get_xdg_file_path_for_app(char *app_name, char *filename, const char *xdg_
     return full_path;
 }
 
-char* get_xdg_file_path(char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
+char* get_xdg_file_path(const char *filename, const char *xdg_env_var, const char *xdg_fallback_dir) {
     return get_xdg_file_path_for_app(XR_DRIVER_DIR, filename, xdg_env_var, xdg_fallback_dir);
 }
 
-char* get_state_file_path(char *filename) {
+char* get_state_file_path(const char *filename) {
     return get_xdg_file_path(filename, XDG_STATE_ENV_VAR, XDG_STATE_FALLBACK_DIR);
 }
 
-char* get_runtime_file_path(char *filename) {
+char* get_runtime_file_path(const char *filename) {
     return get_xdg_file_path(filename, XDG_RUNTIME_ENV_VAR, XDG_RUNTIME_FALLBACK_DIR);
 }
 
-char* get_config_file_path(char *filename) {
+char* get_config_file_path(const char *filename) {
     return get_xdg_file_path(filename, XDG_CONFIG_ENV_VAR, XDG_CONFIG_FALLBACK_DIR);
 }
 
-FILE* get_or_create_state_file(char *filename, char *mode, char **full_path, bool *created) {
+FILE* get_or_create_state_file(const char *filename, const char *mode, char **full_path, bool *created) {
     *full_path = get_state_file_path(filename);
     return get_or_create_file(*full_path, 0777, mode, created);
 }
 
-FILE* get_or_create_runtime_file(char *filename, char *mode, char **full_path, bool *created) {
+FILE* get_or_create_runtime_file(const char *filename, const char *mode, char **full_path, bool *created) {
     *full_path = get_runtime_file_path(filename);
     return get_or_create_file(*full_path, 0700, mode, created);
 }
 
-FILE* get_or_create_config_file(char *filename, char *mode, char **full_path, bool *created) {
+FILE* get_or_create_config_file(const char *filename, const char *mode, char **full_path, bool *created) {
     *full_path = get_config_file_path(filename);
     return get_or_create_file(*full_path, 0777, mode, created);
 }

@@ -113,7 +113,7 @@ void handle_device_connection_events() {
 }
 
 void deinit_devices() {
-    if (callback_handle != (libusb_hotplug_callback_handle)NULL) libusb_hotplug_deregister_callback(ctx, callback_handle);
+    if (callback_handle != 0) libusb_hotplug_deregister_callback(ctx, callback_handle);
     handle_device_update_callback = NULL;
     libusb_exit(ctx);
 }

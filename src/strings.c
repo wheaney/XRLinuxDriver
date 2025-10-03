@@ -2,13 +2,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-bool equal(char *a, const char *b) {
+bool equal(const char *a, const char *b) {
     return strcmp(a, b) == 0;
 }
 
 bool in_array(const char *str, const char **array, int size) {
     for (int i = 0; i < size; i++) {
-        if (equal((char*)str, array[i])) {
+        if (equal(str, array[i])) {
             return true;
         }
     }

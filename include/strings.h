@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-bool equal(char *a, const char *b);
+bool equal(const char *a, const char *b);
 
 bool in_array(const char *str, const char **array, int size);
 
