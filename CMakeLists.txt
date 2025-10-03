@@ -112,6 +112,7 @@ set(SOURCES
     src/plugins/sideview.c
     src/plugins/smooth_follow.c
     src/plugins/virtual_display.c
+    src/plugins/neck_saver.c
     src/runtime_context.c
     src/state.c
     src/strings.c

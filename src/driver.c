@@ -118,16 +118,21 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
 
         // be resilient to bad values that may come from device drivers
         if (!isnan(quat.w)) {
+            static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
+
             // adjust the current rotation by the conjugate of the screen placement quat
             quat = multiply_quaternions(screen_center_conjugate, quat);
 
-            imu_euler_type euler = quaternion_to_euler_xyz(quat);
-            imu_euler_type euler_velocities = get_euler_velocities(euler, device->imu_cycles_per_s);
+            imu_euler_type euler = quaternion_to_euler_zyx(quat);
+            imu_euler_type euler_velocities;
+            bool velocities_set = false;
             
             if (config()->multi_tap_enabled) {
+                euler_velocities = get_euler_velocities(&prev_unmodified_euler, euler, device->imu_cycles_per_s);
                 multi_tap = detect_multi_tap(euler_velocities,
                                             timestamp_ms,
                                             config()->debug_multi_tap);
+                velocities_set = true;
             }
 
             if (multi_tap == MT_RESET_CALIBRATION || control_flags->recalibrate) {
@@ -136,6 +141,19 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
                 reset_calibration(true);
             }
 
+            if (glasses_calibrated) {
+                static imu_euler_type prev_modified_euler = {0.0f, 0.0f, 0.0f};
+                plugins.modify_pose(timestamp_ms, &quat, &euler);
+
+                // recompute velocities after pose modification, since outputs that use them
+                // will want to be relative to the modified pose
+                euler_velocities = get_euler_velocities(&prev_modified_euler, euler, device->imu_cycles_per_s);
+                velocities_set = true;
+            }
+
+            if (!velocities_set) {
+                euler_velocities = get_euler_velocities(&prev_unmodified_euler, euler, device->imu_cycles_per_s);
+            }
             handle_imu_update(timestamp_ms, quat, euler_velocities, glasses_calibrated, ipc_values);
         } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
 

@@ -8,11 +8,12 @@
 #include "plugins/sideview.h"
 #include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
+#include "plugins/neck_saver.h"
 #include "state.h"
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 8
+#define PLUGIN_COUNT 9
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
@@ -21,7 +22,8 @@ const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &custom_banner_plugin,
     &smooth_follow_plugin,
     &breezy_desktop_plugin,
-    &gamescope_reshade_wayland_plugin
+    &gamescope_reshade_wayland_plugin,
+    &neck_saver_plugin
 };
 
 
@@ -104,6 +106,12 @@ imu_quat_type all_plugins_modify_screen_center_func(uint32_t timestamp_ms, imu_q
 
     return screen_center;
 }
+void all_plugins_modify_pose_func(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler) {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->modify_pose == NULL) continue;
+        all_plugins[i]->modify_pose(timestamp_ms, quat, euler);
+    }
+}
 void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
                                       bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
@@ -147,6 +155,7 @@ const plugin_type plugins = {
     .setup_ipc = all_plugins_setup_ipc_func,
     .handle_ipc_change = all_plugins_handle_ipc_change_func,
     .modify_screen_center = all_plugins_modify_screen_center_func,
+    .modify_pose = all_plugins_modify_pose_func,
     .handle_imu_data = all_plugins_handle_imu_data_func,
     .reset_imu_data = all_plugins_reset_imu_data_func,
     .handle_state = all_plugins_handle_state_func,

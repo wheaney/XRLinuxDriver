@@ -161,15 +161,14 @@ float degree_delta(float prev, float next) {
     return delta;
 }
 
-imu_euler_type get_euler_velocities(imu_euler_type euler, int imu_cycles_per_sec) {
-    static imu_euler_type prev_euler = {0.0f, 0.0f, 0.0f};
+imu_euler_type get_euler_velocities(imu_euler_type* previous, imu_euler_type current, int imu_cycles_per_sec) {
     imu_euler_type velocities = {
-        .roll=degree_delta(prev_euler.roll, euler.roll) * imu_cycles_per_sec,
-        .pitch=degree_delta(prev_euler.pitch, euler.pitch) * imu_cycles_per_sec,
-        .yaw=degree_delta(prev_euler.yaw, euler.yaw) * imu_cycles_per_sec
+        .roll=degree_delta(previous->roll, current.roll) * imu_cycles_per_sec,
+        .pitch=degree_delta(previous->pitch, current.pitch) * imu_cycles_per_sec,
+        .yaw=degree_delta(previous->yaw, current.yaw) * imu_cycles_per_sec
     };
 
-    prev_euler = euler;
+    *previous = current;
 
     return velocities;
 }

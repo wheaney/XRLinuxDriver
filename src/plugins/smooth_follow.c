@@ -358,9 +358,16 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
 
         if (smooth_follow_imu_buffer) {
             // capture how far we are from the original screen center
+            imu_quat_type delta_quat = multiply_quaternions(conjugate(*origin_quat), quat);
+
+            // for visual consistency with how screen placement behaves when smooth follow is disabled,
+            // trigger the modify_pose hook
+            imu_euler_type delta_euler = quaternion_to_euler_zyx(delta_quat);
+            plugins.modify_pose(timestamp_ms, &delta_quat, &delta_euler);
+
             imu_buffer_response_type* response = push_to_imu_buffer(
                 smooth_follow_imu_buffer, 
-                multiply_quaternions(conjugate(*origin_quat), quat),
+                delta_quat,
                 timestamp_ms
             );
             state()->smooth_follow_origin_ready = response && response->ready;
