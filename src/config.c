@@ -29,6 +29,8 @@ driver_config_type *default_config() {
     config->vr_lite_invert_y = false;
     config->mouse_sensitivity = 30;
     config->output_mode = strdup(mouse_output_mode);
+    config->external_modes = NULL;
+    config->external_modes_count = 0;
     config->multi_tap_enabled = false;
     config->metrics_disabled = false;
 
@@ -129,7 +131,10 @@ driver_config_type* parse_config_file(FILE *fp) {
             boolean_config(key, value, &config->multi_tap_enabled);
         } else if (equal(key, "metrics_disabled")) {
             boolean_config(key, value, &config->metrics_disabled);
-        }
+        } else if (equal(key, "external_modes")) {
+            free_and_clear(&config->external_modes);
+            config->external_modes = split(value, ',', &config->external_modes_count);
+        } else
 
         plugins.handle_config_line(plugin_configs, key, value);
     }

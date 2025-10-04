@@ -2,6 +2,8 @@
 #include "logging.h"
 #include "plugins.h"
 #include "plugins/opentrack_source.h"
+#include "runtime_context.h"
+#include "strings.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -13,11 +15,13 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <netdb.h>
 #include <unistd.h>
 
 static opentrack_source_config *ot_config = NULL;
 static int udp_fd = -1;
-static struct sockaddr_in udp_addr;
+static struct sockaddr_storage udp_addr;
+static socklen_t udp_addr_len = 0;
 static uint32_t frame_number = 0;
 
 static void opentrack_close_socket() {
@@ -25,26 +29,62 @@ static void opentrack_close_socket() {
         close(udp_fd);
         udp_fd = -1;
     }
+    udp_addr_len = 0;
 }
 
 static bool opentrack_open_socket(const char *ip, int port) {
     opentrack_close_socket();
 
-    udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udp_fd < 0) {
-        log_error("opentrack: socket() failed: %s\n", strerror(errno));
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;      // Allow IPv4 or IPv6
+    hints.ai_socktype = SOCK_DGRAM;   // UDP
+    hints.ai_flags = 0;               // No special flags; numeric or hostname
+
+    char port_str[16];
+    snprintf(port_str, sizeof(port_str), "%d", port);
+
+    // Accept IPv6 literals optionally wrapped in brackets like [::1]
+    const char *host = ip;
+    char hostbuf[256];
+    if (!host || host[0] == '\0') {
+        host = "127.0.0.1";
+    } else {
+        size_t len = strlen(host);
+        if (len >= 2 && host[0] == '[' && host[len - 1] == ']') {
+            size_t n = len - 2;
+            if (n >= sizeof(hostbuf)) n = sizeof(hostbuf) - 1;
+            memcpy(hostbuf, host + 1, n);
+            hostbuf[n] = '\0';
+            host = hostbuf;
+        }
+    }
+
+    struct addrinfo *res = NULL, *rp = NULL;
+    int rc = getaddrinfo(host, port_str, &hints, &res);
+    if (rc != 0) {
+        log_error("opentrack: getaddrinfo('%s', %d) failed: %s\n", host, port, gai_strerror(rc));
         return false;
     }
 
-    memset(&udp_addr, 0, sizeof(udp_addr));
-    udp_addr.sin_family = AF_INET;
-    udp_addr.sin_port = htons((uint16_t)port);
-    if (inet_pton(AF_INET, ip, &udp_addr.sin_addr) != 1) {
-        log_error("opentrack: invalid ip '%s'\n", ip);
-        opentrack_close_socket();
+    for (rp = res; rp != NULL; rp = rp->ai_next) {
+        udp_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (udp_fd < 0)
+            continue;
+
+        memset(&udp_addr, 0, sizeof(udp_addr));
+        memcpy(&udp_addr, rp->ai_addr, rp->ai_addrlen);
+        udp_addr_len = (socklen_t)rp->ai_addrlen;
+        break;
+    }
+
+    if (rp == NULL) {
+        log_error("opentrack: socket() failed for all addresses for '%s': %s\n", ip, strerror(errno));
+        freeaddrinfo(res);
         return false;
     }
 
+    freeaddrinfo(res);
     return true;
 }
 
@@ -61,22 +101,21 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
     if (!cfg) return;
 
     // Preferred keys
-    if (equal(key, "opentrack_source_enabled")) {
-        boolean_config(key, value, &cfg->enabled);
-    } else if (equal(key, "opentrack_app_ip")) {
+    if (equal(key, "opentrack_app_ip")) {
         string_config(key, value, &cfg->ip);
     } else if (equal(key, "opentrack_app_port")) {
         int_config(key, value, &cfg->port);
     }
 }
 
-static void opentrack_set_config_func(void *config) {
-    opentrack_source_config *new_cfg = (opentrack_source_config *)config;
+static void opentrack_set_config_func(void *new_config) {
+    opentrack_source_config *new_cfg = (opentrack_source_config *)new_config;
     if (!new_cfg) return;
 
     bool first = ot_config == NULL;
     bool reopen = false;
 
+    new_cfg->enabled = in_array("opentrack", config()->external_modes, config()->external_modes_count);
     if (!first) {
         if (ot_config->enabled != new_cfg->enabled)
             log_message("OpenTrack UDP has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
@@ -136,7 +175,7 @@ static void opentrack_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type 
     memcpy(buffer + 6 * sizeof(double), &fn, sizeof(uint32_t));
 
     ssize_t to_send = sizeof(buffer);
-    ssize_t sent = sendto(udp_fd, buffer, to_send, 0, (struct sockaddr *)&udp_addr, sizeof(udp_addr));
+    ssize_t sent = sendto(udp_fd, buffer, to_send, 0, (struct sockaddr *)&udp_addr, udp_addr_len);
     if (sent < 0) {
         static int err_count = 0;
         if (err_count++ % 100 == 0) // rate limit errors
