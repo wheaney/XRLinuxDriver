@@ -279,8 +279,8 @@ void breezy_desktop_set_config_func(void* config) {
     }
 };
 
-void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                          bool imu_calibrated, ipc_values_type *ipc_values) {
+void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
+                                          imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
         if (imu_calibrated && ipc_values) {
             breezy_desktop_write_imu_data(ipc_values->imu_data);

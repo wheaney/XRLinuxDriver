@@ -9,11 +9,12 @@
 #include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
 #include "plugins/neck_saver.h"
+#include "plugins/opentrack_source.h"
 #include "state.h"
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 9
+#define PLUGIN_COUNT 10
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
@@ -23,7 +24,8 @@ const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &smooth_follow_plugin,
     &breezy_desktop_plugin,
     &gamescope_reshade_wayland_plugin,
-    &neck_saver_plugin
+    &neck_saver_plugin,
+    &opentrack_source_plugin
 };
 
 
@@ -112,11 +114,11 @@ void all_plugins_modify_pose_func(uint32_t timestamp_ms, imu_quat_type* quat, im
         all_plugins[i]->modify_pose(timestamp_ms, quat, euler);
     }
 }
-void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                      bool imu_calibrated, ipc_values_type *ipc_values) {
+void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
+                                      imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->handle_imu_data == NULL) continue;
-        all_plugins[i]->handle_imu_data(timestamp_ms, quat, velocities, imu_calibrated, ipc_values);
+        all_plugins[i]->handle_imu_data(timestamp_ms, quat, euler, velocities, imu_calibrated, ipc_values);
     }
 }
 void all_plugins_reset_imu_data_func() {
