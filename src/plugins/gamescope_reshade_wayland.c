@@ -347,7 +347,7 @@ void gamescope_reshade_wl_handle_state_func() {
 };
 
 void gamescope_reshade_wl_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, 
-                                               imu_euler_type velocities, bool imu_calibrated, 
+                                               imu_euler_type euler, imu_euler_type velocities, bool imu_calibrated, 
                                                ipc_values_type *ipc_values) {
     if (!reshade_object) return;
     

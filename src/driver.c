@@ -154,7 +154,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             if (!velocities_set) {
                 euler_velocities = get_euler_velocities(&prev_unmodified_euler, euler, device->imu_cycles_per_s);
             }
-            handle_imu_update(timestamp_ms, quat, euler_velocities, glasses_calibrated, ipc_values);
+            handle_imu_update(timestamp_ms, quat, euler, euler_velocities, glasses_calibrated, ipc_values);
         } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
 
         // reset the counter every second
