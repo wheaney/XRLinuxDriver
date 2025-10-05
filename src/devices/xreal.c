@@ -67,6 +67,26 @@ const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     50.0, // XREAL One
     50.0  // XREAL One
 };
+const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
+    10.0, // XREAL Air
+    10.0, // XREAL Air 2
+    10.0, // XREAL Air 2 Pro
+    10.0, // XREAL Air 2 Ultra
+    25.0, // XREAL One Pro
+    25.0, // XREAL One Pro
+    25.0, // XREAL One
+    25.0  // XREAL One
+};
+const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
+    15, // XREAL Air
+    15, // XREAL Air 2
+    15, // XREAL Air 2 Pro
+    15, // XREAL Air 2 Ultra
+    5,  // XREAL One Pro
+    5,  // XREAL One Pro
+    5,  // XREAL One
+    5   // XREAL One
+};
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "Air",
     "Air 2",
@@ -79,17 +99,6 @@ const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
 };
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
-
-const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
-    0.0,  // XREAL Air
-    0.0,  // XREAL Air 2
-    0.0,  // XREAL Air 2 Pro
-    0.0,  // XREAL Air 2 Ultra
-    15.0, // XREAL One Pro
-    15.0, // XREAL One Pro
-    15.0, // XREAL One
-    15.0  // XREAL One
-};
 
 const device_properties_type xreal_air_properties = {
     .brand                              = "XREAL",
@@ -116,7 +125,6 @@ static pthread_mutex_t device_driver_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t device_driver_mcu_exited_cond = PTHREAD_COND_INITIALIZER;
 static bool device_driver_mcu_exited = false;
 
-static imu_quat_type device_conversion_quat = nwu_conversion_quat;
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
 static bool mcu_enabled = false;
@@ -130,7 +138,7 @@ void handle_xreal_event(uint64_t timestamp,
     if (event == DEVICE_IMU_EVENT_UPDATE && elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
-        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
+        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, nwu_conversion_quat);
         driver_handle_imu_event(ts, nwu_quat);
 
         last_utilized_event_ts = ts;
@@ -193,7 +201,8 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->hid_product_id = product_id;
                 device->model = (char *)xreal_supported_models[i];
                 device->fov = xreal_fovs[i];
-                device_conversion_quat = multiply_quaternions(nwu_conversion_quat, device_pitch_adjustment(xreal_pitch_adjustments[i]));
+                device->look_ahead_constant = xreal_look_ahead_constants[i];
+                device->calibration_wait_s = xreal_calibration_wait_s[i];
 
                 return device;
             }
