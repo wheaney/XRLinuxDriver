@@ -20,7 +20,11 @@ RUN apt-get update && apt-get install -y \
     libjson-c-dev \
     python3 \
     python3-yaml \
-    libwayland-dev
+    libwayland-dev \
+    cargo \
+    rustc \
+    git \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /source
 
