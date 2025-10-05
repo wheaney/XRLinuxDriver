@@ -21,7 +21,7 @@ Check below to see if your device is supported. **Note: be sure you're on the la
 | TCL/RayNeo | NXTWEAR S/S+; Air 2, 2s, 3s | :heavy_check_mark: | :+1:          | :heavy_check_mark: |             |                                                       | Official collaboration, closed source SDK.                                                                                              |
 | Rokid    | Max, Air          | :heavy_check_mark: | :+1: | :heavy_check_mark:              |             |                                                       | Official collaboration, closed source SDK.                                                                                              |
 | XREAL    | Air 1, 2, 2 Pro, 2 Ultra  | :heavy_check_mark: | :-1: | :heavy_check_mark: | :heavy_check_mark: | [Official update site](https://www.xreal.com/support/update/). Requires Chrome. | Unwilling to collaborate. [Unofficial, open-source SDK](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver). Exhibits drift. |
-| XREAL    | ~~One, One Pro~~ | :x: |  |  |  |  | Anti-developer stance. No general-purpose SDK for third-party devs. |
+| XREAL    | One, One Pro | :heavy_check_mark: Requires&nbsp;latest&nbsp;firmware. XR&nbsp;driver&nbsp;v2.3.x Breezy&nbsp;Desktop&nbsp;v2.4.0 | :-1: | :heavy_check_mark: | :heavy_check_mark: | [Official update site](https://www.xreal.com/support/update/). Requires Chrome. | **Important** - Disable stabilizer feature on glasses. Must be on latest firmware. |
 
 ## Usage
 
