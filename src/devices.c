@@ -50,13 +50,7 @@ static connected_device_type* _find_connected_device(libusb_device *usb_device, 
     return NULL;
 }
 
-static handle_device_update_func handle_device_update_callback = NULL;
 int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotplug_event event, void *user_data) {
-    if (handle_device_update_callback == NULL) {
-        log_error("hotplug_callback: init_devices must be called first\n");
-        return 1;
-    }
-
     struct libusb_device_descriptor descriptor;
     int r = libusb_get_device_descriptor(usb_device, &descriptor);
     if (r < 0) {
@@ -69,12 +63,12 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
         if (descriptor.idVendor == device->hid_vendor_id && 
             descriptor.idProduct == device->hid_product_id &&
             event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
-            handle_device_update_callback(NULL);
+            handle_device_connection_changed(NULL);
         }
     } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
         connected_device_type* connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) {
-            handle_device_update_callback(connected_device);
+            handle_device_connection_changed(connected_device);
         }
     }
     device_checkin(device);
@@ -84,26 +78,24 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
 
 libusb_context *ctx = NULL;
 libusb_hotplug_callback_handle callback_handle;
-void init_devices(handle_device_update_func callback) {
+void init_devices() {
     int r = libusb_init(&ctx);
     if (r < 0) {
         log_error("Failed to initialize libusb\n");
         return;
     }
-    handle_device_update_callback = callback;
 
     r = libusb_hotplug_register_callback(ctx, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED | LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
                                         LIBUSB_HOTPLUG_ENUMERATE, LIBUSB_HOTPLUG_MATCH_ANY,
                                         LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY,
                                         hotplug_callback, NULL, &callback_handle);
     if (r < 0) {
-        handle_device_update_callback = NULL;
         log_error("Failed to register hotplug callback\n");
     }
 
     connected_device_type* connected_device = find_connected_device();
     if (connected_device != NULL) {
-        handle_device_update_callback(connected_device);
+        handle_device_connection_changed(connected_device);
     }
 }
 
@@ -114,7 +106,6 @@ void handle_device_connection_events() {
 
 void deinit_devices() {
     if (callback_handle != 0) libusb_hotplug_deregister_callback(ctx, callback_handle);
-    handle_device_update_callback = NULL;
     libusb_exit(ctx);
 }
 

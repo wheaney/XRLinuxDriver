@@ -277,6 +277,35 @@ void *block_on_device_thread_func(void *arg) {
         log_debug("Exiting block_on_device thread; force_quit %d\n", force_quit);
 }
 
+// Allows external callers to provide a device+driver without relying on libusb hotplug.
+// If nothing is currently connected, this sets the runtime device and driver and notifies
+// the device thread to begin connecting and blocking on the device. If a device is already
+// connected (or a connection attempt is ongoing for a present device), this call is ignored
+// and the provided device is freed to avoid leaks.
+void device_connected(device_properties_type* new_device, const device_driver_type* new_driver) {
+    if (new_device == NULL || new_driver == NULL) return;
+
+    // If a device is already present/connected (or queued), ignore this request
+    // to avoid disrupting the active connection.
+    if (device_present() || is_driver_connected()) {
+        if (config()->debug_device)
+            log_debug("device_connected: device already present/connected, ignoring new device request\n");
+        free(new_device);
+        return;
+    }
+
+    if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
+    *device_driver = *new_driver;
+
+    // Initialize state for the new device before signaling threads
+    state()->calibration_state = NOT_CALIBRATED;
+    set_device_and_checkout(new_device);
+    init_multi_tap(new_device->imu_cycles_per_s);
+
+    // Re-evaluate readiness: device is now present; this will wake the block thread
+    evaluate_block_on_device_ready();
+}
+
 void update_config_from_file(FILE *fp) {
     driver_config_type* new_config = parse_config_file(fp);
 
@@ -528,7 +557,7 @@ void *monitor_control_flags_file_thread_func(void *arg) {
         log_debug("Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
 }
 
-void handle_device_update(connected_device_type* usb_device) {
+void handle_device_connection_changed(connected_device_type* new_device) {
     // as long as we want a device to remain connected, we need to hold at least one checked out reference to it,
     // otherwise it will get freed prematurely. since this function manages device dis/connect events,
     // it has the responsibility of always holding open at least one reference as long as a device remains connected.
@@ -536,7 +565,7 @@ void handle_device_update(connected_device_type* usb_device) {
 
     if (connected_device != NULL) {
         if (device_driver != NULL) {
-            if (config()->debug_device) log_debug("handle_device_update, device_driver->disconnect_func(false)\n");
+            if (config()->debug_device) log_debug("handle_device_connection_changed, device_driver->disconnect_func(false)\n");
             device_driver->disconnect_func(false);
         }
 
@@ -546,22 +575,22 @@ void handle_device_update(connected_device_type* usb_device) {
         block_on_device_ready = false;
     }
 
-    if (usb_device != NULL) {
+    if (new_device != NULL) {
         if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
-        *device_driver = *usb_device->driver;
-        connected_device = usb_device->device;
+        *device_driver = *new_device->driver;
+        connected_device = new_device->device;
         state()->calibration_state = NOT_CALIBRATED;
         set_device_and_checkout(connected_device);
         init_multi_tap(connected_device->imu_cycles_per_s);
 
-        free(usb_device);
+        free(new_device);
     }
 
     update_state_from_device(state(), connected_device, device_driver);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {
-    init_devices(handle_device_update);
+    init_devices();
     while (!force_quit) {
         handle_device_connection_events();
         sleep(1);

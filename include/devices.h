@@ -104,9 +104,9 @@ struct connected_device_t {
 
 typedef struct connected_device_t connected_device_type;
 
-typedef void (*handle_device_update_func)(connected_device_type* device);
+void handle_device_connection_changed(connected_device_type* new_device);
 
-void init_devices(handle_device_update_func callback);
+void init_devices();
 
 void deinit_devices();
 

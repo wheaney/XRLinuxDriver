@@ -1,5 +1,6 @@
 #pragma once
 
+#include "devices.h"
 #include "imu.h"
 
 #include <stdbool.h>
