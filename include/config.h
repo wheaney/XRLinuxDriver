@@ -13,8 +13,6 @@ struct driver_config_t {
     bool vr_lite_invert_y;
     int mouse_sensitivity;
     char *output_mode;
-    const char **external_modes;
-    int external_modes_count;
     bool multi_tap_enabled;
     bool metrics_disabled;
 

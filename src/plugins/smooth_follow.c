@@ -96,11 +96,13 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
     } else if (equal(key, "sideview_display_size")) {
         float_config(key, value, &temp_config->sideview_display_size);
     } else if (equal(key, "external_mode")) {
-        if (equal(value, "virtual_display")) {
+        if (list_string_contains("virtual_display", value)) {
             temp_config->virtual_display_enabled = true;
-        } else if (equal(value, "sideview")) {
+        }
+        if (list_string_contains("sideview", value)) {
             temp_config->sideview_enabled = true;
-        } else if (equal(value, "breezy_desktop")) {
+        }
+        if (list_string_contains("breezy_desktop", value)) {
             temp_config->breezy_desktop_enabled = true;
         }
     } else if (equal(key, "display_zoom")) {

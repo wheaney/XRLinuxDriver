@@ -10,11 +10,12 @@
 #include "plugins/virtual_display.h"
 #include "plugins/neck_saver.h"
 #include "plugins/opentrack_source.h"
+#include "plugins/opentrack_listener.h"
 #include "state.h"
 
 #include <stdlib.h>
 
-#define PLUGIN_COUNT 10
+#define PLUGIN_COUNT 11
 const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &device_license_plugin,
     &virtual_display_plugin,
@@ -25,7 +26,8 @@ const plugin_type* all_plugins[PLUGIN_COUNT] = {
     &breezy_desktop_plugin,
     &gamescope_reshade_wayland_plugin,
     &neck_saver_plugin,
-    &opentrack_source_plugin
+    &opentrack_source_plugin,
+    &opentrack_listener_plugin
 };
 
 

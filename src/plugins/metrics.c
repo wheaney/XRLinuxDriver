@@ -55,15 +55,19 @@ enum metrics_output_mode {
     OUTPUT_MODE_SIDEVIEW,
     OUTPUT_MODE_VIRTUAL_DISPLAY,
     OUTPUT_MODE_MOUSE,
-    OUTPUT_MODE_JOYSTICK
+    OUTPUT_MODE_JOYSTICK,
+    OUTPUT_MODE_BREEZY_DESKTOP,
+    OUTPUT_MODE_OPENTRACK
 };
 
-char *metrics_output_mode_to_event_name[5] = {
+char *metrics_output_mode_to_event_name[7] = {
     "output_mode_disabled",
     "output_mode_follow",
     "output_mode_virtual_display",
     "output_mode_mouse",
-    "output_mode_joystick"
+    "output_mode_joystick",
+    "output_mode_breezy_desktop",
+    "output_mode_opentrack"
 };
 
 enum metrics_output_mode current_output_mode = OUTPUT_MODE_DISABLED;
@@ -100,10 +104,14 @@ void metrics_set_config_func(void* config) {
             new_output_mode = OUTPUT_MODE_MOUSE;
         } else if (equal(config_output_mode, joystick_output_mode)) {
             new_output_mode = OUTPUT_MODE_JOYSTICK;
-        } else if (equal(config_external_mode, "virtual_display")) {
+        } else if (list_string_contains("virtual_display", config_external_mode)) {
             new_output_mode = OUTPUT_MODE_VIRTUAL_DISPLAY;
-        } else if (equal(config_external_mode, "sideview")) {
+        } else if (list_string_contains("sideview", config_external_mode)) {
             new_output_mode = OUTPUT_MODE_SIDEVIEW;
+        } else if (list_string_contains("breezy_desktop", config_external_mode)) {
+            new_output_mode = OUTPUT_MODE_BREEZY_DESKTOP;
+        } else if (list_string_contains("opentrack", config_external_mode)) {
+            new_output_mode = OUTPUT_MODE_OPENTRACK;
         }
     }
 

@@ -362,6 +362,7 @@ void update_config_from_file(FILE *fp) {
         if (config()->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
     }
+    if (driver_reenabled) plugins.start();
 
     if (output_mode_changed && is_driver_connected()) reinit_outputs();
 

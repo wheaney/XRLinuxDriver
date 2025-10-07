@@ -90,9 +90,9 @@ static bool opentrack_open_socket(const char *ip, int port) {
 
 static void *opentrack_default_config_func() {
     opentrack_source_config *cfg = calloc(1, sizeof(opentrack_source_config));
-    cfg->enabled = false; // opt-in
+    cfg->enabled = false;
     cfg->ip = strdup("127.0.0.1");
-    cfg->port = 4242; // OpenTrack default for UDP over network
+    cfg->port = 4242;
     return cfg;
 }
 
@@ -100,8 +100,9 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
     opentrack_source_config *cfg = (opentrack_source_config *)config;
     if (!cfg) return;
 
-    // Preferred keys
-    if (equal(key, "opentrack_app_ip")) {
+    if (equal(key, "external_mode")) {
+        cfg->enabled = list_string_contains("opentrack", value);
+    } else if (equal(key, "opentrack_app_ip")) {
         string_config(key, value, &cfg->ip);
     } else if (equal(key, "opentrack_app_port")) {
         int_config(key, value, &cfg->port);
@@ -115,16 +116,15 @@ static void opentrack_set_config_func(void *new_config) {
     bool first = ot_config == NULL;
     bool reopen = false;
 
-    new_cfg->enabled = in_array("opentrack", config()->external_modes, config()->external_modes_count);
     if (!first) {
         if (ot_config->enabled != new_cfg->enabled)
-            log_message("OpenTrack UDP has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
+            log_message("OpenTrack UDP source has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
         if (strcmp(ot_config->ip ? ot_config->ip : "", new_cfg->ip ? new_cfg->ip : "") != 0) {
-            log_message("OpenTrack IP changed to %s\n", new_cfg->ip);
+            log_message("OpenTrack source's target IP changed to %s\n", new_cfg->ip);
             reopen = true;
         }
         if (ot_config->port != new_cfg->port) {
-            log_message("OpenTrack port changed to %d\n", new_cfg->port);
+            log_message("OpenTrack source port changed to %d\n", new_cfg->port);
             reopen = true;
         }
 

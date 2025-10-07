@@ -10,4 +10,4 @@ struct opentrack_config_t {
 };
 typedef struct opentrack_config_t opentrack_config;
 
-extern const plugin_type opentrack_plugin;
+extern const plugin_type opentrack_listener_plugin;

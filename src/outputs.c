@@ -379,7 +379,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
         prev_joystick_x = next_joystick_x;
         prev_joystick_y = next_joystick_y;
 
-    plugins.handle_imu_data(timestamp_ms, quat, euler, velocities, imu_calibrated, ipc_values);
+        plugins.handle_imu_data(timestamp_ms, quat, euler, velocities, imu_calibrated, ipc_values);
 
         // reset the counter every second
         if ((++imu_counter % device->imu_cycles_per_s) == 0) {
