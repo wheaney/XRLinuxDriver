@@ -26,7 +26,7 @@
 // It binds a UDP socket, blocks waiting for 6-double payloads (x,y,z,yaw,pitch,roll),
 // converts yaw/pitch/roll (degrees) to a quaternion, and feeds the driver loop.
 
-static opentrack_config *ot_cfg = NULL;
+static opentrack_listener_config *ot_cfg = NULL;
 static void opentrack_start_func();
 
 // Socket state
@@ -189,7 +189,7 @@ static const device_driver_type opentrack_driver = {
 
 // --- plugin impl ---
 static void *opentrack_default_config_func() {
-    opentrack_config *cfg = calloc(1, sizeof(*cfg));
+    opentrack_listener_config *cfg = calloc(1, sizeof(*cfg));
     cfg->enabled = false;
     cfg->ip = strdup("0.0.0.0");
     cfg->port = 4242;
@@ -197,7 +197,7 @@ static void *opentrack_default_config_func() {
 }
 
 static void opentrack_handle_config_line_func(void *config, char *key, char *value) {
-    opentrack_config *cfg = (opentrack_config *)config;
+    opentrack_listener_config *cfg = (opentrack_listener_config *)config;
     if (!cfg) return;
 
     if (equal(key, "opentrack_listener_enabled")) {
@@ -210,7 +210,7 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
 }
 
 static void opentrack_set_config_func(void *new_config) {
-    opentrack_config *new_cfg = (opentrack_config *)new_config;
+    opentrack_listener_config *new_cfg = (opentrack_listener_config *)new_config;
     if (!new_cfg) return;
 
     bool first = (ot_cfg == NULL);
