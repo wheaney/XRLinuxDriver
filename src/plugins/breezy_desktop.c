@@ -64,7 +64,7 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
 
     if (equal(key, "external_mode")) {
-        temp_config->enabled = list_string_contains("breezy_desktop", value);
+        temp_config->enabled = list_string_contains("breezy_desktop", value) && is_productivity_granted();
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
         float_config(key, value, &temp_config->display_zoom);
     } else if (equal(key, "sbs_display_distance")) {

@@ -277,35 +277,6 @@ void *block_on_device_thread_func(void *arg) {
         log_debug("Exiting block_on_device thread; force_quit %d\n", force_quit);
 }
 
-// Allows external callers to provide a device+driver without relying on libusb hotplug.
-// If nothing is currently connected, this sets the runtime device and driver and notifies
-// the device thread to begin connecting and blocking on the device. If a device is already
-// connected (or a connection attempt is ongoing for a present device), this call is ignored
-// and the provided device is freed to avoid leaks.
-void device_connected(device_properties_type* new_device, const device_driver_type* new_driver) {
-    if (new_device == NULL || new_driver == NULL) return;
-
-    // If a device is already present/connected (or queued), ignore this request
-    // to avoid disrupting the active connection.
-    if (device_present() || is_driver_connected()) {
-        if (config()->debug_device)
-            log_debug("device_connected: device already present/connected, ignoring new device request\n");
-        free(new_device);
-        return;
-    }
-
-    if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
-    *device_driver = *new_driver;
-
-    // Initialize state for the new device before signaling threads
-    state()->calibration_state = NOT_CALIBRATED;
-    set_device_and_checkout(new_device);
-    init_multi_tap(new_device->imu_cycles_per_s);
-
-    // Re-evaluate readiness: device is now present; this will wake the block thread
-    evaluate_block_on_device_ready();
-}
-
 void update_config_from_file(FILE *fp) {
     driver_config_type* new_config = parse_config_file(fp);
 

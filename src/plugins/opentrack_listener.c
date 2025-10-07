@@ -40,10 +40,12 @@ static pthread_mutex_t conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t conn_cond = PTHREAD_COND_INITIALIZER;
 static volatile bool block_active = false;
 
+#define OT_DEVICE_BRAND "OpenTrack"
+
 // Placeholder device properties for an OpenTrack source
 static device_properties_type *make_opentrack_device_properties() {
     device_properties_type *d = calloc(1, sizeof(*d));
-    d->brand = "OpenTrack";
+    d->brand = OT_DEVICE_BRAND;
     d->model = "UDP";
     d->hid_vendor_id = 0;
     d->hid_product_id = 0;
@@ -242,8 +244,11 @@ static void* opentrack_listener_thread_func(void* arg) {
         }
         int sel = select(udp_fd + 1, &rfds, NULL, NULL, tvp);
         if (sel == 0) {
-            // timeout
-            if (connected) handle_device_connection_changed(NULL);
+            // timed out
+            device_properties_type *device = device_checkout();
+            if (device && equal(device->brand, OT_DEVICE_BRAND)) handle_device_connection_changed(NULL);
+            device_checkin(device);
+
             pthread_mutex_lock(&conn_mutex);
             if (connected) {
                 connected = false;
@@ -304,7 +309,11 @@ static void* opentrack_listener_thread_func(void* arg) {
 static void opentrack_start_func() {
     // If disabled, stop listener and close socket
     if (driver_disabled() || !ot_cfg || !ot_cfg->enabled) {
-        if (connected) handle_device_connection_changed(NULL);
+
+        device_properties_type *device = device_checkout();
+        if (device && equal(device->brand, OT_DEVICE_BRAND)) handle_device_connection_changed(NULL);
+        device_checkin(device);
+
         pthread_mutex_lock(&conn_mutex);
         if (connected) {
             connected = false;
