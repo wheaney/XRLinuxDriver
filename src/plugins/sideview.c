@@ -35,7 +35,7 @@ void *sideview_default_config_func() {
 void sideview_handle_config_line_func(void* config, char* key, char* value) {
     sideview_config* temp_config = (sideview_config*) config;
     if (equal(key, "external_mode")) {
-        temp_config->enabled = equal(value, "sideview");
+        temp_config->enabled = list_string_contains("sideview", value);
     } else if (equal(key, "sideview_position")) {
         for (int i = 0; i < SIDEVIEW_POSITION_COUNT; i++) {
             if (equal(value, sideview_position_names[i])) {

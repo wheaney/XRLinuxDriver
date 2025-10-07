@@ -154,7 +154,7 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             if (!velocities_set) {
                 euler_velocities = get_euler_velocities(&prev_unmodified_euler, euler, device->imu_cycles_per_s);
             }
-            handle_imu_update(timestamp_ms, quat, euler_velocities, glasses_calibrated, ipc_values);
+            handle_imu_update(timestamp_ms, quat, euler, euler_velocities, glasses_calibrated, ipc_values);
         } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
 
         // reset the counter every second
@@ -333,6 +333,7 @@ void update_config_from_file(FILE *fp) {
         if (config()->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func(true)\n");
         device_driver->disconnect_func(true);
     }
+    if (driver_reenabled) plugins.start();
 
     if (output_mode_changed && is_driver_connected()) reinit_outputs();
 
@@ -528,7 +529,7 @@ void *monitor_control_flags_file_thread_func(void *arg) {
         log_debug("Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
 }
 
-void handle_device_update(connected_device_type* usb_device) {
+void handle_device_connection_changed(connected_device_type* new_device) {
     // as long as we want a device to remain connected, we need to hold at least one checked out reference to it,
     // otherwise it will get freed prematurely. since this function manages device dis/connect events,
     // it has the responsibility of always holding open at least one reference as long as a device remains connected.
@@ -536,7 +537,7 @@ void handle_device_update(connected_device_type* usb_device) {
 
     if (connected_device != NULL) {
         if (device_driver != NULL) {
-            if (config()->debug_device) log_debug("handle_device_update, device_driver->disconnect_func(false)\n");
+            if (config()->debug_device) log_debug("handle_device_connection_changed, device_driver->disconnect_func(false)\n");
             device_driver->disconnect_func(false);
         }
 
@@ -546,22 +547,22 @@ void handle_device_update(connected_device_type* usb_device) {
         block_on_device_ready = false;
     }
 
-    if (usb_device != NULL) {
+    if (new_device != NULL) {
         if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
-        *device_driver = *usb_device->driver;
-        connected_device = usb_device->device;
+        *device_driver = *new_device->driver;
+        connected_device = new_device->device;
         state()->calibration_state = NOT_CALIBRATED;
         set_device_and_checkout(connected_device);
         init_multi_tap(connected_device->imu_cycles_per_s);
 
-        free(usb_device);
+        free(new_device);
     }
 
     update_state_from_device(state(), connected_device, device_driver);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {
-    init_devices(handle_device_update);
+    init_devices();
     while (!force_quit) {
         handle_device_connection_events();
         sleep(1);

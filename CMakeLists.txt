@@ -113,6 +113,8 @@ set(SOURCES
     src/plugins/smooth_follow.c
     src/plugins/virtual_display.c
     src/plugins/neck_saver.c
+    src/plugins/opentrack_source.c
+    src/plugins/opentrack_listener.c
     src/runtime_context.c
     src/state.c
     src/strings.c

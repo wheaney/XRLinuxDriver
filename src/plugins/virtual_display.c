@@ -47,8 +47,8 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
     virtual_display_config* temp_config = (virtual_display_config*) config;
 
     if (equal(key, "external_mode")) {
-        temp_config->enabled = equal(value, "virtual_display");
-        temp_config->follow_mode_enabled = equal(value, "sideview");
+        temp_config->enabled = list_string_contains("virtual_display", value);
+        temp_config->follow_mode_enabled = list_string_contains("sideview", value);
     } else if (equal(key, "look_ahead")) {
         float_config(key, value, &temp_config->look_ahead_override);
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {

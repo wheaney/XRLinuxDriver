@@ -64,7 +64,7 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
 
     if (equal(key, "external_mode")) {
-        temp_config->enabled = equal(value, "breezy_desktop") && is_productivity_granted();
+        temp_config->enabled = list_string_contains("breezy_desktop", value) && is_productivity_granted();
     } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
         float_config(key, value, &temp_config->display_zoom);
     } else if (equal(key, "sbs_display_distance")) {
@@ -264,9 +264,10 @@ void breezy_desktop_reset_imu_data_func() {
     }
 }
 
-void breezy_desktop_set_config_func(void* config) {
-    if (!config) return;
-    breezy_desktop_config* temp_config = (breezy_desktop_config*) config;
+void breezy_desktop_set_config_func(void* new_config) {
+    if (!new_config) return;
+    
+    breezy_desktop_config* temp_config = (breezy_desktop_config*) new_config;
     if (bd_config) {
         if (bd_config->enabled != temp_config->enabled)
             log_message("Breezy desktop has been %s\n", temp_config->enabled ? "enabled" : "disabled");
@@ -279,8 +280,8 @@ void breezy_desktop_set_config_func(void* config) {
     }
 };
 
-void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type velocities,
-                                          bool imu_calibrated, ipc_values_type *ipc_values) {
+void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
+                                         imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
         if (imu_calibrated && ipc_values) {
             breezy_desktop_write_imu_data(ipc_values->imu_data);
