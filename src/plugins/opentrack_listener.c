@@ -22,6 +22,8 @@
 #include <sys/select.h>
 #include <sys/time.h>
 
+#define OT_DEVICE_BRAND "OpenTrack"
+
 // This plugin exposes an OpenTrack UDP stream as a synthetic IMU device.
 // It binds a UDP socket, blocks waiting for 6-double payloads (x,y,z,yaw,pitch,roll),
 // converts yaw/pitch/roll (degrees) to a quaternion, and feeds the driver loop.
@@ -40,7 +42,85 @@ static pthread_mutex_t conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t conn_cond = PTHREAD_COND_INITIALIZER;
 static volatile bool block_active = false;
 
-#define OT_DEVICE_BRAND "OpenTrack"
+// Track OpenTrack source plugin config to prevent feedback loops
+static bool ot_source_enabled = false;
+static char *ot_source_ip = NULL;
+static volatile bool feedback_loop_ignore = false;
+
+static void listener_device_disconnect() {
+    device_properties_type *device = device_checkout();
+    if (device && equal(device->brand, OT_DEVICE_BRAND)) handle_device_connection_changed(NULL);
+    device_checkin(device);
+
+    pthread_mutex_lock(&conn_mutex);
+    if (connected) {
+        connected = false;
+        pthread_cond_broadcast(&conn_cond);
+    }
+    pthread_mutex_unlock(&conn_mutex);
+}
+
+// Utility: check if a target IP string refers to localhost/unspecified
+static bool is_localhostish_ip(const char *ip_raw) {
+    // defaults to localhost if unset, return true
+    if (!ip_raw || !ip_raw[0]) return true;
+
+    // make a scratch copy to strip brackets and zone-id
+    char buf[256];
+    size_t len = strlen(ip_raw);
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    memcpy(buf, ip_raw, len);
+    buf[len] = '\0';
+
+    // Strip surrounding [ ] for IPv6 literals
+    if (buf[0] == '[') {
+        size_t blen = strlen(buf);
+        if (blen >= 2 && buf[blen - 1] == ']') {
+            memmove(buf, buf + 1, blen - 2);
+            buf[blen - 2] = '\0';
+        }
+    }
+    // Strip zone id (e.g., fe80::1%lo0)
+    char *pct = strchr(buf, '%');
+    if (pct) *pct = '\0';
+
+    // Quick textual checks
+    if (strcmp(buf, "localhost") == 0) return true;
+    if (strcmp(buf, "0.0.0.0") == 0) return true; // unspecified IPv4
+    if (strcmp(buf, "::") == 0) return true;      // unspecified IPv6
+
+    // Parse as IPv4
+    struct in_addr a4;
+    if (inet_pton(AF_INET, buf, &a4) == 1) {
+        uint32_t host = ntohl(a4.s_addr);
+        if (host == 0) return true;               // 0.0.0.0
+        if ((host & 0xFF000000u) == 0x7F000000u)  // 127.0.0.0/8
+            return true;
+        return false;
+    }
+
+    // Parse as IPv6
+    struct in6_addr a6;
+    if (inet_pton(AF_INET6, buf, &a6) == 1) {
+        if (IN6_IS_ADDR_LOOPBACK(&a6)) return true;     // ::1
+        if (IN6_IS_ADDR_UNSPECIFIED(&a6)) return true;  // ::
+        return false;
+    }
+
+    // Unknown format; be conservative and do not consider it localhost
+    return false;
+}
+
+static void update_feedback_guard() {
+    bool prev = feedback_loop_ignore;
+    feedback_loop_ignore = (ot_cfg && ot_cfg->enabled && ot_source_enabled && is_localhostish_ip(ot_source_ip));
+    if (feedback_loop_ignore && !prev) {
+        log_message("OpenTrack listener: ignoring loopback packets (source enabled; target %s)\n", ot_source_ip ? ot_source_ip : "127.0.0.1");
+        listener_device_disconnect();
+    } else if (!feedback_loop_ignore && prev) {
+        log_message("OpenTrack listener: feedback guard disabled; accepting packets\n");
+    }
+}
 
 // Placeholder device properties for an OpenTrack source
 static device_properties_type *make_opentrack_device_properties() {
@@ -208,6 +288,10 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
         string_config(key, value, &cfg->ip);
     } else if (equal(key, "opentrack_listen_port")) {
         int_config(key, value, &cfg->port);
+    } else if (equal(key, "external_mode")) {
+        ot_source_enabled = list_string_contains("opentrack", value);
+    } else if (equal(key, "opentrack_app_ip")) {
+        string_config(key, value, &ot_source_ip);
     }
 }
 
@@ -227,6 +311,7 @@ static void opentrack_set_config_func(void *new_config) {
     ot_cfg = new_cfg;
 
     opentrack_start_func();
+    update_feedback_guard();
 }
 
 #define OT_DEVICE_CONNECTED_TIMEOUT_MS 500
@@ -245,16 +330,7 @@ static void* opentrack_listener_thread_func(void* arg) {
         int sel = select(udp_fd + 1, &rfds, NULL, NULL, tvp);
         if (sel == 0) {
             // timed out
-            device_properties_type *device = device_checkout();
-            if (device && equal(device->brand, OT_DEVICE_BRAND)) handle_device_connection_changed(NULL);
-            device_checkin(device);
-
-            pthread_mutex_lock(&conn_mutex);
-            if (connected) {
-                connected = false;
-                pthread_cond_broadcast(&conn_cond);
-            }
-            pthread_mutex_unlock(&conn_mutex);
+            listener_device_disconnect();
             continue;
         } else if (sel < 0) {
             if (errno == EINTR) continue;
@@ -273,6 +349,11 @@ static void* opentrack_listener_thread_func(void* arg) {
             continue;
         }
         if (n < (ssize_t)(6 * sizeof(double))) continue;
+
+        // If we're guarding against a feedback loop, discard packets silently
+        if (feedback_loop_ignore) {
+            continue;
+        }
 
         if (!connected && !device_present()) {
             connected_device_type *nd = calloc(1, sizeof(*nd));
@@ -309,18 +390,7 @@ static void* opentrack_listener_thread_func(void* arg) {
 static void opentrack_start_func() {
     // If disabled, stop listener and close socket
     if (driver_disabled() || !ot_cfg || !ot_cfg->enabled) {
-
-        device_properties_type *device = device_checkout();
-        if (device && equal(device->brand, OT_DEVICE_BRAND)) handle_device_connection_changed(NULL);
-        device_checkin(device);
-
-        pthread_mutex_lock(&conn_mutex);
-        if (connected) {
-            connected = false;
-            pthread_cond_broadcast(&conn_cond);
-        }
-        pthread_mutex_unlock(&conn_mutex);
-        
+        listener_device_disconnect();
         opentrack_close_socket();
         if (listener_running) {
             pthread_join(listener_thread, NULL);
