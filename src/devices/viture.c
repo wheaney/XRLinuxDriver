@@ -23,6 +23,7 @@
 
 #define VITURE_ID_PRODUCT_COUNT 14
 #define VITURE_ID_VENDOR 0x35ca
+#define VITURE_DRIVER_ID "viture"
 #define VITURE_ONE_MODEL_NAME "One"
 #define VITURE_ONE_LITE_MODEL_NAME "One Lite"
 #define VITURE_PRO_MODEL_NAME "Pro"
@@ -349,7 +350,7 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
     pose.has_orientation = true;
     pose.has_position = has_position;
     pose.timestamp_ms = timestamp_ms;
-    driver_handle_pose_event(pose);
+    driver_handle_pose_event(VITURE_DRIVER_ID, pose);
 }
 
 static void viture_legacy_pose_callback(float* pose, uint64_t ts) {
@@ -741,6 +742,7 @@ static void viture_disconnect(bool soft) {
 };
 
 const device_driver_type viture_driver = {
+    .id                                 = VITURE_DRIVER_ID,
     .supported_device_func              = viture_supported_device,
     .device_connect_func                = viture_device_connect,
     .block_on_device_func               = viture_block_on_device,

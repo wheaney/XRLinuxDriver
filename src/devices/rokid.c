@@ -27,6 +27,8 @@ const int rokid_supported_id_product[ROKID_ID_PRODUCT_COUNT] = {
 #define RESOLUTION_3D_3840_1200_90HZ 4
 #define RESOLUTION_3D_3840_1200_60HZ 5
 
+#define ROKID_DRIVER_ID "rokid"
+
 // Rokid SDK is returning rotations relative to an east-up-south coordinate system,
 // this converts to to north-west-up, and applies a 5-degree offset based on factory device calibration
 static const imu_quat_type adjustment_quat = {
@@ -211,7 +213,7 @@ void rokid_block_on_device() {
                 pose.orientation = nwu_quat;
                 pose.has_orientation = true;
                 pose.timestamp_ms = timestamp;
-                driver_handle_pose_event(pose);
+                driver_handle_pose_event(ROKID_DRIVER_ID, pose);
             }
         }
         cleanup();
@@ -235,6 +237,7 @@ bool rokid_is_connected() {
 };
 
 const device_driver_type rokid_driver = {
+    .id                                 = ROKID_DRIVER_ID,
     .supported_device_func              = rokid_supported_device,
     .device_connect_func                = rokid_device_connect,
     .block_on_device_func               = rokid_block_on_device,

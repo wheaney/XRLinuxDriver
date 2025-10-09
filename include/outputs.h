@@ -19,6 +19,7 @@ void reinit_outputs();
 imu_euler_type get_euler_velocities(imu_euler_type* previous, imu_euler_type current, int imu_cycles_per_sec);
 
 void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
+void handle_imu_update_ext(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
 void reset_pose_data(ipc_values_type *ipc_values);
 
 bool wait_for_imu_start();
