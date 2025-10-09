@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "connection_pool.h"
 #include "devices.h"
 #include "state.h"
 
@@ -13,6 +14,8 @@ struct runtime_context_t {
 
     // live view of the state of the driver, reflects real-world state, not intentions
     driver_state_type *state;
+
+    connection_pool_type *conn_pool;
 };
 
 typedef struct runtime_context_t runtime_context;
@@ -24,6 +27,10 @@ driver_state_type* state();
 void set_config(driver_config_type *config);
 
 driver_config_type* config();
+
+void set_connection_pool(connection_pool_type *pool);
+
+connection_pool_type* connection_pool();
 
 // device is so heavily used across threads that it becomes difficult to find a good time to free() it,
 // so the below functions keep a reference count and free it when the count reaches 0
