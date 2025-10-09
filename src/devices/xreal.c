@@ -26,6 +26,8 @@
 
 #define MAPPED_DISPLAY_MODE_COUNT 5
 
+#define XREAL_DRIVER_ID "xreal"
+
 // These two arrays are not only used as sets to determine what type a display mode is, but they're also used to
 // map back and forth to one another (the index of a display mode in one array is used to find the corresponding
 // display mode in the other array). That's way they're ordered the way they are, and some modes are duplicated.
@@ -151,7 +153,7 @@ void handle_xreal_event(uint64_t timestamp,
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
-        driver_handle_imu_event(ts, nwu_quat);
+        driver_handle_imu_event(XREAL_DRIVER_ID, ts, nwu_quat);
 
         last_utilized_event_ts = ts;
     }
@@ -360,6 +362,7 @@ void xreal_disconnect(bool soft) {
 };
 
 const device_driver_type xreal_driver = {
+    .id                                 = XREAL_DRIVER_ID,
     .supported_device_func              = xreal_supported_device,
     .device_connect_func                = xreal_device_connect,
     .block_on_device_func               = xreal_block_on_device,

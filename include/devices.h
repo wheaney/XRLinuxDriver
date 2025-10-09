@@ -59,6 +59,11 @@ struct device_properties_t {
 
     bool sbs_mode_supported;
     bool firmware_update_recommended;
+    
+    // Whether this device may be used as a supplemental device alongside a primary one.
+    // When true, the driver may be run in a supplemental mode and will not be registered
+    // as the primary runtime device in the global context.
+    bool can_be_supplemental;
 };
 
 typedef struct device_properties_t device_properties_type;
@@ -86,6 +91,7 @@ typedef bool (*is_connected_func)();
 typedef void (*disconnect_func)(bool soft);
 
 struct device_driver_t {
+    char* id;
     supported_device_func supported_device_func;
     device_connect_func device_connect_func;
     block_on_device_func block_on_device_func;
@@ -104,7 +110,7 @@ struct connected_device_t {
 
 typedef struct connected_device_t connected_device_type;
 
-void handle_device_connection_changed(connected_device_type* new_device);
+void handle_device_connection_changed(bool is_added, connected_device_type* device);
 
 void init_devices();
 

@@ -20,6 +20,10 @@ imu_euler_type get_euler_velocities(imu_euler_type* previous, imu_euler_type cur
 
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_euler_type velocities,
                        bool imu_calibrated, ipc_values_type *ipc_values);
+
+// Extended alias to avoid cross-repo header signature conflicts
+void handle_imu_update_ext(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_euler_type velocities,
+                           bool imu_calibrated, ipc_values_type *ipc_values);
 void reset_imu_data(ipc_values_type *ipc_values);
 
 bool wait_for_imu_start();

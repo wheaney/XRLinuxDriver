@@ -390,6 +390,11 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
     device_checkin(device);
 }
 
+void handle_imu_update_ext(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_euler_type velocities,
+                           bool imu_calibrated, ipc_values_type *ipc_values) {
+    handle_imu_update(timestamp_ms, quat, euler, velocities, imu_calibrated, ipc_values);
+}
+
 void reset_imu_data(ipc_values_type *ipc_values) {
     if (ipc_values) {    
         pthread_mutex_lock(ipc_values->imu_data_mutex);
