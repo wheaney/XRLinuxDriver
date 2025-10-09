@@ -92,6 +92,7 @@ set(DEVICE_MAPPINGS
 set(SOURCES
     src/buffer.c
     src/config.c
+    src/connection_pool.c
     src/curl.c
     src/devices/xreal.c
     src/devices.c

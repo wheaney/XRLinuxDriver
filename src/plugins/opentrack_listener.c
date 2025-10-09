@@ -1,4 +1,5 @@
 #include "config.h"
+#include "connection_pool.h"
 #include "devices.h"
 #include "driver.h"
 #include "imu.h"
@@ -10,6 +11,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -24,6 +26,7 @@
 #include <sys/time.h>
 
 #define OT_DEVICE_BRAND "OpenTrack"
+#define OT_DRIVER_ID "opentrack"
 
 // This plugin exposes an OpenTrack UDP stream as a synthetic IMU device.
 // It binds a UDP socket, blocks waiting for 6-double payloads (x,y,z,yaw,pitch,roll),
@@ -49,9 +52,11 @@ static char *ot_source_ip = NULL;
 static volatile bool feedback_loop_ignore = false;
 
 static void listener_device_disconnect() {
-    device_properties_type *device = device_checkout();
-    if (device && equal(device->brand, OT_DEVICE_BRAND)) handle_device_connection_changed(NULL);
-    device_checkin(device);
+    connection_t* c = connection_pool_find_driver_connection(OT_DRIVER_ID);
+    connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
+    connected_device->driver = c->driver;
+    connected_device->device = c->device;
+    handle_device_connection_changed(false, connected_device);
 
     pthread_mutex_lock(&conn_mutex);
     if (connected) {
@@ -146,6 +151,7 @@ static device_properties_type *make_opentrack_device_properties() {
     d->look_ahead_ms_cap = 40.0f;
     d->sbs_mode_supported = false;
     d->firmware_update_recommended = false;
+    d->can_be_supplemental = true;
     d->provides_orientation = true;
     d->provides_position = true;
     return d;
@@ -263,6 +269,7 @@ static void opentrack_disconnect(bool soft) {
 }
 
 static const device_driver_type opentrack_driver = {
+    .id                                 = OT_DRIVER_ID,
     .supported_device_func              = opentrack_supported_device,
     .device_connect_func                = opentrack_device_connect,
     .block_on_device_func               = opentrack_block_on_device,
@@ -359,10 +366,10 @@ static void* opentrack_listener_thread_func(void* arg) {
         }
 
         if (!connected && !device_present()) {
-            connected_device_type *nd = calloc(1, sizeof(*nd));
+            connected_device_type *nd = calloc(1, sizeof(connected_device_type));
             nd->driver = &opentrack_driver;
             nd->device = make_opentrack_device_properties();
-            handle_device_connection_changed(nd);
+            handle_device_connection_changed(true, nd);
             pthread_mutex_lock(&conn_mutex);
             connected = true;
             pthread_mutex_unlock(&conn_mutex);
@@ -398,7 +405,7 @@ static void* opentrack_listener_thread_func(void* arg) {
                 pose.has_orientation = true;
                 pose.has_position = true;
                 pose.timestamp_ms = ts_ms - start_ts_ms;
-                driver_handle_pose_event(pose);
+                driver_handle_pose_event(OT_DRIVER_ID, pose);
             }
             device_checkin(device);
         }

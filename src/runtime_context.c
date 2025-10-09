@@ -22,6 +22,14 @@ driver_config_type* config() {
     return context.config;
 }
 
+void set_connection_pool(connection_pool_type* pool) {
+    context.conn_pool = pool;
+}
+
+connection_pool_type* connection_pool() {
+    return context.conn_pool;
+}
+
 static int device_ref_count = 0;
 pthread_mutex_t device_ref_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static device_properties_type* queued_device = NULL;

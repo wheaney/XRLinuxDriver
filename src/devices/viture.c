@@ -23,6 +23,8 @@
 #define VITURE_LUMA_MODEL_NAME "Luma"
 #define VITURE_LUMA_PRO_MODEL_NAME "Luma Pro"
 
+#define VITURE_DRIVER_ID "viture"
+
 const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
 const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
 const float VITURE_LUMA_PITCH_ADJUSTMENT = -8.5;
@@ -188,7 +190,7 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     pose.orientation = quat;
     pose.has_orientation = true;
     pose.timestamp_ms = timestamp;
-    driver_handle_pose_event(pose);
+    driver_handle_pose_event(VITURE_DRIVER_ID, pose);
 }
 
 bool sbs_mode_enabled = false;
@@ -310,6 +312,7 @@ void viture_disconnect(bool soft) {
 };
 
 const device_driver_type viture_driver = {
+    .id                                 = VITURE_DRIVER_ID,
     .supported_device_func              = viture_supported_device,
     .device_connect_func                = viture_device_connect,
     .block_on_device_func               = viture_block_on_device,

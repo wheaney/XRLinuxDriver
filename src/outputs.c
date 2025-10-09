@@ -393,6 +393,10 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
     device_checkin(device);
 }
 
+void handle_imu_update_ext(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
+    handle_imu_update(pose, velocities, imu_calibrated, ipc_values);
+}
+
 void reset_pose_data(ipc_values_type *ipc_values) {
     if (ipc_values) {    
         pthread_mutex_lock(ipc_values->pose_data_mutex);
