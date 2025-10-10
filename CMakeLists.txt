@@ -7,7 +7,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 configure_file(include/version.h.in version.h)
 include_directories(${PROJECT_BINARY_DIR})
 
-set(CMAKE_BUILD_TYPE Release)
+# Build type: default to RelWithDebInfo for useful backtraces unless caller overrides
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+endif()
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
 set(CMAKE_C_STANDARD 17)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
@@ -162,6 +166,30 @@ foreach(TARGET ${ALL_TARGETS})
 endforeach()
 
 add_executable(xrDriver ${SOURCES})
+
+# Improve crash backtraces and line number resolution
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    # Per-config compile options
+    target_compile_options(xrDriver PRIVATE
+        $<$<CONFIG:Debug>:-g3>
+        $<$<CONFIG:Debug>:-O0>
+        $<$<CONFIG:Debug>:-fno-omit-frame-pointer>
+        $<$<CONFIG:RelWithDebInfo>:-g>
+        $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
+    )
+    # Export symbol table for better backtrace_symbols() resolution
+    target_link_options(xrDriver PRIVATE
+        $<$<CONFIG:Debug>:-rdynamic>
+        $<$<CONFIG:RelWithDebInfo>:-rdynamic>
+    )
+endif()
+
+# Optional: AddressSanitizer for clearer reports on memory errors
+option(ENABLE_ASAN "Build with AddressSanitizer" OFF)
+if(ENABLE_ASAN AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(xrDriver PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    target_link_options(xrDriver PRIVATE -fsanitize=address)
+endif()
 
 target_include_directories(xrDriver
 		SYSTEM BEFORE PRIVATE

@@ -53,10 +53,12 @@ static volatile bool feedback_loop_ignore = false;
 
 static void listener_device_disconnect() {
     connection_t* c = connection_pool_find_driver_connection(OT_DRIVER_ID);
-    connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
-    connected_device->driver = c->driver;
-    connected_device->device = c->device;
-    handle_device_connection_changed(false, connected_device);
+    if (c) {
+        connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
+        connected_device->driver = c->driver;
+        connected_device->device = c->device;
+        handle_device_connection_changed(false, connected_device);
+    }
 
     pthread_mutex_lock(&conn_mutex);
     if (connected) {
