@@ -38,6 +38,7 @@ driver_config_type *default_config() {
     config->debug_ipc = false;
     config->debug_license = false;
     config->debug_device = false;
+    config->debug_connections = false;
 
     return config;
 }
@@ -109,6 +110,9 @@ driver_config_type* parse_config_file(FILE *fp) {
                 }
                 if (equal(token, "device")) {
                     config->debug_device = true;
+                }
+                if (equal(token, "connections")) {
+                    config->debug_connections = true;
                 }
                 token = strtok(NULL, ",");
             }
