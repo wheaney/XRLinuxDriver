@@ -92,21 +92,14 @@ void connection_pool_handle_device_added(const device_driver_type* driver, devic
     // If no primary selected yet, pick one
     if (pool->primary_index == -1) {
         pool->primary_index = pick_primary_index(pool);
+        if (config()->debug_connections) log_debug("connection_pool_handle_device_added picked primary %d\n", pool->primary_index);
     }
     // If possible, choose a supplemental distinct from primary
     if (pool->supplemental_index == -1) {
         pool->supplemental_index = pick_supplemental_index(pool);
+        if (config()->debug_connections) log_debug("connection_pool_handle_device_added picked supplemental %d\n", pool->supplemental_index);
     }
 
-    pthread_mutex_unlock(&pool->mutex);
-}
-
-void connection_pool_primary_removed() {
-    if (config()->debug_connections) log_debug("connection_pool_primary_removed\n");
-    pthread_mutex_lock(&pool->mutex);
-    // Drop primary index and try to promote another connection as primary
-    pool->primary_index = -1;
-    pool->primary_index = pick_primary_index(pool);
     pthread_mutex_unlock(&pool->mutex);
 }
 
@@ -168,10 +161,11 @@ bool connection_pool_connect_active() {
     pthread_mutex_lock(&pool->mutex);
     connection_t* p = primary(pool);
     connection_t* s = supplemental(pool);
+    pthread_mutex_unlock(&pool->mutex);
+
     bool pr_ok = false;
     if (p) pr_ok = p->driver->device_connect_func();
     if (s) (void)s->driver->device_connect_func();
-    pthread_mutex_unlock(&pool->mutex);
     return pr_ok;
 }
 
@@ -253,7 +247,9 @@ void connection_pool_handle_device_removed(const char* driver_id) {
 
         // Re-evaluate selections
         pool->primary_index = pick_primary_index(pool);
+        if (config()->debug_connections) log_debug("connection_pool_handle_device_removed picked primary %d\n", pool->primary_index);
         pool->supplemental_index = pick_supplemental_index(pool);
+        if (config()->debug_connections) log_debug("connection_pool_handle_device_removed picked supplemental %d\n", pool->supplemental_index);
     }
 
     pthread_mutex_unlock(&pool->mutex);
