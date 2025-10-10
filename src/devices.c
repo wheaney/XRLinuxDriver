@@ -59,12 +59,14 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
         return 1;
     }
 
-    connection_t* conn = connection_pool_find_hid_connection(descriptor.idVendor, descriptor.idProduct);
-    if (conn != NULL && event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
-        connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
-        connected_device->driver = conn->driver;
-        connected_device->device = conn->device;
-        handle_device_connection_changed(false, connected_device);
+    if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
+        connection_t* conn = connection_pool_find_hid_connection(descriptor.idVendor, descriptor.idProduct);
+        if (conn) {
+            connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
+            connected_device->driver = conn->driver;
+            connected_device->device = conn->device;
+            handle_device_connection_changed(false, connected_device);
+        }
     } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
         connected_device_type* connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) {

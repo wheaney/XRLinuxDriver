@@ -372,6 +372,9 @@ void update_config_from_file(FILE *fp) {
     if (config()->dead_zone_threshold_deg != new_config->dead_zone_threshold_deg)
         log_message("IMU dead zone threshold has been changed to %.2f degrees\n", new_config->dead_zone_threshold_deg);
 
+    if (config()->debug_connections != new_config->debug_connections)
+        log_message("Connection pool debugging has been %s\n", new_config->debug_connections ? "enabled" : "disabled");
+
     update_config(config(), new_config);
 
     if (config()->disabled && is_driver_connected()) {
@@ -581,30 +584,35 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
     // it has the responsibility of always holding open at least one reference as long as a device remains connected.
     static device_properties_type* primary_device_ref = NULL;
 
-    if (connected_device != NULL && (new_device == NULL || !device_equal(connected_device, new_device->device))) {
-        if (device_driver != NULL) {
-            if (config()->debug_device) log_debug("handle_device_connection_changed, device_driver->disconnect_func(false)\n");
-            device_driver->disconnect_func(false);
+    if (is_added) {
+        if (config()->debug_device) log_debug("device added for driver %s\n", device_info->driver->id);
+        connection_pool_handle_device_added(device_info->driver, device_info->device);
+        free(device_info);
+    } else if (!is_added) {
+        if (config()->debug_device) log_debug("device removed for driver %s\n", device_info->driver->id);
+        connection_pool_handle_device_removed(device_info->driver->id);
+        free(device_info);
+    }
+
+    // Reflect the pool's current primary in the runtime context
+    device_properties_type* new_primary = connection_pool_primary_device();
+    if (new_primary != primary_device_ref) {
+        if (primary_device_ref) {
+            // Release previous primary
+            device_checkin(primary_device_ref);
+            primary_device_ref = NULL;
+            block_on_device_ready = false;
         }
-
-        // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
-        device_checkin(connected_device);
-        connected_device = NULL;
-        block_on_device_ready = false;
+        if (new_primary) {
+            state()->calibration_state = NOT_CALIBRATED;
+            set_device_and_checkout(new_primary);
+            init_multi_tap(new_primary->imu_cycles_per_s);
+            primary_device_ref = new_primary;
+        }
     }
 
-    if (new_device != NULL && connected_device == NULL) {
-        if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
-        *device_driver = *new_device->driver;
-        connected_device = new_device->device;
-        state()->calibration_state = NOT_CALIBRATED;
-        set_device_and_checkout(connected_device);
-        init_multi_tap(connected_device->imu_cycles_per_s);
-
-        free(new_device);
-    }
-
-    update_state_from_device(state(), connected_device, device_driver);
+    const device_driver_type* primary_drv = connection_pool_primary_driver();
+    update_state_from_device(state(), new_primary, (device_driver_type*)primary_drv);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {
@@ -643,9 +651,12 @@ int main(int argc, const char** argv) {
     }
     free_and_clear(&lock_file_path);
 
-    connection_pool_init();
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
+    config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
+    update_config_from_file(config_fp);
+
+    if (driver_disabled()) log_message("Driver is disabled\n");
 
     char** features = NULL;
     int feature_count = plugins.register_features(&features);
