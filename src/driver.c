@@ -363,6 +363,9 @@ void update_config_from_file(FILE *fp) {
     if (config()->debug_device != new_config->debug_device)
         log_message("Device debugging has been %s\n", new_config->debug_device ? "enabled" : "disabled");
 
+    if (config()->debug_connections != new_config->debug_connections)
+        log_message("Connection pool debugging has been %s\n", new_config->debug_connections ? "enabled" : "disabled");
+
     update_config(config(), new_config);
 
     if (config()->disabled && is_driver_connected()) {
@@ -573,11 +576,11 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
     static device_properties_type* primary_device_ref = NULL;
 
     if (is_added) {
-        if (config()->debug_device) log_debug("device added for driver %s\n", device_info->driver->id);
+        if (config()->debug_device) log_debug("handle_device_connection_changed driver %s added\n", device_info->driver->id);
         connection_pool_handle_device_added(device_info->driver, device_info->device);
         free(device_info);
     } else if (!is_added) {
-        if (config()->debug_device) log_debug("device removed for driver %s\n", device_info->driver->id);
+        if (config()->debug_device) log_debug("handle_device_connection_changed driver %s removed\n", device_info->driver->id);
         connection_pool_handle_device_removed(device_info->driver->id);
         free(device_info);
     }
@@ -639,9 +642,9 @@ int main(int argc, const char** argv) {
     }
     free_and_clear(&lock_file_path);
 
-    connection_pool_init();
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
+    connection_pool_init();
     config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
 

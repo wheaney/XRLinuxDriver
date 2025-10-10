@@ -10,6 +10,7 @@
 static connection_pool_type* pool = NULL;
 
 static void ensure_capacity() {
+    if (config()->debug_connections) log_debug("ensure_capacity\n");
     if (pool->count >= pool->capacity) {
         int newcap = pool->capacity == 0 ? 2 : pool->capacity + 1;
         pool->list = (connection_t**)realloc(pool->list, newcap * sizeof(connection_t*));
@@ -18,6 +19,7 @@ static void ensure_capacity() {
 }
 
 void connection_pool_init() {
+    if (config()->debug_connections) log_debug("connection_pool_init\n");
     pool = (connection_pool_type*)calloc(1, sizeof(*pool));
     pthread_mutex_init(&pool->mutex, NULL);
     pool->primary_index = -1;
@@ -25,7 +27,7 @@ void connection_pool_init() {
 }
 
 static int pick_primary_index() {
-    // Prefer non-supplemental-capable device as primary. If all can be supplemental, take the first.
+    if (config()->debug_connections) log_debug("pick_primary_index\n");
     for (int i = 0; i < pool->count; ++i) {
         if (!pool->list[i]->device->can_be_supplemental) return i;
     }
@@ -33,6 +35,7 @@ static int pick_primary_index() {
 }
 
 static int pick_supplemental_index() {
+    if (config()->debug_connections) log_debug("pick_supplemental_index\n");
     for (int i = 0; i < pool->count; ++i) {
         if (i != pool->primary_index && pool->list[i]->supplemental) return i;
     }
@@ -40,7 +43,8 @@ static int pick_supplemental_index() {
 }
 
 void connection_pool_handle_device_added(const device_driver_type* driver, device_properties_type* device) {
-    if (!driver || !device) return;
+    if (config()->debug_connections) log_debug("connection_pool_handle_device_added for driver %s\n", driver->id);
+
     pthread_mutex_lock(&pool->mutex);
 
     ensure_capacity(pool);
@@ -64,6 +68,7 @@ void connection_pool_handle_device_added(const device_driver_type* driver, devic
 }
 
 void connection_pool_primary_removed() {
+    if (config()->debug_connections) log_debug("connection_pool_primary_removed\n");
     pthread_mutex_lock(&pool->mutex);
     // Drop primary index and try to promote another connection as primary
     pool->primary_index = -1;
@@ -106,6 +111,7 @@ bool connection_pool_device_set_sbs_mode(bool enabled) {
 }
 
 void connection_pool_disconnect_all(bool soft) {
+    if (config()->debug_connections) log_debug("connection_pool_disconnect_all %s\n", soft ? "soft" : "hard");
     pthread_mutex_lock(&pool->mutex);
     for (int i = 0; i < pool->count; ++i) {
         connection_t* c = pool->list[i];
@@ -117,12 +123,14 @@ void connection_pool_disconnect_all(bool soft) {
 
 static void* block_thread_func(void* arg) {
     connection_t* c = (connection_t*)arg;
+    if (config()->debug_connections) log_debug("block_thread_func %s\n", c->driver->id);
     c->driver->block_on_device_func();
     c->thread_running = false;
     return NULL;
 }
 
 bool connection_pool_connect_active() {
+    if (config()->debug_connections) log_debug("connection_pool_connect_active\n");
     pthread_mutex_lock(&pool->mutex);
     connection_t* p = primary(pool);
     connection_t* s = supplemental(pool);
@@ -134,6 +142,7 @@ bool connection_pool_connect_active() {
 }
 
 void connection_pool_block_on_active() {
+    if (config()->debug_connections) log_debug("connection_pool_block_on_active\n");
     pthread_mutex_lock(&pool->mutex);
     connection_t* p = primary(pool);
     connection_t* s = supplemental(pool);
@@ -166,15 +175,6 @@ void connection_pool_block_on_active() {
     pthread_mutex_unlock(&pool->mutex);
 }
 
-bool connection_pool_should_accept_event(const char* driver_id) {
-    bool accept = false;
-    pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
-    if (p && p->active && strcmp(p->driver->id, driver_id) == 0) accept = true;
-    pthread_mutex_unlock(&pool->mutex);
-    return accept;
-}
-
 device_properties_type* connection_pool_primary_device() {
     pthread_mutex_lock(&pool->mutex);
     connection_t* p = primary(pool);
@@ -192,6 +192,8 @@ const device_driver_type* connection_pool_primary_driver() {
 }
 
 void connection_pool_handle_device_removed(const char* driver_id) {
+    if (config()->debug_connections) log_debug("connection_pool_handle_device_removed for driver %s\n", driver_id);
+
     pthread_mutex_lock(&pool->mutex);
 
     int remove_index = -1;
@@ -228,6 +230,7 @@ void connection_pool_handle_device_removed(const char* driver_id) {
 }
 
 connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product) {
+    if (config()->debug_connections) log_debug("connection_pool_find_hid_connection for vendor %d product %d\n", id_vendor, id_product);
     pthread_mutex_lock(&pool->mutex);
     for (int i = 0; i < pool->count; ++i) {
         connection_t* c = pool->list[i];
@@ -241,6 +244,7 @@ connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id
 }
 
 connection_t* connection_pool_find_driver_connection(const char* driver_id) {
+    if (config()->debug_connections) log_debug("connection_pool_find_driver_connection for driver %s\n", driver_id);
     pthread_mutex_lock(&pool->mutex);
     for (int i = 0; i < pool->count; ++i) {
         connection_t* c = pool->list[i];
