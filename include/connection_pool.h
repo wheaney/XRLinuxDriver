@@ -34,10 +34,6 @@ void connection_pool_init();
 // (non-supplemental) or use it as a supplemental connection.
 void connection_pool_handle_device_added(const device_driver_type* driver, device_properties_type* device);
 
-// Signals that the current primary device has been removed; the pool should tear down
-// or swap to a different available connection if possible.
-void connection_pool_primary_removed();
-
 // Delegate helpers the main driver uses (these generally forward to the primary connection)
 bool connection_pool_is_connected();
 bool connection_pool_device_is_sbs_mode();
