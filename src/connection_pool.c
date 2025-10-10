@@ -10,7 +10,6 @@
 static connection_pool_type* pool = NULL;
 
 static void ensure_capacity() {
-    if (config()->debug_connections) log_debug("ensure_capacity\n");
     if (pool->count >= pool->capacity) {
         int newcap = pool->capacity == 0 ? 2 : pool->capacity + 1;
         pool->list = (connection_t**)realloc(pool->list, newcap * sizeof(connection_t*));
@@ -19,7 +18,6 @@ static void ensure_capacity() {
 }
 
 void connection_pool_init() {
-    if (config()->debug_connections) log_debug("connection_pool_init\n");
     pool = (connection_pool_type*)calloc(1, sizeof(*pool));
     pthread_mutex_init(&pool->mutex, NULL);
     pool->primary_index = -1;
@@ -27,7 +25,6 @@ void connection_pool_init() {
 }
 
 static int pick_primary_index() {
-    if (config()->debug_connections) log_debug("pick_primary_index\n");
     for (int i = 0; i < pool->count; ++i) {
         if (!pool->list[i]->device->can_be_supplemental) return i;
     }
@@ -35,7 +32,6 @@ static int pick_primary_index() {
 }
 
 static int pick_supplemental_index() {
-    if (config()->debug_connections) log_debug("pick_supplemental_index\n");
     for (int i = 0; i < pool->count; ++i) {
         if (i != pool->primary_index && pool->list[i]->supplemental) return i;
     }
