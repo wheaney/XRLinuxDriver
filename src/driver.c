@@ -146,6 +146,8 @@ void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
 
         // be resilient to bad values that may come from device drivers
         if (!isnan(pose.orientation.w)) {
+            // Feed time sync first so it has raw quaternions from each stream
+            connection_pool_ingest_imu_quat(driver_id, pose);
             static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
 
             if (pose.has_orientation) {

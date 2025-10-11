@@ -47,6 +47,34 @@ pkg_check_modules(JSONC REQUIRED json-c)
 pkg_check_modules(CURL REQUIRED libcurl)
 pkg_check_modules(LIBWAYLAND_CLIENT REQUIRED wayland-client)
 
+# FFTW (single-precision) — required; build from provided tarball via ExternalProject
+include(ExternalProject)
+set(FFTW_TARBALL_DEFAULT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/fftw/fftw-3.3.10.tar.gz)
+if(NOT DEFINED FFTW_TARBALL)
+    set(FFTW_TARBALL ${FFTW_TARBALL_DEFAULT})
+endif()
+if(NOT EXISTS ${FFTW_TARBALL})
+    message(FATAL_ERROR "FFTW tarball not found at ${FFTW_TARBALL}. Place fftw-3.3.10.tar.gz under thirdparty/fftw or pass -DFFTW_TARBALL=/path/to/fftw-3.3.10.tar.gz")
+endif()
+
+set(FFTW_PREFIX ${CMAKE_BINARY_DIR}/fftw3)
+set(FFTW_INSTALL_DIR ${FFTW_PREFIX})
+ExternalProject_Add(fftw3f_ext
+    URL ${FFTW_TARBALL}
+    PREFIX ${FFTW_PREFIX}
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=${FFTW_INSTALL_DIR} --enable-float --disable-shared --with-pic
+    BUILD_COMMAND $(MAKE)
+    INSTALL_COMMAND $(MAKE) install
+    BUILD_IN_SOURCE 1
+)
+
+add_library(fftw3f STATIC IMPORTED GLOBAL)
+set_target_properties(fftw3f PROPERTIES
+    IMPORTED_LOCATION ${FFTW_INSTALL_DIR}/lib/libfftw3f.a
+)
+add_dependencies(fftw3f fftw3f_ext)
+
 execute_process(COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
@@ -107,6 +135,7 @@ set(SOURCES
     src/features/sbs.c
     src/files.c
     src/logging.c
+    src/imu_time_sync.c
     src/imu.c
     src/ipc.c
     src/multitap.c
@@ -195,6 +224,7 @@ target_include_directories(xrDriver
 		SYSTEM BEFORE PRIVATE
 		${LIBEVDEV_INCLUDE_DIRS}
 		${JSONC_INCLUDE_DIRS}
+        ${FFTW_INSTALL_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/rayneoSDKHeaders
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary/interface_lib/include
@@ -217,6 +247,7 @@ target_link_libraries(xrDriver
     PRIVATE
         ${LIBEVDEV_LIBRARIES}
         ${JSONC_LIBRARIES}
+        fftw3f
         xrealAirLibrary
         Threads::Threads
         m
@@ -227,3 +258,4 @@ target_link_libraries(xrDriver
         ${LIBWAYLAND_CLIENT_LIBRARIES}
 )
 add_dependencies(xrDriver run_python_script)
+add_dependencies(xrDriver fftw3f_ext)

@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <pthread.h>
 
+#include "imu_time_sync.h"
+
 typedef struct connection_t {
     const device_driver_type* driver;
     device_properties_type* device; // owned by pool
@@ -21,6 +23,14 @@ struct connection_pool_t {
     int capacity;
     int primary_index;      // index in list or -1
     int supplemental_index; // index in list or -1
+
+    // Time sync state
+    imu_rate_estimator_t* rate_est_primary;
+    imu_rate_estimator_t* rate_est_supp;
+    IMUTimeSync* time_sync;
+    bool time_sync_initialized;
+    float last_offset_s;
+    float last_confidence;
 };
 
 // Connection pool type that manages multiple device connections.
@@ -62,3 +72,10 @@ void connection_pool_handle_device_removed(const char* driver_id);
 
 connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product);
 connection_t* connection_pool_find_driver_connection(const char* driver_id);
+
+// --- Time sync integration ---
+// Feed an incoming IMU quaternion from a driver into the time sync subsystem
+void connection_pool_ingest_imu_quat(const char* driver_id, imu_pose_type pose);
+
+// Returns whether a time delta has been computed and, if so, fills out parameters.
+bool connection_pool_get_time_delta(float* out_offset_seconds, float* out_confidence);

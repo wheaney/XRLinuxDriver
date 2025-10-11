@@ -367,7 +367,7 @@ static void* opentrack_listener_thread_func(void* arg) {
             continue;
         }
 
-        if (!connected && !device_present()) {
+        if (!connected) {
             connected_device_type *nd = calloc(1, sizeof(connected_device_type));
             nd->driver = &opentrack_driver;
             nd->device = make_opentrack_device_properties();

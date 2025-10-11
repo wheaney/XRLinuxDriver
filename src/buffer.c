@@ -3,6 +3,54 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
+
+// ---------------------------------------------------------------------------
+// Ring buffer implementation (moved from buffers.h/buffers.c into buffer.*)
+// ---------------------------------------------------------------------------
+
+void ring_buffer_init(ring_buffer_t* rb, int capacity) {
+    if (!rb || capacity <= 0) return;
+    rb->data = (float*)calloc((size_t)capacity, sizeof(float));
+    rb->capacity = rb->data ? capacity : 0;
+    rb->size = 0;
+    rb->head = 0;
+}
+
+void ring_buffer_free(ring_buffer_t* rb) {
+    if (!rb) return;
+    free(rb->data);
+    rb->data = NULL;
+    rb->capacity = 0;
+    rb->size = 0;
+    rb->head = 0;
+}
+
+void ring_buffer_push(ring_buffer_t* rb, float value) {
+    if (!rb || rb->capacity <= 0) return;
+    if (rb->size < rb->capacity) {
+        // append at tail
+        int tail = (rb->head + rb->size) % rb->capacity;
+        rb->data[tail] = value;
+        rb->size++;
+    } else {
+        // overwrite oldest and advance head
+        rb->data[rb->head] = value;
+        rb->head = (rb->head + 1) % rb->capacity;
+    }
+}
+
+float ring_buffer_get(const ring_buffer_t* rb, int index) {
+    if (!rb || index < 0 || index >= rb->size || rb->capacity <= 0) return 0.0f;
+    int pos = (rb->head + index) % rb->capacity;
+    return rb->data[pos];
+}
+
+void ring_buffer_reset(ring_buffer_t* rb) {
+    if (!rb) return;
+    rb->size = 0;
+    rb->head = 0;
+}
 
 buffer_type *create_buffer(int size) {
     buffer_type *buffer = calloc(1, sizeof(buffer_type));
