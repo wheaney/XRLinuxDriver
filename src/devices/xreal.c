@@ -1,4 +1,5 @@
 #include "devices.h"
+#include "connection_pool.h"
 #include "device_imu.h"
 #include "device_mcu.h"
 #include "driver.h"
@@ -153,7 +154,8 @@ void handle_xreal_event(uint64_t timestamp,
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
-        driver_handle_imu_event(XREAL_DRIVER_ID, ts, nwu_quat);
+        // Feed the raw quaternion into the connection pool for time sync/fusion
+        connection_pool_ingest_imu_quat(XREAL_DRIVER_ID, ts, nwu_quat);
 
         last_utilized_event_ts = ts;
     }

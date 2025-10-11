@@ -4,6 +4,7 @@
 #include "driver.h"
 #include "logging.h"
 #include "plugins/opentrack_listener.h"
+#include "imu.h"
 #include "runtime_context.h"
 #include "strings.h"
 
@@ -31,6 +32,9 @@
 // It binds a UDP socket, blocks waiting for 6-double payloads (x,y,z,yaw,pitch,roll),
 // converts yaw/pitch/roll (degrees) to a quaternion, and feeds the driver loop.
 
+// Forward declaration for static driver descriptor used during dynamic registration
+static const device_driver_type opentrack_driver;
+
 static opentrack_listener_config *ot_cfg = NULL;
 static void opentrack_start_func();
 
@@ -51,13 +55,11 @@ static char *ot_source_ip = NULL;
 static volatile bool feedback_loop_ignore = false;
 
 static void listener_device_disconnect() {
-    connection_t* c = connection_pool_find_driver_connection(OT_DRIVER_ID);
-    if (c) {
-        connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
-        connected_device->driver = c->driver;
-        connected_device->device = c->device;
-        handle_device_connection_changed(false, connected_device);
-    }
+    // Deregister synthetic device from connection pool
+    connected_device_type *nd = calloc(1, sizeof(connected_device_type));
+    nd->driver = &opentrack_driver;
+    nd->device = NULL;
+    handle_device_connection_changed(false, nd);
 
     pthread_mutex_lock(&conn_mutex);
     if (connected) {
@@ -234,11 +236,7 @@ static bool opentrack_bind_socket(const char *ip, int port) {
 }
 
 // --- device driver impl ---
-static device_properties_type *opentrack_supported_device(uint16_t id_vendor, uint16_t id_product, uint8_t usb_bus, uint8_t usb_address) {
-    (void)id_vendor; (void)id_product; (void)usb_bus; (void)usb_address;
-    // This hook is specific to the libusb hotplug event, which will never be triggered for the OpenTrack source.
-    return NULL;
-}
+static device_properties_type *opentrack_supported_device(uint16_t id_vendor, uint16_t id_product, uint8_t usb_bus, uint8_t usb_address) { (void)id_vendor; (void)id_product; (void)usb_bus; (void)usb_address; return NULL; }
 
 static bool opentrack_device_connect() {
     connected = ot_cfg && ot_cfg->enabled && udp_fd != -1;
@@ -365,6 +363,7 @@ static void* opentrack_listener_thread_func(void* arg) {
         }
 
         if (!connected) {
+            // Register synthetic device on first packet
             connected_device_type *nd = calloc(1, sizeof(connected_device_type));
             nd->driver = &opentrack_driver;
             nd->device = make_opentrack_device_properties();
@@ -387,7 +386,8 @@ static void* opentrack_listener_thread_func(void* arg) {
             if (!prev_block_active) {
                 start_ts_ms = ts_ms;
             }
-            driver_handle_imu_event(OT_DRIVER_ID, ts_ms - start_ts_ms, q);
+            // Feed into connection pool; forwarding to the driver is decided by the pool
+            connection_pool_ingest_imu_quat(OT_DRIVER_ID, ts_ms - start_ts_ms, q);
         }
         prev_block_active = block_active;
     }

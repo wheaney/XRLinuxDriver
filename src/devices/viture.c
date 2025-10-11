@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "driver.h"
+#include "connection_pool.h"
 #include "imu.h"
 #include "logging.h"
 #include "outputs.h"
@@ -184,7 +185,8 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
 
     quat = multiply_quaternions(quat, adjustment_quat);
 
-    driver_handle_imu_event(VITURE_DRIVER_ID, timestamp, quat);
+    // Feed the raw quaternion into the connection pool for time sync/fusion
+    connection_pool_ingest_imu_quat(VITURE_DRIVER_ID, timestamp, quat);
 }
 
 bool sbs_mode_enabled = false;

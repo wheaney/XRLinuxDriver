@@ -42,6 +42,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifndef NAME_MAX
+#define NAME_MAX 255
+#endif
+
 #define INOTIFY_EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 #define INOTIFY_EVENT_BUFFER_SIZE (1024 * INOTIFY_EVENT_SIZE)
 #define MT_RECENTER_SCREEN 2
@@ -82,8 +86,14 @@ void driver_handle_imu_event(const char* driver_id, uint32_t timestamp_ms, imu_q
 
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
+        // Only process events from the primary device; supplemental devices only feed time sync
+        if (!connection_pool_is_primary_driver_id(driver_id)) {
+            device_checkin(device);
+            return;
+        }
+
         if (config()->debug_device && imu_counter == 0)
-            log_debug("driver_handle_imu_event - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
+            log_debug("driver_handle_imu_event (primary) - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
             
         if (glasses_calibrated) {
             if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
@@ -121,8 +131,11 @@ void driver_handle_imu_event(const char* driver_id, uint32_t timestamp_ms, imu_q
 
         // be resilient to bad values that may come from device drivers
         if (!isnan(quat.w)) {
-            // Feed time sync first so it has raw quaternions from each stream
-            connection_pool_ingest_imu_quat(driver_id, timestamp_ms, quat);
+            // If the pool can provide a fused orientation (primary +/- supplemental), prefer it
+            imu_quat_type fused_quat;
+            if (connection_pool_get_fused_quaternion(timestamp_ms, &fused_quat)) {
+                quat = fused_quat;
+            }
             static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
 
             // adjust the current rotation by the conjugate of the screen placement quat

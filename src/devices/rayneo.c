@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "devices/rayneo.h"
+#include "connection_pool.h"
 #include "driver.h"
 #include "imu.h"
 #include "logging.h"
@@ -82,7 +83,8 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
 
         imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
-        driver_handle_imu_event(RAYNEO_DRIVER_ID, ts, nwu_quat);
+        // Feed the raw quaternion into the connection pool for time sync/fusion
+        connection_pool_ingest_imu_quat(RAYNEO_DRIVER_ID, ts, nwu_quat);
 
         last_utilized_event_ts = ts;
     }

@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "driver.h"
+#include "connection_pool.h"
 #include "imu.h"
 #include "logging.h"
 #include "outputs.h"
@@ -207,7 +208,8 @@ void rokid_block_on_device() {
                     handle_display_mode(device, GetDisplayMode(control_instance));
                 }
 
-                driver_handle_imu_event(ROKID_DRIVER_ID, timestamp, nwu_quat);
+                // Feed the raw quaternion into the connection pool for time sync/fusion
+                connection_pool_ingest_imu_quat(ROKID_DRIVER_ID, timestamp, nwu_quat);
             }
         }
         cleanup();

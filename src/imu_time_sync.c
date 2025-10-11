@@ -7,6 +7,7 @@
 
 #include "imu_time_sync.h"
 #include "imu.h"
+#include "logging.h"
 #include "buffer.h"
 
 static inline float quat_angular_distance_f(imu_quat_type q1, imu_quat_type q2) {
@@ -243,6 +244,38 @@ bool imu_time_sync_is_ready(IMUTimeSync* sync) {
             sync->buffer2->count >= min_samples2));
 }
 
+// Debug helpers
+static void signal_stats(const float* s, int n, float* out_min, float* out_max, float* out_mean, float* out_std, int* out_nonzero) {
+    if (!s || n <= 0) { if(out_min) *out_min=0; if(out_max) *out_max=0; if(out_mean) *out_mean=0; if(out_std) *out_std=0; if(out_nonzero) *out_nonzero=0; return; }
+    float mn = s[0], mx = s[0], sum = 0.0f, sum2 = 0.0f; int nz = 0;
+    for (int i=0;i<n;i++) { float v = s[i]; if (v < mn) mn = v; if (v > mx) mx = v; sum += v; sum2 += v*v; if (fabsf(v) > 1e-7f) nz++; }
+    float mean = sum / (float)n; float var = fmaxf(0.0f, (sum2/(float)n) - mean*mean); float std = sqrtf(var);
+    if (out_min) *out_min = mn; if (out_max) *out_max = mx; if (out_mean) *out_mean = mean; if (out_std) *out_std = std; if (out_nonzero) *out_nonzero = nz;
+}
+
+static void log_signal_stats(const char* tag, const float* s1, int n1, const float* s2, int n2) {
+    float mn1,mx1,mu1,std1; int nz1; signal_stats(s1,n1,&mn1,&mx1,&mu1,&std1,&nz1);
+    float mn2,mx2,mu2,std2; int nz2; signal_stats(s2,n2,&mn2,&mx2,&mu2,&std2,&nz2);
+    log_debug("imu_time_sync %s stats: s1[n=%d] min=%.6g max=%.6g mean=%.6g std=%.6g nz=%d; s2[n=%d] min=%.6g max=%.6g mean=%.6g std=%.6g nz=%d\n",
+              tag, n1, mn1,mx1,mu1,std1,nz1, n2, mn2,mx2,mu2,std2,nz2);
+}
+
+char * signal_to_string(const float* signal, int length) {
+    // Simple string representation for debugging
+    size_t buf_size = (size_t)(length * 12 + 2); // 12 chars per float + commas + null
+    char* buf = (char*)malloc(buf_size);
+    if (!buf) return NULL;
+    char* ptr = buf;
+    size_t remaining = buf_size;
+    for (int i = 0; i < length; i++) {
+        int written = snprintf(ptr, remaining, "%.6g%s", signal[i], (i < length - 1) ? ", " : "");
+        if (written < 0 || (size_t)written >= remaining) break;
+        ptr += written;
+        remaining -= (size_t)written;
+    }
+    return buf;
+}
+
 bool imu_time_sync_compute_offset(IMUTimeSync* sync,
                                   float* out_offset_seconds,
                                   float* out_confidence) {
@@ -272,6 +305,10 @@ bool imu_time_sync_compute_offset(IMUTimeSync* sync,
     float* resampled1 = signal1;
     float* resampled2 = signal2;
 
+    log_signal_stats("pre-resample", signal1, len1, signal2, len2);
+    // Optional: print a small prefix of samples for inspection
+    // log_debug("imu_time_sync_compute_offset 0: %s\n%s", signal_to_string(signal1, len1), signal_to_string(signal2, len2));
+
     if (len1 != target_len) {
         resampled1 = resample_signal(signal1, len1, target_len);
         free(signal1);
@@ -281,15 +318,32 @@ bool imu_time_sync_compute_offset(IMUTimeSync* sync,
         free(signal2);
     }
 
+    log_signal_stats("post-resample", resampled1, target_len, resampled2, target_len);
+
     // Normalize signals
     normalize_signal(resampled1, target_len);
     normalize_signal(resampled2, target_len);
+
+    // If both signals are (near) zero-variance after detrending, bail out
+    float mn1,mx1,mu1,std1; int nz1; signal_stats(resampled1, target_len, &mn1,&mx1,&mu1,&std1,&nz1);
+    float mn2,mx2,mu2,std2; int nz2; signal_stats(resampled2, target_len, &mn2,&mx2,&mu2,&std2,&nz2);
+    log_signal_stats("post-normalize", resampled1, target_len, resampled2, target_len);
+    if (std1 < 1e-6f || std2 < 1e-6f) {
+        if (out_offset_seconds) *out_offset_seconds = 0.0f;
+        if (out_confidence) *out_confidence = 0.0f;
+        free(resampled1);
+        free(resampled2);
+        return false;
+    }
 
     // Compute cross-correlation using FFT (FAST!)
     int corr_len;
     float* correlation = cross_correlate_fft(resampled1, target_len,
                                              resampled2, target_len,
                                              &corr_len);
+
+    // Optional deep dump: correlation[0] and signals
+    // log_debug("imu_time_sync_compute_offset 2:%f\n%s\n%s", *correlation, signal_to_string(resampled1, target_len), signal_to_string(resampled2, target_len));
 
     // Find peak
     int max_idx = find_max_index(correlation, corr_len);
