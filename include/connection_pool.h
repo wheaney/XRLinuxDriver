@@ -14,6 +14,14 @@ typedef struct connection_t {
     bool active;
     pthread_t thread;
     bool thread_running;
+
+    // Per-connection IMU state
+    imu_quat_type ref_quat;      // reference quaternion captured when rate is known
+    bool ref_set;
+    imu_quat_type last_quat;     // most recent raw quaternion
+    imu_quat_type last_rel_quat; // last quaternion relative to ref_quat
+    bool have_last;
+    uint32_t last_ts_ms;
 } connection_t;
 
 struct connection_pool_t {
@@ -74,8 +82,17 @@ connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id
 connection_t* connection_pool_find_driver_connection(const char* driver_id);
 
 // --- Time sync integration ---
-// Feed an incoming IMU quaternion from a driver into the time sync subsystem
-void connection_pool_ingest_imu_quat(const char* driver_id, imu_pose_type pose);
+// Feed an incoming pose from a driver into the time sync subsystem
+void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose);
 
 // Returns whether a time delta has been computed and, if so, fills out parameters.
 bool connection_pool_get_time_delta(float* out_offset_seconds, float* out_confidence);
+
+// Returns true if the given driver id is currently the primary connection
+bool connection_pool_is_primary_driver_id(const char* driver_id);
+
+// Compute a fused quaternion from available sources. If supplemental is present and
+// sufficiently time-aligned with the primary (based on measured offset), returns a fused
+// orientation; otherwise returns the primary's last relative quaternion. Returns false if
+// no primary quaternion is available yet.
+bool connection_pool_get_fused_quaternion(uint32_t timestamp_ms, imu_quat_type* out_quat);

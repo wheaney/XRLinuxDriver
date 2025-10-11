@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "devices/rayneo.h"
+#include "connection_pool.h"
 #include "driver.h"
 #include "imu.h"
 #include "logging.h"
@@ -88,7 +89,8 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
         pose.orientation = nwu_quat;
         pose.has_orientation = true;
         pose.timestamp_ms = ts;
-        driver_handle_pose_event(RAYNEO_DRIVER_ID, pose);
+        // Feed the raw quaternion into the connection pool for time sync/fusion
+        connection_pool_ingest_pose(RAYNEO_DRIVER_ID, pose);
 
         last_utilized_event_ts = ts;
     }

@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "driver.h"
+#include "connection_pool.h"
 #include "imu.h"
 #include "logging.h"
 #include "outputs.h"
@@ -213,7 +214,8 @@ void rokid_block_on_device() {
                 pose.orientation = nwu_quat;
                 pose.has_orientation = true;
                 pose.timestamp_ms = timestamp;
-                driver_handle_pose_event(ROKID_DRIVER_ID, pose);
+                // Feed the raw quaternion into the connection pool for time sync/fusion
+                connection_pool_ingest_pose(ROKID_DRIVER_ID, pose);
             }
         }
         cleanup();

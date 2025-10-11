@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "runtime_context.h"
 #include "imu_time_sync.h"
+#include "imu.h"
 
 #include <pthread.h>
 #include <stdint.h>
@@ -82,6 +83,8 @@ void connection_pool_handle_device_added(const device_driver_type* driver, devic
     c->device = device; // take ownership
     c->supplemental = device->can_be_supplemental;
     c->active = false;
+    c->ref_set = false;
+    c->have_last = false;
     pool->list[pool->count++] = c;
 
     // If no primary selected yet, try to pick one
@@ -274,12 +277,19 @@ static int index_of_driver_id(const char* driver_id) {
     return -1;
 }
 
-void connection_pool_ingest_imu_quat(const char* driver_id, imu_pose_type pose) {
+void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
     pthread_mutex_lock(&pool->mutex);
     int idx = index_of_driver_id(driver_id);
     if (idx < 0) { pthread_mutex_unlock(&pool->mutex); return; }
     int primary_idx = pool->primary_index;
     int supp_idx = pool->supplemental_index;
+
+    connection_t* conn = pool->list[idx];
+    if (conn) {
+        conn->last_quat = pose.orientation;
+        conn->last_ts_ms = pose.timestamp_ms;
+        conn->have_last = true;
+    }
 
     // Update rate estimators first
     if (idx == primary_idx) {
@@ -295,17 +305,31 @@ void connection_pool_ingest_imu_quat(const char* driver_id, imu_pose_type pose) 
         float rate1 = imu_rate_estimator_get_rate_hz(pool->rate_est_primary);
         float rate2 = imu_rate_estimator_get_rate_hz(pool->rate_est_supp);
         // Use a 2s window by default; could be configurable later
-        float window_s = 2.0f;
+        float window_s = 5.0f;
         pool->time_sync = imu_time_sync_create(window_s, rate1, rate2);
         pool->time_sync_initialized = (pool->time_sync != NULL);
         if (config()->debug_connections) log_debug("time_sync initialized (rate1=%.2f, rate2=%.2f)\n", rate1, rate2);
+
+        // Capture reference quaternions for both streams based on current sample(s)
+        connection_t* p = primary();
+        connection_t* s = supplemental();
+        if (p && p->have_last) { p->ref_quat = p->last_quat; p->ref_set = true; }
+        if (s && s->have_last) { s->ref_quat = s->last_quat; s->ref_set = true; }
     }
 
     // Feed samples if initialized
     if (pool->time_sync_initialized && pool->time_sync) {
         int src = (idx == primary_idx) ? 0 : (idx == supp_idx ? 1 : -1);
         if (src >= 0) {
-            imu_time_sync_add_quaternion_sample(pool->time_sync, src, pose.orientation);
+            // Convert to relative quaternion using the stream's reference to keep signals comparable
+            connection_t* c = pool->list[idx];
+            imu_quat_type rel = pose.orientation;
+            if (c && c->ref_set) {
+                imu_quat_type conj = conjugate(c->ref_quat);
+                rel = multiply_quaternions(conj, pose.orientation);
+            }
+            c->last_rel_quat = rel;
+            imu_time_sync_add_quaternion_sample(pool->time_sync, src, rel);
 
             // Opportunistically compute offset when ready
             float offset_s, conf;
@@ -320,7 +344,40 @@ void connection_pool_ingest_imu_quat(const char* driver_id, imu_pose_type pose) 
         }
     }
 
+    // Decide whether to forward to the driver. We only forward for primary samples to avoid duplicates.
+    bool should_forward = (idx == primary_idx);
+    imu_quat_type fused_for_forward = pose.orientation;
+    if (should_forward) {
+        // Prepare fused quaternion under lock using current state
+        connection_t* p = primary();
+        connection_t* s = supplemental();
+        if (p) {
+            imu_quat_type fused = p->ref_set ? p->last_rel_quat : p->last_quat;
+            if (s && s->have_last && pool->last_confidence > 0.2f) {
+                float w = pool->last_confidence;
+                if (w < 0.0f) w = 0.0f; if (w > 1.0f) w = 1.0f;
+                imu_quat_type q1 = normalize_quaternion(fused);
+                imu_quat_type q2 = normalize_quaternion(s->ref_set ? s->last_rel_quat : s->last_quat);
+                imu_quat_type blended = {
+                    .x = (1.0f - w) * q1.x + w * q2.x,
+                    .y = (1.0f - w) * q1.y + w * q2.y,
+                    .z = (1.0f - w) * q1.z + w * q2.z,
+                    .w = (1.0f - w) * q1.w + w * q2.w,
+                };
+                fused = normalize_quaternion(blended);
+            }
+            fused_for_forward = fused;
+        }
+    }
+
     pthread_mutex_unlock(&pool->mutex);
+
+    // Forward outside of the lock to avoid deadlocks with driver code paths
+    if (should_forward) {
+        extern void driver_handle_pose(const char* driver_id, imu_pose_type pose);
+        pose.orientation = fused_for_forward;
+        driver_handle_pose(driver_id, pose);
+    }
 }
 
 bool connection_pool_get_time_delta(float* out_offset_seconds, float* out_confidence) {
@@ -332,6 +389,50 @@ bool connection_pool_get_time_delta(float* out_offset_seconds, float* out_confid
     }
     pthread_mutex_unlock(&pool->mutex);
     return ok;
+}
+
+bool connection_pool_is_primary_driver_id(const char* driver_id) {
+    if (!driver_id) return false;
+    pthread_mutex_lock(&pool->mutex);
+    connection_t* p = primary();
+    bool is_primary = p && strcmp(p->driver->id, driver_id) == 0;
+    pthread_mutex_unlock(&pool->mutex);
+    return is_primary;
+}
+
+// Very simple fusion: if supplemental exists and time sync confidence is available, we can
+// blend orientations; for now, return primary rel quaternion, optionally nudged by supplemental.
+// This is a placeholder for more sophisticated fusion.
+bool connection_pool_get_fused_quaternion(uint32_t timestamp_ms, imu_quat_type* out_quat) {
+    (void)timestamp_ms;
+    pthread_mutex_lock(&pool->mutex);
+    connection_t* p = primary();
+    if (!p || !p->have_last) { pthread_mutex_unlock(&pool->mutex); return false; }
+
+    imu_quat_type fused = p->ref_set ? p->last_rel_quat : p->last_quat;
+
+    connection_t* s = supplemental();
+    if (s && s->have_last && pool->last_confidence > 0.2f) {
+        // Simple slerp-ish linear blend in quaternion space (not true slerp; acceptable as placeholder)
+        // weight based on confidence, clamped
+        float w = pool->last_confidence;
+        if (w < 0.0f) w = 0.0f; if (w > 1.0f) w = 1.0f;
+        imu_quat_type q1 = fused;
+        imu_quat_type q2 = s->ref_set ? s->last_rel_quat : s->last_quat;
+        // normalize inputs
+        q1 = normalize_quaternion(q1);
+        q2 = normalize_quaternion(q2);
+        imu_quat_type blended = {
+            .x = (1.0f - w) * q1.x + w * q2.x,
+            .y = (1.0f - w) * q1.y + w * q2.y,
+            .z = (1.0f - w) * q1.z + w * q2.z,
+            .w = (1.0f - w) * q1.w + w * q2.w,
+        };
+        fused = normalize_quaternion(blended);
+    }
+    *out_quat = fused;
+    pthread_mutex_unlock(&pool->mutex);
+    return true;
 }
 
 connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product) {

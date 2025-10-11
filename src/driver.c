@@ -44,6 +44,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifndef NAME_MAX
+#define NAME_MAX 255
+#endif
+
 #define INOTIFY_EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 #define INOTIFY_EVENT_BUFFER_SIZE (1024 * INOTIFY_EVENT_SIZE)
 #define MT_RECENTER_SCREEN 2
@@ -78,15 +82,21 @@ void reset_calibration(bool reset_device) {
     } else log_message("Waiting on device calibration\n");
 }
 
-void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
+void driver_handle_pose(const char* driver_id, imu_pose_type pose) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
     static int multi_tap = 0;
 
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
+        // Only process events from the primary device; supplemental devices only feed time sync
+        if (!connection_pool_is_primary_driver_id(driver_id)) {
+            device_checkin(device);
+            return;
+        }
+
         if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
-            log_debug("driver_handle_imu_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
+            log_debug("driver_handle_pose (primary) - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
             
         if (glasses_calibrated) {
             if (!captured_reference_pose || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
@@ -146,8 +156,11 @@ void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
 
         // be resilient to bad values that may come from device drivers
         if (!isnan(pose.orientation.w)) {
-            // Feed time sync first so it has raw quaternions from each stream
-            connection_pool_ingest_imu_quat(driver_id, pose);
+            // If the pool can provide a fused orientation (primary +/- supplemental), prefer it
+            imu_quat_type fused_quat;
+            if (connection_pool_get_fused_quaternion(pose.timestamp_ms, &fused_quat)) {
+                pose.orientation = fused_quat;
+            }
             static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
 
             if (pose.has_orientation) {
@@ -193,7 +206,7 @@ void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
                 euler_velocities = get_euler_velocities(&prev_unmodified_euler, pose.euler, device->imu_cycles_per_s);
             }
             handle_imu_update_ext(pose, euler_velocities, glasses_calibrated, ipc_values);
-        } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
+        } else if (config()->debug_device) log_debug("driver_handle_pose, received invalid quat\n");
 
         // reset the counter every second
         if ((++imu_counter % device->imu_cycles_per_s) == 0) {
