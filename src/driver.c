@@ -121,6 +121,8 @@ void driver_handle_imu_event(const char* driver_id, uint32_t timestamp_ms, imu_q
 
         // be resilient to bad values that may come from device drivers
         if (!isnan(quat.w)) {
+            // Feed time sync first so it has raw quaternions from each stream
+            connection_pool_ingest_imu_quat(driver_id, timestamp_ms, quat);
             static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
 
             // adjust the current rotation by the conjugate of the screen placement quat
