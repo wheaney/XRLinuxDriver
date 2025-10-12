@@ -39,6 +39,22 @@ struct connection_pool_t {
     bool time_sync_initialized;
     float last_offset_s;
     float last_confidence;
+
+    // Locked time sync and fusion correction state
+    bool time_sync_locked;      // once true, stop feeding time_sync and use locked_offset_s
+    float locked_offset_s;      // positive means supplemental lags primary by this many seconds
+    float locked_confidence;    // confidence when we locked
+
+    // Primary relative quaternion history for alignment/correction
+    imu_quat_type* primary_rel_hist; // ring buffer
+    int primary_hist_size;
+    int primary_hist_count;
+    int primary_hist_index;     // next write index
+    uint64_t primary_sample_count; // monotonically increasing sample counter
+
+    // Low-rate correction scheduler and trailing error measure
+    uint64_t last_fusion_check_ms_host; // CLOCK_MONOTONIC-based timestamp (ms)
+    float fusion_error_ema;     // exponential moving average of angular error (radians)
 };
 
 // Connection pool type that manages multiple device connections.
