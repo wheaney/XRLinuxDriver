@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
+#include <math.h>
 
 static connection_pool_type* pool = NULL;
 
@@ -30,6 +33,16 @@ void connection_pool_init() {
     pool->time_sync_initialized = false;
     pool->last_offset_s = 0.0f;
     pool->last_confidence = 0.0f;
+    pool->time_sync_locked = false;
+    pool->locked_offset_s = 0.0f;
+    pool->locked_confidence = 0.0f;
+    pool->primary_hist_size = 4096; // supports several seconds at 1kHz
+    pool->primary_rel_hist = (imu_quat_type*)calloc((size_t)pool->primary_hist_size, sizeof(imu_quat_type));
+    pool->primary_hist_count = 0;
+    pool->primary_hist_index = 0;
+    pool->primary_sample_count = 0;
+    pool->last_fusion_check_ms_host = 0;
+    pool->fusion_error_ema = 0.0f;
 }
 
 static int pick_primary_index() {
@@ -148,6 +161,14 @@ void connection_pool_disconnect_all(bool soft) {
     if (pool->time_sync) { imu_time_sync_destroy(pool->time_sync); pool->time_sync = NULL; }
     if (pool->rate_est_primary) { imu_rate_estimator_destroy(pool->rate_est_primary); pool->rate_est_primary = imu_rate_estimator_create(256); }
     if (pool->rate_est_supp) { imu_rate_estimator_destroy(pool->rate_est_supp); pool->rate_est_supp = imu_rate_estimator_create(256); }
+    pool->time_sync_locked = false;
+    pool->locked_offset_s = 0.0f;
+    pool->locked_confidence = 0.0f;
+    pool->primary_hist_count = 0;
+    pool->primary_hist_index = 0;
+    pool->primary_sample_count = 0;
+    pool->last_fusion_check_ms_host = 0;
+    pool->fusion_error_ema = 0.0f;
     pthread_mutex_unlock(&pool->mutex);
 }
 
@@ -263,6 +284,14 @@ void connection_pool_handle_device_removed(const char* driver_id) {
         if (pool->time_sync) { imu_time_sync_destroy(pool->time_sync); pool->time_sync = NULL; }
         if (pool->rate_est_primary) { imu_rate_estimator_destroy(pool->rate_est_primary); pool->rate_est_primary = imu_rate_estimator_create(256); }
         if (pool->rate_est_supp) { imu_rate_estimator_destroy(pool->rate_est_supp); pool->rate_est_supp = imu_rate_estimator_create(256); }
+        pool->time_sync_locked = false;
+        pool->locked_offset_s = 0.0f;
+        pool->locked_confidence = 0.0f;
+        pool->primary_hist_count = 0;
+        pool->primary_hist_index = 0;
+        pool->primary_sample_count = 0;
+        pool->last_fusion_check_ms_host = 0;
+        pool->fusion_error_ema = 0.0f;
     }
 
     pthread_mutex_unlock(&pool->mutex);
@@ -275,6 +304,55 @@ static int index_of_driver_id(const char* driver_id) {
         if (c && strcmp(c->driver->id, driver_id) == 0) return i;
     }
     return -1;
+}
+
+// Helpers for fusion alignment/correction
+static inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+static inline float quat_angular_distance(imu_quat_type a, imu_quat_type b) {
+    // angle between orientations (0..pi)
+    imu_quat_type q_rel = multiply_quaternions(b, conjugate(a));
+    float w = q_rel.w; if (w < 0.0f) w = -w; if (w > 1.0f) w = 1.0f;
+    return 2.0f * acosf(w);
+}
+static imu_quat_type quat_slerp(imu_quat_type q1, imu_quat_type q2, float t) {
+    // Minimal slerp implementation; fall back to lerp for small angles
+    q1 = normalize_quaternion(q1); q2 = normalize_quaternion(q2);
+    float dot = q1.x*q2.x + q1.y*q2.y + q1.z*q2.z + q1.w*q2.w;
+    if (dot < 0.0f) { dot = -dot; q2.x=-q2.x; q2.y=-q2.y; q2.z=-q2.z; q2.w=-q2.w; }
+    const float DOT_THRESHOLD = 0.9995f;
+    if (dot > DOT_THRESHOLD) {
+        // Lerp then normalize
+        imu_quat_type res = {
+            .x = q1.x + t*(q2.x - q1.x),
+            .y = q1.y + t*(q2.y - q1.y),
+            .z = q1.z + t*(q2.z - q1.z),
+            .w = q1.w + t*(q2.w - q1.w)
+        };
+        return normalize_quaternion(res);
+    }
+    float theta_0 = acosf(clampf(dot, -1.0f, 1.0f));
+    float sin_theta_0 = sinf(theta_0);
+    float theta = theta_0 * t;
+    float sin_theta = sinf(theta);
+    float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
+    float s1 = sin_theta / sin_theta_0;
+    imu_quat_type res = {
+        .x = s0*q1.x + s1*q2.x,
+        .y = s0*q1.y + s1*q2.y,
+        .z = s0*q1.z + s1*q2.z,
+        .w = s0*q1.w + s1*q2.w
+    };
+    return res;
+}
+
+static inline uint64_t now_ms_monotonic() {
+#ifdef CLOCK_MONOTONIC
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000ull + (uint64_t)(ts.tv_nsec / 1000000ull);
+#else
+    struct timeval tv; gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000ull + (uint64_t)(tv.tv_usec / 1000ull);
+#endif
 }
 
 void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
@@ -317,21 +395,23 @@ void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
         if (s && s->have_last) { s->ref_quat = s->last_quat; s->ref_set = true; }
     }
 
-    // Feed samples if initialized
-    if (pool->time_sync_initialized && pool->time_sync) {
+    // Convert to relative quaternion for both streams using their own reference
+    if (conn) {
+        imu_quat_type rel = pose.orientation;
+        if (conn->ref_set) {
+            imu_quat_type conj = conjugate(conn->ref_quat);
+            rel = multiply_quaternions(conj, pose.orientation);
+        }
+        conn->last_rel_quat = normalize_quaternion(rel);
+    }
+
+    // Feed time sync until we lock; once locked, we stop feeding and use locked offset
+    if (pool->time_sync_initialized && pool->time_sync && !pool->time_sync_locked) {
         int src = (idx == primary_idx) ? 0 : (idx == supp_idx ? 1 : -1);
         if (src >= 0) {
-            // Convert to relative quaternion using the stream's reference to keep signals comparable
-            connection_t* c = pool->list[idx];
-            imu_quat_type rel = pose.orientation;
-            if (c && c->ref_set) {
-                imu_quat_type conj = conjugate(c->ref_quat);
-                rel = multiply_quaternions(conj, pose.orientation);
-            }
-            c->last_rel_quat = rel;
-            imu_time_sync_add_quaternion_sample(pool->time_sync, src, rel);
+            imu_time_sync_add_quaternion_sample(pool->time_sync, src, conn->last_rel_quat);
 
-            // Opportunistically compute offset when ready
+            // Compute/refresh offset
             float offset_s, conf;
             if (imu_time_sync_is_ready(pool->time_sync) &&
                 imu_time_sync_compute_offset(pool->time_sync, &offset_s, &conf)) {
@@ -339,6 +419,84 @@ void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
                 pool->last_confidence = conf;
                 if (config()->debug_connections) {
                     log_debug("time_sync update: offset=%.6fs, confidence=%.3f\n", offset_s, conf);
+                }
+                // Lock if confidence sufficiently high
+                const float lock_conf_threshold = 0.7f; // tuneable
+                if (conf >= lock_conf_threshold) {
+                    pool->time_sync_locked = true;
+                    pool->locked_offset_s = offset_s;
+                    pool->locked_confidence = conf;
+                    if (config()->debug_connections) log_debug("time_sync LOCKED: offset=%.6fs (supp lags primary if -), conf=%.3f\n", offset_s, conf);
+                }
+            }
+        }
+    }
+
+    // Maintain primary relative quaternion history (ring buffer) once ref_set
+    if (idx == primary_idx) {
+        if (conn && conn->ref_set && pool->primary_rel_hist) {
+            pool->primary_rel_hist[pool->primary_hist_index] = conn->last_rel_quat;
+            pool->primary_hist_index = (pool->primary_hist_index + 1) % pool->primary_hist_size;
+            if (pool->primary_hist_count < pool->primary_hist_size) pool->primary_hist_count++;
+            pool->primary_sample_count++;
+        }
+    }
+
+    // Periodic alignment and gentle correction (~2 Hz) when locked and supplemental sample arrives
+    if (pool->time_sync_locked && idx == supp_idx) {
+        uint64_t now_ms = now_ms_monotonic();
+        const uint64_t period_ms = 500; // 2 Hz
+        if (pool->last_fusion_check_ms_host == 0 || (now_ms - pool->last_fusion_check_ms_host) >= period_ms) {
+            pool->last_fusion_check_ms_host = now_ms;
+
+            connection_t* p = primary();
+            connection_t* s = supplemental();
+            if (p && s && p->ref_set && s->ref_set && pool->primary_hist_count > 3) {
+                // Determine how many primary samples to step back using estimated rate
+                float rate1 = imu_rate_estimator_get_rate_hz(pool->rate_est_primary);
+                if (rate1 < 1e-3f) rate1 = 100.0f; // fallback
+                float lag_s = fabsf(pool->locked_offset_s); // treat magnitude as time delay of supplemental behind primary
+                float lag_samples_f = lag_s * rate1;
+                if (lag_samples_f < 0.0f) lag_samples_f = 0.0f;
+                // We'll sample between floor and ceil
+                int lag_samples0 = (int)floorf(lag_samples_f);
+                float t = lag_samples_f - (float)lag_samples0;
+                if (lag_samples0 >= pool->primary_hist_count - 1) { lag_samples0 = pool->primary_hist_count - 2; t = 1.0f; }
+
+                // Fetch two nearest primary quats at that lag
+                int idx0 = pool->primary_hist_index - 1 - lag_samples0;
+                int idx1 = idx0 - 1; // older sample
+                while (idx0 < 0) idx0 += pool->primary_hist_size;
+                while (idx1 < 0) idx1 += pool->primary_hist_size;
+                imu_quat_type q0 = pool->primary_rel_hist[idx0 % pool->primary_hist_size];
+                imu_quat_type q1 = pool->primary_rel_hist[idx1 % pool->primary_hist_size];
+                // Interpolate toward older by t
+                imu_quat_type primary_ref = quat_slerp(q0, q1, clampf(t, 0.0f, 1.0f));
+                imu_quat_type supp_rel = s->last_rel_quat;
+
+                // Compute angular error between primary_ref and supp_rel
+                float angle_err = quat_angular_distance(primary_ref, supp_rel); // radians
+                // Update EMA
+                const float ema_alpha = 0.2f; // smoothing factor
+                pool->fusion_error_ema = (1.0f - ema_alpha) * pool->fusion_error_ema + ema_alpha * angle_err;
+
+                // If trailing error exceeds threshold, gently nudge primary ref_quat so relative agrees
+                const float err_threshold = 1.0f * (3.1415926535f / 180.0f); // 1 degree
+                if (pool->fusion_error_ema > err_threshold) {
+                    // We want p_rel' = conj(step)*p_rel to approach supp_rel. Let corr = supp_rel * conj(p_rel).
+                    // Choose step = conj(slerp(I, corr, gain)), then conj(step) = slerp(I, corr, gain).
+                    imu_quat_type corr = multiply_quaternions(supp_rel, conjugate(primary_ref));
+                    float gain = 0.05f; // small correction step per check
+                    imu_quat_type step_full = quat_slerp((imu_quat_type){0,0,0,1}, normalize_quaternion(corr), clampf(gain, 0.0f, 1.0f));
+                    imu_quat_type step_rel = conjugate(step_full);
+                    p->ref_quat = normalize_quaternion(multiply_quaternions(p->ref_quat, step_rel));
+
+                    if (config()->debug_connections) {
+                        log_debug("fusion correction applied: angle_err=%.3f deg, ema=%.3f deg, lag_s=%.4f, gain=%.3f\n",
+                                  angle_err * 180.0f / 3.1415926535f,
+                                  pool->fusion_error_ema * 180.0f / 3.1415926535f,
+                                  lag_s, gain);
+                    }
                 }
             }
         }
@@ -348,26 +506,9 @@ void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
     bool should_forward = (idx == primary_idx);
     imu_quat_type fused_for_forward = pose.orientation;
     if (should_forward) {
-        // Prepare fused quaternion under lock using current state
+        // With alignment-based correction, forward primary's relative or raw quaternion without blending
         connection_t* p = primary();
-        connection_t* s = supplemental();
-        if (p) {
-            imu_quat_type fused = p->ref_set ? p->last_rel_quat : p->last_quat;
-            if (s && s->have_last && pool->last_confidence > 0.2f) {
-                float w = pool->last_confidence;
-                if (w < 0.0f) w = 0.0f; if (w > 1.0f) w = 1.0f;
-                imu_quat_type q1 = normalize_quaternion(fused);
-                imu_quat_type q2 = normalize_quaternion(s->ref_set ? s->last_rel_quat : s->last_quat);
-                imu_quat_type blended = {
-                    .x = (1.0f - w) * q1.x + w * q2.x,
-                    .y = (1.0f - w) * q1.y + w * q2.y,
-                    .z = (1.0f - w) * q1.z + w * q2.z,
-                    .w = (1.0f - w) * q1.w + w * q2.w,
-                };
-                fused = normalize_quaternion(blended);
-            }
-            fused_for_forward = fused;
-        }
+        if (p) fused_for_forward = p->ref_set ? p->last_rel_quat : p->last_quat;
     }
 
     pthread_mutex_unlock(&pool->mutex);
