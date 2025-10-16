@@ -20,9 +20,9 @@ typedef bool (*setup_ipc_func)();
 typedef void (*handle_ipc_change_func)();
 typedef imu_quat_type (*modify_screen_center_func)(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center);
 typedef void (*modify_pose_func)(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler);
-typedef void (*handle_imu_data_func)(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
-                                     imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
-typedef void (*reset_imu_data_func)();
+typedef void (*handle_pose_data_func)(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
+                                      imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
+typedef void (*reset_pose_data_func)();
 typedef void (*handle_state_func)();
 typedef void (*handle_device_connect_func)();
 typedef void (*handle_device_disconnect_func)();
@@ -42,8 +42,8 @@ struct plugin_t {
     handle_ipc_change_func handle_ipc_change;
     modify_screen_center_func modify_screen_center;
     modify_pose_func modify_pose;
-    handle_imu_data_func handle_imu_data;
-    reset_imu_data_func reset_imu_data;
+    handle_pose_data_func handle_pose_data;
+    reset_pose_data_func reset_pose_data;
     handle_state_func handle_state;
     handle_device_connect_func handle_device_connect;
     handle_device_disconnect_func handle_device_disconnect;

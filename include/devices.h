@@ -1,6 +1,5 @@
 #pragma once
 
-#include "driver.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,6 +15,9 @@ typedef enum calibration_setup_t calibration_setup_type;
 #define RESOLUTION_1080P_H 1080
 #define RESOLUTION_1200P_W 1920
 #define RESOLUTION_1200P_H 1200
+
+// distance from the pivot point (neck) to the lenses, in cm, typically ~5 inches
+#define LENS_TO_PIVOT_CM (5.0f * 2.54f)
 
 struct device_properties_t {
     char* brand;
@@ -59,6 +61,10 @@ struct device_properties_t {
 
     bool sbs_mode_supported;
     bool firmware_update_recommended;
+
+    // Tracking capabilities exposed by this device
+    bool provides_orientation; // 3DoF available
+    bool provides_position;    // 6DoF available
 };
 
 typedef struct device_properties_t device_properties_type;

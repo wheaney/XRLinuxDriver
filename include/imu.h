@@ -15,10 +15,17 @@ struct imu_quat_t {
 	float w;
 };
 
+struct imu_vec3_t {
+	float x;
+	float y;
+	float z;
+};
+
 extern const float imu_reset_data[16];
 
 typedef struct imu_euler_t imu_euler_type;
 typedef struct imu_quat_t imu_quat_type;
+typedef struct imu_vec3_t imu_vec3_type;
 
 float degree_to_radian(float deg);
 float radian_to_degree(float rad);

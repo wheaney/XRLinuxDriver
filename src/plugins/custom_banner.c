@@ -61,13 +61,13 @@ void custom_banner_handle_device_connect_func() {
     evaluate_banner_conditions();
 };
 
-void custom_banner_reset_imu_data_func() {
+void custom_banner_reset_pose_data_func() {
     evaluate_banner_conditions();
 };
 
 const plugin_type custom_banner_plugin = {
     .id = "custom_banner",
     .setup_ipc = custom_banner_setup_ipc_func,
-    .reset_imu_data = custom_banner_reset_imu_data_func,
+    .reset_pose_data = custom_banner_reset_pose_data_func,
     .handle_device_connect = custom_banner_handle_device_connect_func
 };

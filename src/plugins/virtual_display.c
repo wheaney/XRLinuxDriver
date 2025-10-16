@@ -84,7 +84,7 @@ void set_virtual_display_ipc_values() {
                             vd_config->follow_mode_enabled &&
                             vd_config->passthrough_smooth_follow_enabled);
         float display_zoom = state()->sbs_mode_enabled ? vd_config->sbs_display_size : vd_config->display_zoom;
-        float display_north_offset = state()->sbs_mode_enabled ? vd_config->sbs_display_distance : 1.0;
+        float display_north_offset = vd_config->sbs_display_distance;
         float look_ahead_constant = vd_config->look_ahead_override == 0 ?
                                         device->look_ahead_constant :
                                         vd_config->look_ahead_override;

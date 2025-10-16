@@ -116,17 +116,18 @@ void all_plugins_modify_pose_func(uint32_t timestamp_ms, imu_quat_type* quat, im
         all_plugins[i]->modify_pose(timestamp_ms, quat, euler);
     }
 }
-void all_plugins_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
+void all_plugins_handle_pose_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
                                       imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
-        if (all_plugins[i]->handle_imu_data == NULL) continue;
-        all_plugins[i]->handle_imu_data(timestamp_ms, quat, euler, velocities, imu_calibrated, ipc_values);
+        if (all_plugins[i]->handle_pose_data == NULL) continue;
+        all_plugins[i]->handle_pose_data(timestamp_ms, quat, euler, position, velocities, imu_calibrated, ipc_values);
     }
 }
-void all_plugins_reset_imu_data_func() {
+
+void all_plugins_reset_pose_data_func() {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
-        if (all_plugins[i]->reset_imu_data == NULL) continue;
-        all_plugins[i]->reset_imu_data();
+        if (all_plugins[i]->reset_pose_data == NULL) continue;
+        all_plugins[i]->reset_pose_data();
     }
 }
 void all_plugins_handle_state_func() {
@@ -160,8 +161,8 @@ const plugin_type plugins = {
     .handle_ipc_change = all_plugins_handle_ipc_change_func,
     .modify_screen_center = all_plugins_modify_screen_center_func,
     .modify_pose = all_plugins_modify_pose_func,
-    .handle_imu_data = all_plugins_handle_imu_data_func,
-    .reset_imu_data = all_plugins_reset_imu_data_func,
+    .handle_pose_data = all_plugins_handle_pose_data_func,
+    .reset_pose_data = all_plugins_reset_pose_data_func,
     .handle_state = all_plugins_handle_state_func,
     .handle_device_connect = all_plugins_handle_device_connect_func,
     .handle_device_disconnect = all_plugins_handle_device_disconnect_func

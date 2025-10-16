@@ -54,7 +54,9 @@ const device_properties_type rokid_one_properties = {
     .look_ahead_scanline_adjust         = 8.0,
     .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
-    .firmware_update_recommended        = false
+    .firmware_update_recommended        = false,
+    .provides_orientation               = true,
+    .provides_position                  = false
 };
 
 static void* event_instance = NULL;
@@ -205,7 +207,8 @@ void rokid_block_on_device() {
                     handle_display_mode(device, GetDisplayMode(control_instance));
                 }
 
-                driver_handle_imu_event(timestamp, nwu_quat);
+                imu_vec3_type zero_pos = {0};
+                driver_handle_pose_event(timestamp, nwu_quat, zero_pos);
             }
         }
         cleanup();

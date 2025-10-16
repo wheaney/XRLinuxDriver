@@ -129,7 +129,9 @@ const device_properties_type xreal_air_properties = {
     .look_ahead_scanline_adjust         = 8.0,
     .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
-    .firmware_update_recommended        = false
+    .firmware_update_recommended        = false,
+    .provides_orientation               = true,
+    .provides_position                  = false
 };
 
 static pthread_mutex_t device_driver_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -151,7 +153,8 @@ void handle_xreal_event(uint64_t timestamp,
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
-        driver_handle_imu_event(ts, nwu_quat);
+        imu_vec3_type zero_pos = {0};
+        driver_handle_pose_event(ts, nwu_quat, zero_pos);
 
         last_utilized_event_ts = ts;
     }

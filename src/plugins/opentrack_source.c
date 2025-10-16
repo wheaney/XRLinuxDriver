@@ -150,8 +150,8 @@ static void opentrack_handle_device_disconnect_func() {
     frame_number = 0;
 }
 
-static void opentrack_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
-                                           imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
+static void opentrack_handle_pose_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
+                                            imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     (void)timestamp_ms;
     (void)ipc_values;
 
@@ -159,11 +159,13 @@ static void opentrack_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type 
 
     // Map to OpenTrack expected payload: 6 doubles (x,y,z,yaw,pitch,roll) + uint32 frame number
     // Units: the PHP PoC scaled position by 10 and used degrees for yaw/pitch/roll.
-    // We don't have positional tracking, so set x,y,z to 0.
     double payload[6];
-    payload[0] = 0.0; // x
-    payload[1] = 0.0; // y
-    payload[2] = 0.0; // z
+
+    // XR driver tracks in NWU, convert to EUS
+    payload[0] = -position.y;
+    payload[1] = position.z;
+    payload[2] = -position.x;
+    
     payload[3] = euler.yaw;
     payload[4] = euler.pitch;
     payload[5] = euler.roll;
@@ -183,7 +185,7 @@ static void opentrack_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type 
     }
 }
 
-static void opentrack_reset_imu_data_func() {
+static void opentrack_reset_pose_data_func() {
     frame_number = 0;
 }
 
@@ -192,7 +194,7 @@ const plugin_type opentrack_source_plugin = {
     .default_config = opentrack_default_config_func,
     .handle_config_line = opentrack_handle_config_line_func,
     .set_config = opentrack_set_config_func,
-    .handle_imu_data = opentrack_handle_imu_data_func,
-    .reset_imu_data = opentrack_reset_imu_data_func,
+    .handle_pose_data = opentrack_handle_pose_data_func,
+    .reset_pose_data = opentrack_reset_pose_data_func,
     .handle_device_disconnect = opentrack_handle_device_disconnect_func
 };

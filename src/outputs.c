@@ -266,7 +266,7 @@ bool wait_for_imu_start() {
 }
 
 void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_euler_type velocities,
-                       bool imu_calibrated, ipc_values_type *ipc_values) {
+                       imu_vec3_type position, bool imu_calibrated, ipc_values_type *ipc_values) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
 
@@ -312,12 +312,14 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
                 imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, quat, (float)timestamp_ms);
 
                 if (response && response->ready) {
-                    pthread_mutex_lock(ipc_values->imu_data_mutex);
+                    pthread_mutex_lock(ipc_values->pose_data_mutex);
 
-                    memcpy(ipc_values->imu_data, response->data, sizeof(float) * 16);
-                    set_skippable_gamescope_reshade_effect_uniform_variable("imu_quat_data", ipc_values->imu_data, 16, sizeof(float), true);
+                    memcpy(ipc_values->pose_orientation, response->data, sizeof(float) * 16);
+                    memcpy(ipc_values->pose_position, &position, sizeof(float) * 3);
+                    set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", ipc_values->pose_orientation, 16, sizeof(float), true);
+                    set_skippable_gamescope_reshade_effect_uniform_variable("pose_position", ipc_values->pose_position, 3, sizeof(float), true);
 
-                    pthread_mutex_unlock(ipc_values->imu_data_mutex);
+                    pthread_mutex_unlock(ipc_values->pose_data_mutex);
                 }
                 free(response);
             }
@@ -379,7 +381,7 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
         prev_joystick_x = next_joystick_x;
         prev_joystick_y = next_joystick_y;
 
-        plugins.handle_imu_data(timestamp_ms, quat, euler, velocities, imu_calibrated, ipc_values);
+        plugins.handle_pose_data(timestamp_ms, quat, euler, position, velocities, imu_calibrated, ipc_values);
 
         // reset the counter every second
         if ((++imu_counter % device->imu_cycles_per_s) == 0) {
@@ -390,14 +392,14 @@ void handle_imu_update(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type
     device_checkin(device);
 }
 
-void reset_imu_data(ipc_values_type *ipc_values) {
+void reset_pose_data(ipc_values_type *ipc_values) {
     if (ipc_values) {    
-        pthread_mutex_lock(ipc_values->imu_data_mutex);
-        memcpy(ipc_values->imu_data, imu_reset_data, sizeof(float) * 16);
-        pthread_mutex_unlock(ipc_values->imu_data_mutex);
+        pthread_mutex_lock(ipc_values->pose_data_mutex);
+        memcpy(ipc_values->pose_orientation, imu_reset_data, sizeof(float) * 16);
+        pthread_mutex_unlock(ipc_values->pose_data_mutex);
     }
 
-    plugins.reset_imu_data();
+    plugins.reset_pose_data();
 }
 
 bool is_imu_alive() {
