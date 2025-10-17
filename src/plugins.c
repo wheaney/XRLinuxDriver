@@ -102,14 +102,16 @@ void all_plugins_handle_ipc_change_func() {
         all_plugins[i]->handle_ipc_change();
     }
 }
-imu_quat_type all_plugins_modify_screen_center_func(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center) {
+bool all_plugins_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_type orientation, imu_vec3_type position, 
+                                            imu_quat_type* ref_orientation, imu_vec3_type* ref_position) {
+    bool modified = false;
     for (int i = 0; i < PLUGIN_COUNT; i++) {
-        if (all_plugins[i]->modify_screen_center == NULL) continue;
-        screen_center = all_plugins[i]->modify_screen_center(timestamp_ms, quat, screen_center);
+        if (all_plugins[i]->modify_reference_pose == NULL) continue;
+        modified |= all_plugins[i]->modify_reference_pose(timestamp_ms, orientation, position, ref_orientation, ref_position);
     }
-
-    return screen_center;
+    return modified;
 }
+
 void all_plugins_modify_pose_func(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->modify_pose == NULL) continue;
@@ -159,7 +161,7 @@ const plugin_type plugins = {
     .set_config = all_plugins_set_config_func,
     .setup_ipc = all_plugins_setup_ipc_func,
     .handle_ipc_change = all_plugins_handle_ipc_change_func,
-    .modify_screen_center = all_plugins_modify_screen_center_func,
+    .modify_reference_pose = all_plugins_modify_reference_pose_func,
     .modify_pose = all_plugins_modify_pose_func,
     .handle_pose_data = all_plugins_handle_pose_data_func,
     .reset_pose_data = all_plugins_reset_pose_data_func,

@@ -39,4 +39,5 @@ imu_euler_type quaternion_to_euler_xyz(imu_quat_type q);
 imu_euler_type quaternion_to_euler_zyx(imu_quat_type q);
 imu_euler_type quaternion_to_euler_zxy(imu_quat_type q);
 imu_quat_type device_pitch_adjustment(float adjustment_degrees);
+imu_vec3_type vector_rotate(imu_vec3_type v, imu_quat_type q);
 bool quat_equal(imu_quat_type q1, imu_quat_type q2);

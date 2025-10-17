@@ -57,6 +57,7 @@ control_flags_type *control_flags;
 bool captured_reference_pose=false;
 imu_quat_type reference_orientation;
 imu_quat_type reference_orientation_conj;
+imu_vec3_type reference_position;
 
 static bool is_driver_connected() {
     return device_driver != NULL && device_driver->is_connected_func();
@@ -92,11 +93,12 @@ void driver_handle_pose_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vec
 
                 reference_orientation = quat;
                 reference_orientation_conj = conjugate(reference_orientation);
+                reference_position = position;
                 captured_reference_pose = true;
                 control_flags->recenter_screen = false;
             } else {
-                reference_orientation = plugins.modify_screen_center(timestamp_ms, quat, reference_orientation);
-                reference_orientation_conj = conjugate(reference_orientation);
+                bool pose_updated = plugins.modify_reference_pose(timestamp_ms, quat, position, &reference_orientation, &reference_position);
+                if (pose_updated) reference_orientation_conj = conjugate(reference_orientation);
             }
         } else {
             struct timeval tv;
@@ -107,6 +109,7 @@ void driver_handle_pose_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vec
                 imu_quat_type tmp_screen_center = { .w = 1.0, .x = 0.0, .y = 0.0, .z = 0.0 };
                 reference_orientation = tmp_screen_center;
                 reference_orientation_conj = conjugate(reference_orientation);
+                reference_position = (imu_vec3_type){0.0f, 0.0f, 0.0f};
 
                 glasses_calibration_started_sec=tv.tv_sec;
                 if (ipc_values) reset_pose_data(ipc_values);
@@ -123,8 +126,15 @@ void driver_handle_pose_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vec
         if (!isnan(quat.w)) {
             static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
 
-            // adjust the current rotation by the conjugate of the screen placement quat
+            // adjust the current rotation and position by the conjugate of the screen placement quat
             quat = multiply_quaternions(reference_orientation_conj, quat);
+
+            // interpret all positions relative to the reference orientation
+            position = vector_rotate((imu_vec3_type){
+                .x = position.x - reference_position.x,
+                .y = position.y - reference_position.y,
+                .z = position.z - reference_position.z
+            }, reference_orientation_conj);
 
             imu_euler_type euler = quaternion_to_euler_zyx(quat);
             imu_euler_type euler_velocities;

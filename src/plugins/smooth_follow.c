@@ -124,7 +124,8 @@ static bool smooth_follow_enabled=false;
 follow_state_type follow_state = FOLLOW_STATE_NONE;
 uint32_t last_timestamp_ms = -1;
 static imu_quat_type *origin_quat = NULL;
-static bool snap_back_to_center = false;
+static imu_vec3_type *origin_position = NULL;
+
 uint32_t start_snap_back_timestamp_ms = -1;
 static bool was_sbs_mode_enabled = false;
 static void update_smooth_follow_params() {
@@ -179,22 +180,16 @@ static void update_smooth_follow_params() {
 
     was_sbs_mode_enabled = state()->sbs_mode_enabled;
     bool was_smooth_follow_enabled = smooth_follow_enabled;
-    smooth_follow_enabled = false;
-    if (is_smooth_follow_granted() && (virtual_display_follow || smooth_follow)) {
-        smooth_follow_enabled = true;
-    } else if (is_productivity_granted() && breezy_desktop_follow) {
-        smooth_follow_enabled = true;
-        if (!was_smooth_follow_enabled) {
-            // we'll capture the screen center on the next modify_screen_center call, before it changes
-            snap_back_to_center = true;
-            start_snap_back_timestamp_ms = -1;
-        }
-    } else if (was_smooth_follow_enabled && origin_quat && snap_back_to_center) {
+    smooth_follow_enabled = is_smooth_follow_granted() && (virtual_display_follow || smooth_follow);
+    smooth_follow_enabled |= is_productivity_granted() && breezy_desktop_follow;
+    
+    if (!smooth_follow_enabled && was_smooth_follow_enabled && origin_quat) {
         // we'll want to return as close to the original center as possible
         *sf_params = sticky_params;
     }
 
     if (smooth_follow_enabled && !was_smooth_follow_enabled) {
+        start_snap_back_timestamp_ms = -1;
         last_timestamp_ms = -1;
         *sf_params = init_params;
         follow_state = FOLLOW_STATE_INIT;
@@ -269,18 +264,22 @@ float percent_adjust(float multiplier, float percent, bool inverse) {
 // if slerping threshold is met, this returns a quaternion that's "a" percent of the way between "from" and "to"
 imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
     imu_quat_type target = to;
-    if (origin_quat && smooth_follow_enabled) {
-        // origin_quat helps us understand the user's frame of reference, so by adjusting
-        // the target, we can modify it from that frame of reference and get more accurate axis adjustments
+
+    // modify the target orientation to filter out unwanted axes based on configured tracking preferences
+    if (origin_quat && smooth_follow_enabled && (!sf_config->track_roll || !sf_config->track_pitch || !sf_config->track_yaw)) {
+        // since we're going to convert the target to euler angles, we should first understand the target
+        // relative to the origin to reduce the chances of gimbal locking (the user is more likely to be facing 
+        // towards the origin). this will also lock the non-tracked axes relative to the origin, which makes the
+        // most sense for smooth follow.
         imu_quat_type to_rel = multiply_quaternions(conjugate(*origin_quat), to);
         imu_euler_type to_euler = quaternion_to_euler_zyx(to_rel);
         
         // ignore tracking preferences if smooth_follow_enabled is false, since we want to fully return to
         // the original center
         imu_euler_type target_euler;
-        target_euler.roll = (sf_config->track_roll || !smooth_follow_enabled) ? to_euler.roll : 0.0;
-        target_euler.pitch = (sf_config->track_pitch || !smooth_follow_enabled) ? to_euler.pitch : 0.0;
-        target_euler.yaw = (sf_config->track_yaw || !smooth_follow_enabled) ? to_euler.yaw : 0.0;
+        target_euler.roll = sf_config->track_roll ? to_euler.roll : 0.0;
+        target_euler.pitch = sf_config->track_pitch ? to_euler.pitch : 0.0;
+        target_euler.yaw = sf_config->track_yaw ? to_euler.yaw : 0.0;
 
         // the result is relative to origin_quat, so we need to reapply it
         target = multiply_quaternions(*origin_quat, euler_to_quaternion_zyx(target_euler));
@@ -332,26 +331,32 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
 }
 
 imu_buffer_type *smooth_follow_imu_buffer = NULL;
-imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center) {
+bool smooth_follow_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_type orientation, imu_vec3_type position, 
+                                              imu_quat_type* ref_orientation, imu_vec3_type* ref_position) {
     if (!smooth_follow_enabled && !origin_quat || !sf_params) {
-        return screen_center;
+        return false;
     }
 
     if (last_timestamp_ms == -1) {
         last_timestamp_ms = timestamp_ms;
-        return screen_center;
+        return false;
     }
 
     if (follow_state == FOLLOW_STATE_NONE) {
         last_timestamp_ms = timestamp_ms;
     }
 
+    if (!smooth_follow_enabled && !origin_quat) return false;
+
     uint32_t elapsed_ms = timestamp_ms - last_timestamp_ms;
     last_timestamp_ms = timestamp_ms;
 
-    // apps using snapback also want to track distance from the origin,
-    // we could use a different config boolean for this if it ever needs to be untied from snapback
-    if (origin_quat && snap_back_to_center) {
+    // always keep position centered for smooth follow
+    // TODO - would be pretty easy to slerp this towards center
+    imu_vec3_type new_pos = {0.0f, 0.0f, 0.0f};
+    *ref_position = new_pos;
+
+    if (origin_quat) {
         if (!smooth_follow_imu_buffer) {
             device_properties_type* device = device_checkout();
             if (device != NULL) smooth_follow_imu_buffer = create_imu_buffer(device->imu_buffer_size);
@@ -360,7 +365,7 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
 
         if (smooth_follow_imu_buffer) {
             // capture how far we are from the original screen center
-            imu_quat_type delta_quat = multiply_quaternions(conjugate(*origin_quat), quat);
+            imu_quat_type delta_quat = multiply_quaternions(conjugate(*origin_quat), orientation);
 
             // for visual consistency with how screen placement behaves when smooth follow is disabled,
             // trigger the modify_pose hook
@@ -378,50 +383,46 @@ imu_quat_type smooth_follow_modify_screen_center_func(uint32_t timestamp_ms, imu
             }
             free(response);
         }
-    }
 
-    // smooth follow has been disabled, slerp the screen back to its original center
-    if (!smooth_follow_enabled) {
-        if (origin_quat && snap_back_to_center) {
+        // smooth follow has been disabled, slerp the screen back to its original center
+        if (!smooth_follow_enabled) {
             if (start_snap_back_timestamp_ms == -1) {
                 start_snap_back_timestamp_ms = timestamp_ms;
             }
             uint32_t elapsed_snap_back_ms = timestamp_ms - start_snap_back_timestamp_ms;
-            imu_quat_type result = slerp(screen_center, *origin_quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
+            *ref_orientation = slerp(*ref_orientation, *origin_quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
             
             // our return-to-angle is so small it will never hit the target, kill the snap-back slerp after 2 seconds
             if (follow_state == FOLLOW_STATE_NONE || elapsed_snap_back_ms > 2000) {
                 follow_state = FOLLOW_STATE_NONE;
-                result = *origin_quat;
+                *ref_orientation = *origin_quat;
+                *ref_position = *origin_position;
 
                 // we've reached our destination, clear this out to stop slerping
                 free_and_clear(&origin_quat);
-                snap_back_to_center = false;
-
+                free_and_clear(&origin_position);
                 free_and_clear(&state()->smooth_follow_origin);
                 state()->smooth_follow_origin_ready = false;
 
                 start_snap_back_timestamp_ms = -1;
             }
 
-            return result;
-        } else {
-            free_and_clear(&origin_quat);
+            return true;
         }
-
-        return screen_center;
-    } else if (!origin_quat) {
+    } else {
         // smooth follow was just enabled, capture the origin before it changes
         origin_quat = calloc(1, sizeof(imu_quat_type));
-        *origin_quat = screen_center;
+        *origin_quat = *ref_orientation;
 
-        if (snap_back_to_center) {
-            if (!state()->smooth_follow_origin) state()->smooth_follow_origin = calloc(16, sizeof(float));
-            state()->smooth_follow_origin_ready = false;
-        }
+        origin_position = calloc(1, sizeof(imu_vec3_type));
+        *origin_position = *ref_position;
+
+        if (!state()->smooth_follow_origin) state()->smooth_follow_origin = calloc(16, sizeof(float));
+        state()->smooth_follow_origin_ready = false;
     }
 
-    return slerp(screen_center, quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
+    *ref_orientation = slerp(*ref_orientation, *origin_quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
+    return true;
 }
 
 // unlike gaming, smooth follow for desktop is a temporary state, handled via control flags rather than persistent config
@@ -456,13 +457,13 @@ static void smooth_follow_handle_state_func() {
 }
 
 static void handle_device_disconnect() {
-    snap_back_to_center = false;
     last_timestamp_ms = -1;
     follow_state = FOLLOW_STATE_NONE;
     follow_wait_time_start_ms = -1;
     start_snap_back_timestamp_ms = -1;
 
     free_and_clear(&origin_quat);
+    free_and_clear(&origin_position);
     free_and_clear(&state()->smooth_follow_origin);
     state()->smooth_follow_origin_ready = false;
 }
@@ -475,7 +476,7 @@ const plugin_type smooth_follow_plugin = {
     .set_config = smooth_follow_set_config_func,
     .handle_state = smooth_follow_handle_state_func,
     .handle_ipc_change = update_smooth_follow_params,
-    .modify_screen_center = smooth_follow_modify_screen_center_func,
+    .modify_reference_pose = smooth_follow_modify_reference_pose_func,
     .handle_device_connect = update_smooth_follow_params,
     .handle_device_disconnect = handle_device_disconnect
 };

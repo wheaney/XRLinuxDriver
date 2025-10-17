@@ -18,7 +18,8 @@ typedef void (*start_func)();
 
 typedef bool (*setup_ipc_func)();
 typedef void (*handle_ipc_change_func)();
-typedef imu_quat_type (*modify_screen_center_func)(uint32_t timestamp_ms, imu_quat_type quat, imu_quat_type screen_center);
+typedef bool (*modify_reference_pose_func)(uint32_t timestamp_ms, imu_quat_type orientation, imu_vec3_type position, 
+                                           imu_quat_type* ref_orientation, imu_vec3_type* ref_position);
 typedef void (*modify_pose_func)(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler);
 typedef void (*handle_pose_data_func)(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
                                       imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
@@ -40,7 +41,7 @@ struct plugin_t {
 
     setup_ipc_func setup_ipc;
     handle_ipc_change_func handle_ipc_change;
-    modify_screen_center_func modify_screen_center;
+    modify_reference_pose_func modify_reference_pose;
     modify_pose_func modify_pose;
     handle_pose_data_func handle_pose_data;
     reset_pose_data_func reset_pose_data;

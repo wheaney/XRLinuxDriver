@@ -445,15 +445,6 @@ const plugin_type opentrack_listener_plugin = {
     .default_config = opentrack_default_config_func,
     .handle_config_line = opentrack_handle_config_line_func,
     .set_config = opentrack_set_config_func,
-    .register_features = NULL,
     .start = opentrack_start_func,
-    .setup_ipc = NULL,
-    .handle_ipc_change = NULL,
-    .modify_screen_center = NULL,
-    .modify_pose = NULL,
-    .handle_pose_data = NULL,
-    .reset_pose_data = NULL,
-    .handle_state = NULL,
-    .handle_device_connect = NULL,
     .handle_device_disconnect = opentrack_handle_device_disconnect_func
 };
