@@ -51,9 +51,8 @@ breezy_desktop_config *bd_config;
 void breezy_desktop_reset_config(breezy_desktop_config *config) {
     config->enabled = false;
     config->look_ahead_override = 0.0;
-    config->display_zoom = 1.0;
-    config->sbs_display_distance = 1.0;
-    config->sbs_display_size = 1.0;
+    config->display_distance = 1.0;
+    config->display_size = 1.0;
     config->sbs_content = false;
     config->sbs_mode_stretched = false;
 };
@@ -70,12 +69,10 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
 
     if (equal(key, "external_mode")) {
         temp_config->enabled = list_string_contains("breezy_desktop", value) && is_productivity_granted();
-    } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
-        float_config(key, value, &temp_config->display_zoom);
-    } else if (equal(key, "sbs_display_distance")) {
-        float_config(key, value, &temp_config->sbs_display_distance);
-    } else if (equal(key, "sbs_display_size")) {
-        float_config(key, value, &temp_config->sbs_display_size);
+    } else if (equal(key, "display_distance")) {
+        float_config(key, value, &temp_config->display_distance);
+    } else if (equal(key, "display_size")) {
+        float_config(key, value, &temp_config->display_size);
     } else if (equal(key, "sbs_content")) {
         boolean_config(key, value, &temp_config->sbs_content);
     } else if (equal(key, "sbs_mode_stretched")) {

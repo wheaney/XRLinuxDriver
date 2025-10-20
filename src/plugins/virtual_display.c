@@ -26,9 +26,8 @@ const int virtual_display_feature_count = 2;
 void virtual_display_reset_config(virtual_display_config *config) {
     config->enabled = false;
     config->look_ahead_override = 0.0;
-    config->display_zoom = 1.0;
-    config->sbs_display_distance = 1.0;
-    config->sbs_display_size = 1.0;
+    config->display_distance = 1.0;
+    config->display_size = 1.0;
     config->sbs_content = false;
     config->sbs_mode_stretched = true;
     config->passthrough_smooth_follow_enabled = false;
@@ -51,12 +50,10 @@ void virtual_display_handle_config_line_func(void* config, char* key, char* valu
         temp_config->follow_mode_enabled = list_string_contains("sideview", value);
     } else if (equal(key, "look_ahead")) {
         float_config(key, value, &temp_config->look_ahead_override);
-    } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
-        float_config(key, value, &temp_config->display_zoom);
-    } else if (equal(key, "sbs_display_distance")) {
-        float_config(key, value, &temp_config->sbs_display_distance);
-    } else if (equal(key, "sbs_display_size")) {
-        float_config(key, value, &temp_config->sbs_display_size);
+    } else if (equal(key, "display_distance")) {
+        float_config(key, value, &temp_config->display_distance);
+    } else if (equal(key, "display_size")) {
+        float_config(key, value, &temp_config->display_size);
     } else if (equal(key, "sbs_content")) {
         boolean_config(key, value, &temp_config->sbs_content);
     } else if (equal(key, "sbs_mode_stretched")) {
@@ -83,8 +80,7 @@ void set_virtual_display_ipc_values() {
                             (vd_config->enabled ||
                             vd_config->follow_mode_enabled &&
                             vd_config->passthrough_smooth_follow_enabled);
-        float display_zoom = state()->sbs_mode_enabled ? vd_config->sbs_display_size : vd_config->display_zoom;
-        float display_north_offset = vd_config->sbs_display_distance;
+
         float look_ahead_constant = vd_config->look_ahead_override == 0 ?
                                         device->look_ahead_constant :
                                         vd_config->look_ahead_override;
@@ -93,7 +89,7 @@ void set_virtual_display_ipc_values() {
                                     0.0;
         float look_ahead_cfg[4] = {look_ahead_constant, look_ahead_ftm, device->look_ahead_scanline_adjust, device->look_ahead_ms_cap};
 
-        // computed values based on display and SBS config/state
+        // computed values based on display config/state
         float display_aspect_ratio = (float)device->resolution_w / (float)device->resolution_h;
         float diag_to_vert_ratio = sqrt(pow(display_aspect_ratio, 2) + 1);
         float half_fov_z_rads = degree_to_radian(device->fov / diag_to_vert_ratio) / 2;
@@ -131,9 +127,9 @@ void set_virtual_display_ipc_values() {
         }
         if (virtual_display_ipc_values) {
             *virtual_display_ipc_values->enabled                = enabled && !is_gamescope_reshade_ipc_connected();
-            *virtual_display_ipc_values->display_zoom           = display_zoom;
+            *virtual_display_ipc_values->display_size           = vd_config->display_size;
             *virtual_display_ipc_values->sbs_mode_stretched     = sbs_mode_stretched;
-            *virtual_display_ipc_values->display_north_offset   = display_north_offset;
+            *virtual_display_ipc_values->display_north_offset   = vd_config->display_distance;
             *virtual_display_ipc_values->curved_display         = vd_config->curved_display;
             *virtual_display_ipc_values->half_fov_z_rads        = half_fov_z_rads;
             *virtual_display_ipc_values->half_fov_y_rads        = half_fov_y_rads;
@@ -149,9 +145,9 @@ void set_virtual_display_ipc_values() {
         if (is_gamescope_reshade_ipc_connected()) {
             // don't set the "flush" flag here, we'll let the IMU data trigger the flush
             set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("display_size", &display_zoom, 1, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("display_size", &vd_config->display_size, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("display_north_offset", &display_north_offset, 1, sizeof(float), false);
+            set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->display_distance, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
@@ -184,14 +180,11 @@ void virtual_display_set_config_func(void* config) {
             if (vd_config->look_ahead_override != temp_config->look_ahead_override)
                 log_message("Look ahead override has changed to %f\n", temp_config->look_ahead_override);
 
-            if (vd_config->display_zoom != temp_config->display_zoom)
-                log_message("Display size has changed to %f\n", temp_config->display_zoom);
+            if (vd_config->display_size != temp_config->display_size)
+                log_message("Display size has changed to %f\n", temp_config->display_size);
 
-            if (vd_config->sbs_display_size != temp_config->sbs_display_size)
-                log_message("SBS display size has changed to %f\n", temp_config->sbs_display_size);
-
-            if (vd_config->sbs_display_distance != temp_config->sbs_display_distance)
-                log_message("SBS display distance has changed to %f\n", temp_config->sbs_display_distance);
+            if (vd_config->display_distance != temp_config->display_distance)
+                log_message("Display distance has changed to %f\n", temp_config->display_distance);
 
             if (vd_config->sbs_content != temp_config->sbs_content)
                 log_message("SBS content has been changed to %s\n", temp_config->sbs_content ? "enabled" : "disabled");
@@ -220,7 +213,7 @@ int virtual_display_register_features_func(char*** features) {
 
 const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
 const char *virtual_display_look_ahead_cfg_ipc_name = "look_ahead_cfg";
-const char *virtual_display_display_zoom_ipc_name = "display_size";
+const char *virtual_display_display_size_ipc_name = "display_size";
 const char *virtual_display_display_north_offset_ipc_name = "display_north_offset";
 const char *virtual_display_sbs_enabled_ipc_name = "sbs_enabled";
 const char *virtual_display_sbs_content_ipc_name = "sbs_content";
@@ -240,7 +233,7 @@ bool virtual_display_setup_ipc_func() {
     if (!virtual_display_ipc_values) virtual_display_ipc_values = calloc(1, sizeof(virtual_display_ipc_values_type));
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
-    setup_ipc_value(virtual_display_display_zoom_ipc_name, (void**) &virtual_display_ipc_values->display_zoom, sizeof(float), debug);
+    setup_ipc_value(virtual_display_display_size_ipc_name, (void**) &virtual_display_ipc_values->display_size, sizeof(float), debug);
     setup_ipc_value(virtual_display_display_north_offset_ipc_name, (void**) &virtual_display_ipc_values->display_north_offset, sizeof(float), debug);
     setup_ipc_value(virtual_display_sbs_enabled_ipc_name, (void**) &virtual_display_ipc_values->sbs_enabled, sizeof(bool), debug);
     setup_ipc_value(virtual_display_sbs_content_ipc_name, (void**) &virtual_display_ipc_values->sbs_content, sizeof(bool), debug);

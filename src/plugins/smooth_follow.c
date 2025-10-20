@@ -70,11 +70,9 @@ void *smooth_follow_default_config_func() {
     config->sideview_enabled = false;
     config->sideview_follow_enabled = false;
     config->sideview_follow_threshold = 0.5;
-    config->sideview_display_size = 1.0;
     config->breezy_desktop_enabled = false;
-    config->virtual_display_size = 1.0;
-    config->sbs_display_distance = 1.0;
-    config->sbs_display_size = 1.0;
+    config->display_distance = 1.0;
+    config->display_size = 1.0;
     config->track_roll = false;
     config->track_pitch = true;
     config->track_yaw = true;
@@ -93,8 +91,6 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         boolean_config(key, value, &temp_config->sideview_follow_enabled);
     } else if (equal(key, "sideview_follow_threshold")) {
         float_config(key, value, &temp_config->sideview_follow_threshold);
-    } else if (equal(key, "sideview_display_size")) {
-        float_config(key, value, &temp_config->sideview_display_size);
     } else if (equal(key, "external_mode")) {
         if (list_string_contains("virtual_display", value)) {
             temp_config->virtual_display_enabled = true;
@@ -105,12 +101,10 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
         if (list_string_contains("breezy_desktop", value)) {
             temp_config->breezy_desktop_enabled = true;
         }
-    } else if (equal(key, "display_zoom")) {
-        float_config(key, value, &temp_config->virtual_display_size);
-    } else if (equal(key, "sbs_display_distance")) {
-        float_config(key, value, &temp_config->sbs_display_distance);
-    } else if (equal(key, "sbs_display_size")) {
-        float_config(key, value, &temp_config->sbs_display_size);
+    } else if (equal(key, "display_distance")) {
+        float_config(key, value, &temp_config->display_distance);
+    } else if (equal(key, "display_size")) {
+        float_config(key, value, &temp_config->display_size);
     } else if (equal(key, "smooth_follow_track_roll")) {
         boolean_config(key, value, &temp_config->track_roll);
     } else if (equal(key, "smooth_follow_track_pitch")) {
@@ -133,17 +127,12 @@ static void update_smooth_follow_params() {
     bool virtual_display_follow = sf_config->virtual_display_enabled && sf_config->virtual_display_follow_enabled;
     bool smooth_follow = sf_config->sideview_enabled && sf_config->sideview_follow_enabled;
     bool breezy_desktop_follow = sf_config->breezy_desktop_enabled && state()->breezy_desktop_smooth_follow_enabled;
-    float display_distance = 1.0;
-    if (state()->sbs_mode_enabled) {
-        display_distance = sf_config->sbs_display_distance;
-    }
     device_properties_type* device = device_checkout();
     if (device != NULL) {
         float half_fov = device->fov / 2.0;
         if (virtual_display_follow) {
             *sf_params = loose_follow_params;
-            float display_size = state()->sbs_mode_enabled ? sf_config->sbs_display_size : sf_config->virtual_display_size;
-            float device_fov_threshold = device->fov * display_size / display_distance;
+            float device_fov_threshold = device->fov * sf_config->display_size / sf_config->display_distance;
 
             sf_params->lower_angle_threshold = device_fov_threshold;
             sf_params->upper_angle_threshold = device_fov_threshold * 2.0;
@@ -152,7 +141,7 @@ static void update_smooth_follow_params() {
             bool widescreen = state()->sbs_mode_enabled && is_gamescope_reshade_ipc_connected();
             float threshold = sf_params->lower_angle_threshold;
             if (sf_config->sideview_follow_threshold) threshold = sf_config->sideview_follow_threshold;
-            float display_size = fmax(1.0, sf_config->sideview_display_size * (widescreen ? 2.0 : 1.0));
+            float display_size = fmax(1.0, sf_config->display_size * (widescreen ? 2.0 : 1.0));
 
             // this calculation tends to fall short for sizes > 1.0, so increase by 25%
             threshold += half_fov * (display_size  - 1.0) * 1.25;
@@ -164,7 +153,7 @@ static void update_smooth_follow_params() {
             sf_params->return_to_angle = threshold;
         } else if (breezy_desktop_follow) {
             *sf_params = sticky_params;
-            display_distance = 1.0;
+            float display_distance = 1.0;
             float threshold = sf_params->lower_angle_threshold;
             if (state()->breezy_desktop_display_distance) display_distance = state()->breezy_desktop_display_distance;
             if (state()->breezy_desktop_follow_threshold) threshold = state()->breezy_desktop_follow_threshold;
