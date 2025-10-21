@@ -60,7 +60,8 @@ void set_sideview_ipc_values_from_config() {
             *sideview_ipc_values->enabled = enabled && !is_gamescope_reshade_ipc_connected();
             *sideview_ipc_values->position = position;
         }
-        set_gamescope_reshade_effect_uniform_variable("sideview_enabled", &enabled, 1, sizeof(bool), false);
+        bool gamescope_enabled = enabled && is_gamescope_reshade_ipc_connected();
+        set_gamescope_reshade_effect_uniform_variable("sideview_enabled", &gamescope_enabled, 1, sizeof(bool), false);
         set_gamescope_reshade_effect_uniform_variable("sideview_position", &position, 1, sizeof(float), false);
     } else {
         sideview_handle_device_disconnect_func();

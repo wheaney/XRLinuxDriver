@@ -296,7 +296,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 ipc_values->date[1] = (float)(t->tm_mon + 1);
                 ipc_values->date[2] = (float)t->tm_mday;
                 ipc_values->date[3] = (float)(t->tm_hour * 3600 + t->tm_min * 60 + t->tm_sec);
-                set_skippable_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), false);
+                set_skippable_gamescope_reshade_effect_uniform_variable("keepalive_date", ipc_values->date, 4, sizeof(float), true);
             }
 
             if (imu_calibrated) {
@@ -315,7 +315,9 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
 
                     memcpy(ipc_values->pose_orientation, response->data, sizeof(float) * 16);
                     memcpy(ipc_values->pose_position, &pose.position, sizeof(float) * 3);
-                    set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", ipc_values->pose_orientation, 16, sizeof(float), true);
+
+                    // trigger flush on just the last write
+                    set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", ipc_values->pose_orientation, 16, sizeof(float), false);
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_position", ipc_values->pose_position, 3, sizeof(float), true);
 
                     pthread_mutex_unlock(ipc_values->pose_data_mutex);

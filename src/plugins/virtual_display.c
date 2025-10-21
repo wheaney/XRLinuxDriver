@@ -142,9 +142,10 @@ void set_virtual_display_ipc_values() {
             memcpy(virtual_display_ipc_values->lens_vector_r, lens_vector_r, sizeof(lens_vector_r));
         }
 
-        if (is_gamescope_reshade_ipc_connected()) {
-            // don't set the "flush" flag here, we'll let the IMU data trigger the flush
-            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &enabled, 1, sizeof(bool), false);
+        // don't set the "flush" flag here if gamescope is enabled, we'll let the frequent IMU data writes trigger the flush
+        bool gamescope_enabled = enabled && is_gamescope_reshade_ipc_connected();
+        set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &gamescope_enabled, 1, sizeof(bool), !gamescope_enabled);
+        if (gamescope_enabled) {
             set_gamescope_reshade_effect_uniform_variable("display_size", &vd_config->display_size, 1, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
             set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->display_distance, 1, sizeof(float), false);
@@ -158,9 +159,6 @@ void set_virtual_display_ipc_values() {
             set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
             set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
-        } else {
-            bool gamescope_enabled = false;
-            set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &gamescope_enabled, 1, sizeof(bool), true);
         }
     } else {
         virtual_display_handle_device_disconnect_func();
@@ -176,7 +174,7 @@ void virtual_display_set_config_func(void* config) {
         if (vd_config->enabled != temp_config->enabled)
             log_message("Virtual display has been %s\n", temp_config->enabled ? "enabled" : "disabled");
 
-        if (temp_config->enabled || temp_config->passthrough_smooth_follow_enabled && temp_config->follow_mode_enabled) {
+        if (temp_config->enabled || temp_config->follow_mode_enabled) {
             if (vd_config->look_ahead_override != temp_config->look_ahead_override)
                 log_message("Look ahead override has changed to %f\n", temp_config->look_ahead_override);
 
