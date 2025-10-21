@@ -102,27 +102,25 @@ void all_plugins_handle_ipc_change_func() {
         all_plugins[i]->handle_ipc_change();
     }
 }
-bool all_plugins_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_type orientation, imu_vec3_type position, 
-                                            imu_quat_type* ref_orientation, imu_vec3_type* ref_position) {
+bool all_plugins_modify_reference_pose_func(imu_pose_type pose, imu_pose_type* ref_pose) {
     bool modified = false;
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->modify_reference_pose == NULL) continue;
-        modified |= all_plugins[i]->modify_reference_pose(timestamp_ms, orientation, position, ref_orientation, ref_position);
+        modified |= all_plugins[i]->modify_reference_pose(pose, ref_pose);
     }
     return modified;
 }
 
-void all_plugins_modify_pose_func(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler) {
+void all_plugins_modify_pose_func(imu_pose_type* pose) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->modify_pose == NULL) continue;
-        all_plugins[i]->modify_pose(timestamp_ms, quat, euler);
+        all_plugins[i]->modify_pose(pose);
     }
 }
-void all_plugins_handle_pose_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
-                                      imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
+void all_plugins_handle_pose_data_func(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->handle_pose_data == NULL) continue;
-        all_plugins[i]->handle_pose_data(timestamp_ms, quat, euler, position, velocities, imu_calibrated, ipc_values);
+        all_plugins[i]->handle_pose_data(pose, velocities, imu_calibrated, ipc_values);
     }
 }
 

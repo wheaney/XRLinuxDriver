@@ -18,11 +18,9 @@ typedef void (*start_func)();
 
 typedef bool (*setup_ipc_func)();
 typedef void (*handle_ipc_change_func)();
-typedef bool (*modify_reference_pose_func)(uint32_t timestamp_ms, imu_quat_type orientation, imu_vec3_type position, 
-                                           imu_quat_type* ref_orientation, imu_vec3_type* ref_position);
-typedef void (*modify_pose_func)(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler);
-typedef void (*handle_pose_data_func)(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
-                                      imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
+typedef bool (*modify_reference_pose_func)(imu_pose_type pose, imu_pose_type* ref_pose);
+typedef void (*modify_pose_func)(imu_pose_type* pose);
+typedef void (*handle_pose_data_func)(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
 typedef void (*reset_pose_data_func)();
 typedef void (*handle_state_func)();
 typedef void (*handle_device_connect_func)();

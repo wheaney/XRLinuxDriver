@@ -6,5 +6,5 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-void driver_handle_pose_event(uint32_t timestamp_ms, imu_quat_type quat, imu_vec3_type position);
+void driver_handle_pose_event(imu_pose_type pose);
 bool driver_disabled();

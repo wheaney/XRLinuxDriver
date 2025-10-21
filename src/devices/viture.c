@@ -184,8 +184,11 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
 
     quat = multiply_quaternions(quat, adjustment_quat);
 
-    imu_vec3_type zero_pos = {0};
-    driver_handle_pose_event(timestamp, quat, zero_pos);
+    imu_pose_type pose = {0};
+    pose.orientation = quat;
+    pose.has_orientation = true;
+    pose.timestamp_ms = timestamp;
+    driver_handle_pose_event(pose);
 }
 
 bool sbs_mode_enabled = false;

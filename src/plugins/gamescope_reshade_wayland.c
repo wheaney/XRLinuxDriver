@@ -346,8 +346,7 @@ void gamescope_reshade_wl_handle_state_func() {
     pthread_mutex_unlock(&wayland_mutex);
 };
 
-void gamescope_reshade_wl_handle_pose_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
-                                                imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
+void gamescope_reshade_wl_handle_pose_data_func(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (!reshade_object) return;
     
     pthread_mutex_lock(&wayland_mutex);

@@ -117,8 +117,7 @@ void smooth_follow_handle_config_line_func(void* config, char* key, char* value)
 static bool smooth_follow_enabled=false;
 follow_state_type follow_state = FOLLOW_STATE_NONE;
 uint32_t last_timestamp_ms = -1;
-static imu_quat_type *origin_quat = NULL;
-static imu_vec3_type *origin_position = NULL;
+static imu_pose_type *origin_pose = NULL;
 
 uint32_t start_snap_back_timestamp_ms = -1;
 static bool was_sbs_mode_enabled = false;
@@ -172,7 +171,7 @@ static void update_smooth_follow_params() {
     smooth_follow_enabled = is_smooth_follow_granted() && (virtual_display_follow || smooth_follow);
     smooth_follow_enabled |= is_productivity_granted() && breezy_desktop_follow;
     
-    if (!smooth_follow_enabled && was_smooth_follow_enabled && origin_quat) {
+    if (!smooth_follow_enabled && was_smooth_follow_enabled && origin_pose) {
         // we'll want to return as close to the original center as possible
         *sf_params = sticky_params;
     }
@@ -255,12 +254,12 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
     imu_quat_type target = to;
 
     // modify the target orientation to filter out unwanted axes based on configured tracking preferences
-    if (origin_quat && smooth_follow_enabled && (!sf_config->track_roll || !sf_config->track_pitch || !sf_config->track_yaw)) {
+    if (origin_pose && smooth_follow_enabled && (!sf_config->track_roll || !sf_config->track_pitch || !sf_config->track_yaw)) {
         // since we're going to convert the target to euler angles, we should first understand the target
         // relative to the origin to reduce the chances of gimbal locking (the user is more likely to be facing 
         // towards the origin). this will also lock the non-tracked axes relative to the origin, which makes the
         // most sense for smooth follow.
-        imu_quat_type to_rel = multiply_quaternions(conjugate(*origin_quat), to);
+        imu_quat_type to_rel = multiply_quaternions(conjugate(origin_pose->orientation), to);
         imu_euler_type to_euler = quaternion_to_euler_zyx(to_rel);
         
         // ignore tracking preferences if smooth_follow_enabled is false, since we want to fully return to
@@ -271,7 +270,7 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
         target_euler.yaw = sf_config->track_yaw ? to_euler.yaw : 0.0;
 
         // the result is relative to origin_quat, so we need to reapply it
-        target = multiply_quaternions(*origin_quat, euler_to_quaternion_zyx(target_euler));
+        target = multiply_quaternions(origin_pose->orientation, euler_to_quaternion_zyx(target_euler));
     }
 
     float cosTheta = from.w * target.w + from.x * target.x + from.y * target.y + from.z * target.z;
@@ -320,32 +319,28 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
 }
 
 imu_buffer_type *smooth_follow_imu_buffer = NULL;
-bool smooth_follow_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_type orientation, imu_vec3_type position, 
-                                              imu_quat_type* ref_orientation, imu_vec3_type* ref_position) {
-    if (!smooth_follow_enabled && !origin_quat || !sf_params) {
+bool smooth_follow_modify_reference_pose_func(imu_pose_type pose, imu_pose_type* ref_pose) {
+    if ((!smooth_follow_enabled && !origin_pose) || !sf_params) {
         return false;
     }
 
     if (last_timestamp_ms == -1) {
-        last_timestamp_ms = timestamp_ms;
+        last_timestamp_ms = pose.timestamp_ms;
         return false;
     }
 
     if (follow_state == FOLLOW_STATE_NONE) {
-        last_timestamp_ms = timestamp_ms;
+        last_timestamp_ms = pose.timestamp_ms;
     }
 
-    if (!smooth_follow_enabled && !origin_quat) return false;
-
-    uint32_t elapsed_ms = timestamp_ms - last_timestamp_ms;
-    last_timestamp_ms = timestamp_ms;
+    uint32_t elapsed_ms = pose.timestamp_ms - last_timestamp_ms;
+    last_timestamp_ms = pose.timestamp_ms;
 
     // always keep position centered for smooth follow
     // TODO - would be pretty easy to slerp this towards center
-    imu_vec3_type new_pos = {0.0f, 0.0f, 0.0f};
-    *ref_position = new_pos;
+    ref_pose->position = (imu_vec3_type){0.0f, 0.0f, 0.0f};
 
-    if (origin_quat) {
+    if (origin_pose) {
         if (!smooth_follow_imu_buffer) {
             device_properties_type* device = device_checkout();
             if (device != NULL) smooth_follow_imu_buffer = create_imu_buffer(device->imu_buffer_size);
@@ -354,17 +349,18 @@ bool smooth_follow_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_ty
 
         if (smooth_follow_imu_buffer) {
             // capture how far we are from the original screen center
-            imu_quat_type delta_quat = multiply_quaternions(conjugate(*origin_quat), orientation);
+            imu_quat_type delta_quat = multiply_quaternions(conjugate(origin_pose->orientation), pose.orientation);
 
             // for visual consistency with how screen placement behaves when smooth follow is disabled,
             // trigger the modify_pose hook
-            imu_euler_type delta_euler = quaternion_to_euler_zyx(delta_quat);
-            plugins.modify_pose(timestamp_ms, &delta_quat, &delta_euler);
+            imu_pose_type delta_pose = { .timestamp_ms = pose.timestamp_ms, .orientation = delta_quat, .position = (imu_vec3_type){0.0f,0.0f,0.0f}, .euler = quaternion_to_euler_zyx(delta_quat) };
+            plugins.modify_pose(&delta_pose);
+            delta_quat = delta_pose.orientation;
 
             imu_buffer_response_type* response = push_to_imu_buffer(
                 smooth_follow_imu_buffer, 
                 delta_quat,
-                timestamp_ms
+                pose.timestamp_ms
             );
             state()->smooth_follow_origin_ready = response && response->ready;
             if (state()->smooth_follow_origin_ready) {
@@ -376,20 +372,19 @@ bool smooth_follow_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_ty
         // smooth follow has been disabled, slerp the screen back to its original center
         if (!smooth_follow_enabled) {
             if (start_snap_back_timestamp_ms == -1) {
-                start_snap_back_timestamp_ms = timestamp_ms;
+                start_snap_back_timestamp_ms = pose.timestamp_ms;
             }
-            uint32_t elapsed_snap_back_ms = timestamp_ms - start_snap_back_timestamp_ms;
-            *ref_orientation = slerp(*ref_orientation, *origin_quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
+            uint32_t elapsed_snap_back_ms = pose.timestamp_ms - start_snap_back_timestamp_ms;
+            ref_pose->orientation = slerp(ref_pose->orientation, origin_pose->orientation, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
             
             // our return-to-angle is so small it will never hit the target, kill the snap-back slerp after 2 seconds
             if (follow_state == FOLLOW_STATE_NONE || elapsed_snap_back_ms > 2000) {
                 follow_state = FOLLOW_STATE_NONE;
-                *ref_orientation = *origin_quat;
-                *ref_position = *origin_position;
+                ref_pose->orientation = origin_pose->orientation;
+                ref_pose->position = origin_pose->position;
 
                 // we've reached our destination, clear this out to stop slerping
-                free_and_clear(&origin_quat);
-                free_and_clear(&origin_position);
+                free_and_clear(&origin_pose);
                 free_and_clear(&state()->smooth_follow_origin);
                 state()->smooth_follow_origin_ready = false;
 
@@ -400,17 +395,17 @@ bool smooth_follow_modify_reference_pose_func(uint32_t timestamp_ms, imu_quat_ty
         }
     } else {
         // smooth follow was just enabled, capture the origin before it changes
-        origin_quat = calloc(1, sizeof(imu_quat_type));
-        *origin_quat = *ref_orientation;
-
-        origin_position = calloc(1, sizeof(imu_vec3_type));
-        *origin_position = *ref_position;
+        origin_pose = calloc(1, sizeof(imu_pose_type));
+        origin_pose->orientation = ref_pose->orientation;
+        origin_pose->position = ref_pose->position;
+        origin_pose->has_orientation = ref_pose->has_orientation;
+        origin_pose->has_position = ref_pose->has_position;
 
         if (!state()->smooth_follow_origin) state()->smooth_follow_origin = calloc(16, sizeof(float));
         state()->smooth_follow_origin_ready = false;
     }
 
-    *ref_orientation = slerp(*ref_orientation, *origin_quat, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
+    ref_pose->orientation = slerp(ref_pose->orientation, origin_pose->orientation, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
     return true;
 }
 
@@ -451,8 +446,7 @@ static void handle_device_disconnect() {
     follow_wait_time_start_ms = -1;
     start_snap_back_timestamp_ms = -1;
 
-    free_and_clear(&origin_quat);
-    free_and_clear(&origin_position);
+    free_and_clear(&origin_pose);
     free_and_clear(&state()->smooth_follow_origin);
     state()->smooth_follow_origin_ready = false;
 }

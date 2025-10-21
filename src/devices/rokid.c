@@ -207,8 +207,11 @@ void rokid_block_on_device() {
                     handle_display_mode(device, GetDisplayMode(control_instance));
                 }
 
-                imu_vec3_type zero_pos = {0};
-                driver_handle_pose_event(timestamp, nwu_quat, zero_pos);
+                imu_pose_type pose = (imu_pose_type){0};
+                pose.orientation = nwu_quat;
+                pose.has_orientation = true;
+                pose.timestamp_ms = timestamp;
+                driver_handle_pose_event(pose);
             }
         }
         cleanup();

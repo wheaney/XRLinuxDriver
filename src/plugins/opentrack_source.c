@@ -150,25 +150,27 @@ static void opentrack_handle_device_disconnect_func() {
     frame_number = 0;
 }
 
-static void opentrack_handle_pose_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler, imu_vec3_type position, 
-                                            imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
-    (void)timestamp_ms;
+static void opentrack_handle_pose_data_func(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     (void)ipc_values;
 
     if (!ot_config || !ot_config->enabled || !imu_calibrated || udp_fd == -1) return;
 
     // Map to OpenTrack expected payload: 6 doubles (x,y,z,yaw,pitch,roll) + uint32 frame number
     // Units: the PHP PoC scaled position by 10 and used degrees for yaw/pitch/roll.
-    double payload[6];
+    double payload[6] = {0};
 
     // XR driver tracks in NWU, convert to EUS
-    payload[0] = -position.y;
-    payload[1] = position.z;
-    payload[2] = -position.x;
+    if (pose.has_position) {
+        payload[0] = -pose.position.y;
+        payload[1] = pose.position.z;
+        payload[2] = -pose.position.x;
+    }
     
-    payload[3] = euler.yaw;
-    payload[4] = euler.pitch;
-    payload[5] = euler.roll;
+    if (pose.has_orientation) {
+        payload[3] = pose.euler.yaw;
+        payload[4] = pose.euler.pitch;
+        payload[5] = pose.euler.roll;
+    }
 
     // Build buffer: 6 doubles + uint32
     uint8_t buffer[6 * sizeof(double) + sizeof(uint32_t)];

@@ -393,7 +393,13 @@ static void* opentrack_listener_thread_func(void* arg) {
                     .z = (float)vals[1] / full_distance_cm
                 };
 
-                driver_handle_pose_event(ts_ms - start_ts_ms, q, pos);
+                imu_pose_type pose = (imu_pose_type){0};
+                pose.orientation = q;
+                pose.position = pos;
+                pose.has_orientation = true;
+                pose.has_position = true;
+                pose.timestamp_ms = ts_ms - start_ts_ms;
+                driver_handle_pose_event(pose);
             }
             device_checkin(device);
         }

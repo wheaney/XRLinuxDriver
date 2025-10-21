@@ -82,9 +82,12 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
         GetHeadTrackerPose(rotation, position, &time);
 
         imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
-    imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
-    imu_vec3_type zero_pos = { 0 };
-    driver_handle_pose_event(ts, nwu_quat, zero_pos);
+        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
+        imu_pose_type pose = (imu_pose_type){0};
+        pose.orientation = nwu_quat;
+        pose.has_orientation = true;
+        pose.timestamp_ms = ts;
+        driver_handle_pose_event(pose);
 
         last_utilized_event_ts = ts;
     }

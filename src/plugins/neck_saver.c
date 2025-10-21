@@ -45,16 +45,16 @@ static void neck_saver_set_config_func(void *config) {
     ns_config = new_config;
 }
 
-static void neck_saver_modify_pose_func(uint32_t timestamp_ms, imu_quat_type* quat, imu_euler_type* euler) {
-    if (!ns_config || !quat || !euler) return;
+static void neck_saver_modify_pose_func(imu_pose_type* pose) {
+    if (!ns_config || !pose) return;
     if (ns_config->horizontal_multiplier == 1.0f && ns_config->vertical_multiplier == 1.0f) return;
 
     // euler is XYZ (roll,pitch,yaw). Apply multipliers accordingly.
-    euler->yaw *= ns_config->horizontal_multiplier;
-    euler->pitch *= ns_config->vertical_multiplier;
+    pose->euler.yaw *= ns_config->horizontal_multiplier;
+    pose->euler.pitch *= ns_config->vertical_multiplier;
 
     // Keep quaternion consistent with updated euler angles
-    *quat = euler_to_quaternion_zyx(*euler);
+    pose->orientation = euler_to_quaternion_zyx(pose->euler);
 }
 
 const plugin_type neck_saver_plugin = {

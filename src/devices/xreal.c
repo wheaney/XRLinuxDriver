@@ -153,8 +153,11 @@ void handle_xreal_event(uint64_t timestamp,
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
-        imu_vec3_type zero_pos = {0};
-        driver_handle_pose_event(ts, nwu_quat, zero_pos);
+        imu_pose_type pose = {0};
+        pose.orientation = nwu_quat;
+        pose.has_orientation = true;
+        pose.timestamp_ms = ts;
+        driver_handle_pose_event(pose);
 
         last_utilized_event_ts = ts;
     }
