@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+if ! systemctl --user --quiet is-active xr-driver >/dev/null 2>&1; then
+    if [ -z "$IGNORE_SYSTEMD_ERRORS" ]; then
+        echo "xr-driver service is not active. Start it with:" >&2
+        echo "  systemctl --user start xr-driver" >&2
+        echo ""
+        echo "If the issue persists, please create an issue on the wheaney/XRLinuxDriver repository."
+        echo ""
+        echo "To ignore this error, rerun with IGNORE_SYSTEMD_ERRORS=1"
+        exit 1
+    else
+        echo "Warning: xr-driver service is not active, most actions will be ineffective until this is resolved. Continuing due to IGNORE_SYSTEMD_ERRORS..." >&2
+    fi
+fi
+
 USER=${SUDO_USER:-$USER}
 USER_HOME=$(getent passwd $USER | cut -d: -f6)
 if [ -z "$XDG_CONFIG_HOME" ]; then
@@ -62,12 +76,14 @@ then
         config_value="mouse"
         config_key2="external_mode"
         config_value2="none"
-    elif [ "$1" == "--display-zoom" ] || [ "$1" == "-z" ]; then
-        config_key="display_zoom"
+    elif [ "$1" == "--display-size" ] || [ "$1" == "-ds" ]; then
         config_type="string"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
+        config_key="display_size"
+        config_value="$2"
+    elif [ "$1" == "--display-distance" ] || [ "$1" == "-dd" ]; then
+        config_type="string"
+        config_key="display_distance"
+        config_value="$2"
     elif [ "$1" == "--external-mode" ] || [ "$1" == "-em" ]; then
         config_type="string"
         config_key="external_mode"
@@ -101,21 +117,9 @@ then
         config_type="string"
         config_key="sbs_content"
         config_value="${2:-true}"
-    elif [ "$1" == "--sbs-display-size" ] || [ "$1" == "-sbsds" ]; then
-        config_type="string"
-        config_key="sbs_display_size"
-        config_value="$2"
-    elif [ "$1" == "--sbs-display-distance" ] || [ "$1" == "-sbsdd" ]; then
-        config_type="string"
-        config_key="sbs_display_distance"
-        config_value="$2"
     elif [ "$1" == "--sideview-position" ] || [ "$1" == "-svp" ]; then
         config_type="string"
         config_key="sideview_position"
-        config_value="$2"
-    elif [ "$1" == "--sideview-display-size" ] || [ "$1" == "-svds" ]; then
-        config_type="string"
-        config_key="sideview_display_size"
         config_value="$2"
     elif [ "$1" == "--smooth-follow-enable" ] || [ "$1" == "-sfe" ]; then
         config_key="sideview_smooth_follow_enabled"
@@ -250,21 +254,19 @@ Options:
   -ms, --mouse-sensitivity [sensitivity_value]
   -mte, --multi-tap-enable
   -mtd, --multi-tap-disable
-  -z, --display-zoom [zoom_value]
+  -ds, --display-size [display_size]
+  -dd, --display-distance [display_distance]
   -em, --external-mode
   -de, --disable-external
   -vd, --virtual-display
   -bd, --breezy-desktop
   -sv, --sideview
   -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
-  -svds, --sideview-display-size [display_size]
   -sfe, --smooth-follow-enable
   -sfd, --smooth-follow-disable
   -sft, --smooth-follow-threshold [threshold_value]
   -sbsms, --sbs-mode-stretched [true|false]
   -sbs3d, --sbs-content-3d [true|false]
-  -sbsds, --sbs-display-size [display_size]
-  -sbsdd, --sbs-display-distance [display_distance]
   -nsh, --neck-saver-horizontal [multiplier]
   -nsv, --neck-saver-vertical [multiplier]
   -dm, --disable-metrics

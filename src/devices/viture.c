@@ -126,7 +126,9 @@ const device_properties_type viture_one_properties = {
     .look_ahead_scanline_adjust         = 10.0,
     .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
-    .firmware_update_recommended        = false
+    .firmware_update_recommended        = false,
+    .provides_orientation               = true,
+    .provides_position                  = false
 };
 
 const int frequency_enum_to_value[] = {
@@ -182,7 +184,11 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
 
     quat = multiply_quaternions(quat, adjustment_quat);
 
-    driver_handle_imu_event(timestamp, quat);
+    imu_pose_type pose = {0};
+    pose.orientation = quat;
+    pose.has_orientation = true;
+    pose.timestamp_ms = timestamp;
+    driver_handle_pose_event(pose);
 }
 
 bool sbs_mode_enabled = false;

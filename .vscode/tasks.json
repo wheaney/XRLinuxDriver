@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build XRLinuxDriver (cmake)",
+			"type": "shell",
+			"command": "bash -lc 'set -euo pipefail; if [ -d build ]; then cmake --build build -j$(nproc); else cmake -S . -B build && cmake --build build -j$(nproc); fi'",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		}
+	]
+}

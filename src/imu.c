@@ -225,3 +225,21 @@ imu_quat_type device_pitch_adjustment(float adjustment_degrees) {
 bool quat_equal(imu_quat_type q1, imu_quat_type q2) {
     return q1.w == q2.w && q1.x == q2.x && q1.y == q2.y && q1.z == q2.z;
 }
+
+imu_vec3_type vector_rotate(imu_vec3_type v, imu_quat_type q) {
+    q = normalize_quaternion(q);
+
+    float w = q.w;
+    float qx = q.x, qy = q.y, qz = q.z;
+
+    float tx = 2.0f * (qy * v.z - qz * v.y);
+    float ty = 2.0f * (qz * v.x - qx * v.z);
+    float tz = 2.0f * (qx * v.y - qy * v.x);
+
+    imu_vec3_type out;
+    out.x = v.x + w * tx + (qy * tz - qz * ty);
+    out.y = v.y + w * ty + (qz * tx - qx * tz);
+    out.z = v.z + w * tz + (qx * ty - qy * tx);
+
+    return out;
+}

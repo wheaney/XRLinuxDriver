@@ -346,9 +346,7 @@ void gamescope_reshade_wl_handle_state_func() {
     pthread_mutex_unlock(&wayland_mutex);
 };
 
-void gamescope_reshade_wl_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, 
-                                               imu_euler_type euler, imu_euler_type velocities, bool imu_calibrated, 
-                                               ipc_values_type *ipc_values) {
+void gamescope_reshade_wl_handle_pose_data_func(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (!reshade_object) return;
     
     pthread_mutex_lock(&wayland_mutex);
@@ -361,7 +359,7 @@ void gamescope_reshade_wl_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_t
     pthread_mutex_unlock(&wayland_mutex);
 }
 
-void gamescope_reshade_wl_reset_imu_data_func() {
+void gamescope_reshade_wl_reset_pose_data_func() {
     set_gamescope_reshade_effect_uniform_variable("imu_quat_data", imu_reset_data, 16, sizeof(float), true);
 }
 
@@ -372,7 +370,7 @@ const plugin_type gamescope_reshade_wayland_plugin = {
     .set_config = gamescope_reshade_wayland_set_config_func,
     .setup_ipc = gamescope_reshade_wl_setup_ipc,
     .handle_state = gamescope_reshade_wl_handle_state_func,
-    .handle_imu_data = gamescope_reshade_wl_handle_imu_data_func,
-    .reset_imu_data = gamescope_reshade_wl_reset_imu_data_func,
+    .handle_pose_data = gamescope_reshade_wl_handle_pose_data_func,
+    .reset_pose_data = gamescope_reshade_wl_reset_pose_data_func,
     .handle_device_disconnect = wayland_cleanup,
 };

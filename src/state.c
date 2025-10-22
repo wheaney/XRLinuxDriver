@@ -1,4 +1,5 @@
 #include "devices.h"
+#include "imu.h"
 #include "logging.h"
 #include "memory.h"
 #include "plugins.h"
@@ -14,6 +15,7 @@
 #include <string.h>
 #include <sys/inotify.h>
 #include <sys/time.h>
+#include <math.h>
 
 const char *calibration_setup_strings[2] = {
     "AUTOMATIC",
@@ -53,6 +55,8 @@ void write_state(driver_state_type *state) {
         fprintf(fp, "calibration_state=%s\n", calibration_state_strings[state->calibration_state]);
         fprintf(fp, "sbs_mode_supported=%s\n", state->sbs_mode_supported ? "true" : "false");
         fprintf(fp, "sbs_mode_enabled=%s\n", state->sbs_mode_enabled ? "true" : "false");
+        fprintf(fp, "connected_device_full_distance_cm=%.2f\n", state->connected_device_full_distance_cm);
+        fprintf(fp, "connected_device_full_size_cm=%.2f\n", state->connected_device_full_size_cm);
         if (state->breezy_desktop_smooth_follow_enabled)
             fprintf(fp, "breezy_desktop_smooth_follow_enabled=true\n");
         if (state->is_gamescope_reshade_ipc_connected)
@@ -121,6 +125,12 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
             free_and_clear(&state->connected_device_model);
             state->connected_device_model = strdup(device->model);
         }
+
+        // Rough estimate of display parameters based on lens distance ratio and FOV
+        float full_distance_cm = LENS_TO_PIVOT_CM / device->lens_distance_ratio;
+        state->connected_device_full_distance_cm = full_distance_cm;
+        state->connected_device_full_size_cm = 2.0f * full_distance_cm * tanf(degree_to_radian(device->fov) * 0.5f);
+
         state->calibration_setup = device->calibration_setup;
         state->sbs_mode_supported = device->sbs_mode_supported;
     }

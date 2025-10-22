@@ -1,6 +1,7 @@
 #include "config.h"
 #include "devices.h"
 #include "driver.h"
+#include "imu.h"
 #include "logging.h"
 #include "plugins/opentrack_listener.h"
 #include "runtime_context.h"
@@ -145,6 +146,8 @@ static device_properties_type *make_opentrack_device_properties() {
     d->look_ahead_ms_cap = 40.0f;
     d->sbs_mode_supported = false;
     d->firmware_update_recommended = false;
+    d->provides_orientation = true;
+    d->provides_position = true;
     return d;
 }
 
@@ -367,18 +370,37 @@ static void* opentrack_listener_thread_func(void* arg) {
 
         static bool prev_block_active = false;
         if (block_active) {
-            // Only feed events when block_on_device is active
-            double vals[6];
-            memcpy(vals, buf, 6 * sizeof(double));
-            imu_euler_type e = { .roll = (float)vals[5], .pitch = (float)vals[4], .yaw = (float)vals[3] };
-            imu_quat_type q = euler_to_quaternion_zyx(e);
-            struct timeval tv2; gettimeofday(&tv2, NULL);
-            uint32_t ts_ms = (uint32_t)((tv2.tv_sec * 1000ULL) + (tv2.tv_usec / 1000ULL));
-            static uint32_t start_ts_ms = 0; // set on first active event
-            if (!prev_block_active) {
-                start_ts_ms = ts_ms;
+            device_properties_type *device = device_checkout();
+            if (device) {
+                // Only feed events when block_on_device is active
+                double vals[6];
+                memcpy(vals, buf, 6 * sizeof(double));
+                imu_euler_type e = { .roll = (float)vals[5], .pitch = (float)vals[4], .yaw = (float)vals[3] };
+                imu_quat_type q = euler_to_quaternion_zyx(e);
+                struct timeval tv2; gettimeofday(&tv2, NULL);
+                uint32_t ts_ms = (uint32_t)((tv2.tv_sec * 1000ULL) + (tv2.tv_usec / 1000ULL));
+                static uint32_t start_ts_ms = 0; // set on first active event
+                if (!prev_block_active) {
+                    start_ts_ms = ts_ms;
+                }
+
+                // OpenTrack reports in EUS; convert to NWU
+                float full_distance_cm = LENS_TO_PIVOT_CM / device->lens_distance_ratio;
+                imu_vec3_type pos = { 
+                    .x = (float)-vals[2] / full_distance_cm,
+                    .y = (float)-vals[0] / full_distance_cm,
+                    .z = (float)vals[1] / full_distance_cm
+                };
+
+                imu_pose_type pose = (imu_pose_type){0};
+                pose.orientation = q;
+                pose.position = pos;
+                pose.has_orientation = true;
+                pose.has_position = true;
+                pose.timestamp_ms = ts_ms - start_ts_ms;
+                driver_handle_pose_event(pose);
             }
-            driver_handle_imu_event(ts_ms - start_ts_ms, q);
+            device_checkin(device);
         }
         prev_block_active = block_active;
     }
@@ -428,15 +450,6 @@ const plugin_type opentrack_listener_plugin = {
     .default_config = opentrack_default_config_func,
     .handle_config_line = opentrack_handle_config_line_func,
     .set_config = opentrack_set_config_func,
-    .register_features = NULL,
     .start = opentrack_start_func,
-    .setup_ipc = NULL,
-    .handle_ipc_change = NULL,
-    .modify_screen_center = NULL,
-    .modify_pose = NULL,
-    .handle_imu_data = NULL,
-    .reset_imu_data = NULL,
-    .handle_state = NULL,
-    .handle_device_connect = NULL,
     .handle_device_disconnect = opentrack_handle_device_disconnect_func
 };

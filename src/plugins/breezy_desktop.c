@@ -33,12 +33,17 @@ static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int fd = BREEZY_DESKTOP_FD_RESET;
 static pthread_once_t shared_mem_path_once = PTHREAD_ONCE_INIT;
 
-#define NUM_IMU_VALUES 16
-float IMU_RESET[NUM_IMU_VALUES] = {
+#define NUM_ORIENTATION_VALUES 16
+float ORIENTATION_RESET[NUM_ORIENTATION_VALUES] = {
         0.0, 0.0, 0.0, 1.0,
         0.0, 0.0, 0.0, 1.0,
         0.0, 0.0, 0.0, 1.0,
         0.0, 0.0, 0.0, 0.0
+};
+
+#define NUM_POSITION_VALUES 3
+float POSITION_RESET[NUM_POSITION_VALUES] = {
+    0.0, 0.0, 0.0
 };
 
 breezy_desktop_config *bd_config;
@@ -46,9 +51,8 @@ breezy_desktop_config *bd_config;
 void breezy_desktop_reset_config(breezy_desktop_config *config) {
     config->enabled = false;
     config->look_ahead_override = 0.0;
-    config->display_zoom = 1.0;
-    config->sbs_display_distance = 1.0;
-    config->sbs_display_size = 1.0;
+    config->display_distance = 1.0;
+    config->display_size = 1.0;
     config->sbs_content = false;
     config->sbs_mode_stretched = false;
 };
@@ -65,12 +69,10 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
 
     if (equal(key, "external_mode")) {
         temp_config->enabled = list_string_contains("breezy_desktop", value) && is_productivity_granted();
-    } else if (equal(key, "external_zoom") || equal(key, "display_zoom")) {
-        float_config(key, value, &temp_config->display_zoom);
-    } else if (equal(key, "sbs_display_distance")) {
-        float_config(key, value, &temp_config->sbs_display_distance);
-    } else if (equal(key, "sbs_display_size")) {
-        float_config(key, value, &temp_config->sbs_display_size);
+    } else if (equal(key, "display_distance")) {
+        float_config(key, value, &temp_config->display_distance);
+    } else if (equal(key, "display_size")) {
+        float_config(key, value, &temp_config->display_size);
     } else if (equal(key, "sbs_content")) {
         boolean_config(key, value, &temp_config->sbs_content);
     } else if (equal(key, "sbs_mode_stretched")) {
@@ -78,7 +80,7 @@ void breezy_desktop_handle_config_line_func(void* config, char* key, char* value
     }
 };
 
-const uint8_t DATA_LAYOUT_VERSION = 4;
+const uint8_t DATA_LAYOUT_VERSION = 5;
 #define BOOL_TRUE 1
 #define BOOL_FALSE 0
 
@@ -95,8 +97,10 @@ const int CONFIG_DATA_END_OFFSET =
 
 const int IMU_RECORD_SIZE =
     sizeof(uint8_t) + // smooth_follow_enabled
+    sizeof(float) * NUM_ORIENTATION_VALUES + // smooth_follow_origin (4 quaternion rows, 4 values each)
+    sizeof(float) * NUM_POSITION_VALUES + // pose_position
     sizeof(uint64_t) + // imu_date_ms
-    sizeof(float) * NUM_IMU_VALUES + // imu_quat_data (4 quaternion rows, 4 values each)
+    sizeof(float) * NUM_ORIENTATION_VALUES + // pose_orientation (4 quaternion rows, 4 values each)
     sizeof(uint8_t); // imu_parity_byte
 
 uint64_t last_config_write_ts = 0;
@@ -229,7 +233,7 @@ void write_config_data() {
     }
 }
 
-void breezy_desktop_write_imu_data(float *values) {
+void breezy_desktop_write_pose_data(float *orientation, float *position) {
     pthread_mutex_lock(&file_mutex);
     int wfd = get_shared_mem_fd();
     if (wfd != -1) {
@@ -243,12 +247,13 @@ void breezy_desktop_write_imu_data(float *values) {
         uint8_t smooth_follow_enabled = state()->breezy_desktop_smooth_follow_enabled ? BOOL_TRUE : BOOL_FALSE;
         if (full_write(wfd, &smooth_follow_enabled, sizeof(uint8_t)) == -1) goto imu_error;
         if (state()->smooth_follow_origin_ready && state()->smooth_follow_origin) {
-            if (full_write(wfd, state()->smooth_follow_origin, sizeof(float) * NUM_IMU_VALUES) == -1) goto imu_error;
-        } else if (full_write(wfd, values, sizeof(float) * NUM_IMU_VALUES) == -1) goto imu_error;
+            if (full_write(wfd, state()->smooth_follow_origin, sizeof(float) * NUM_ORIENTATION_VALUES) == -1) goto imu_error;
+        } else if (full_write(wfd, orientation, sizeof(float) * NUM_ORIENTATION_VALUES) == -1) goto imu_error;
+        if (full_write(wfd, position, sizeof(float) * NUM_POSITION_VALUES) == -1) goto imu_error;
         if (full_write(wfd, &epoch_ms, sizeof(uint64_t)) == -1) goto imu_error;
-        if (full_write(wfd, values, sizeof(float) * NUM_IMU_VALUES) == -1) goto imu_error;
+        if (full_write(wfd, orientation, sizeof(float) * NUM_ORIENTATION_VALUES) == -1) goto imu_error;
         uint8_t parity = 0; uint8_t* d = (uint8_t*)&epoch_ms; for (size_t i=0;i<sizeof(uint64_t);++i) parity ^= d[i];
-        d = (uint8_t*)values; for (size_t i=0;i<sizeof(float)*NUM_IMU_VALUES;++i) parity ^= d[i];
+        d = (uint8_t*)orientation; for (size_t i=0;i<sizeof(float)*NUM_ORIENTATION_VALUES;++i) parity ^= d[i];
         if (full_write(wfd, &parity, sizeof(uint8_t)) == -1) goto imu_error;
         pthread_mutex_unlock(&file_mutex); return;
     }
@@ -258,9 +263,9 @@ imu_error:
     pthread_mutex_unlock(&file_mutex);
 }
 
-void breezy_desktop_reset_imu_data_func() {
+void breezy_desktop_reset_pose_data_func() {
     if (fd_is_valid(fd) || is_productivity_granted() && bd_config && bd_config->enabled) {
-        breezy_desktop_write_imu_data(&IMU_RESET[0]);
+        breezy_desktop_write_pose_data(&ORIENTATION_RESET[0], &POSITION_RESET[0]);
     }
 }
 
@@ -276,17 +281,16 @@ void breezy_desktop_set_config_func(void* new_config) {
     bd_config = temp_config;
     if (has_started) {
         write_config_data();
-        if (state()->calibration_state == CALIBRATING) breezy_desktop_reset_imu_data_func();
+        if (state()->calibration_state == CALIBRATING) breezy_desktop_reset_pose_data_func();
     }
 };
 
-void breezy_desktop_handle_imu_data_func(uint32_t timestamp_ms, imu_quat_type quat, imu_euler_type euler,
-                                         imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
+void breezy_desktop_handle_pose_data_func(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
         if (imu_calibrated && ipc_values) {
-            breezy_desktop_write_imu_data(ipc_values->imu_data);
+            breezy_desktop_write_pose_data(ipc_values->pose_orientation, ipc_values->pose_position);
         } else {
-            breezy_desktop_reset_imu_data_func();
+            breezy_desktop_reset_pose_data_func();
         }
     }
 }
@@ -309,7 +313,7 @@ void breezy_desktop_device_connect_func() {
     pthread_mutex_unlock(&file_mutex);
     has_started = true;
     write_config_data();
-    breezy_desktop_reset_imu_data_func();
+    breezy_desktop_reset_pose_data_func();
 }
 
 const plugin_type breezy_desktop_plugin = {
@@ -319,8 +323,8 @@ const plugin_type breezy_desktop_plugin = {
     .handle_config_line = breezy_desktop_handle_config_line_func,
     .set_config = breezy_desktop_set_config_func,
     .register_features = breezy_desktop_register_features_func,
-    .handle_imu_data = breezy_desktop_handle_imu_data_func,
-    .reset_imu_data = breezy_desktop_reset_imu_data_func,
+    .handle_pose_data = breezy_desktop_handle_pose_data_func,
+    .reset_pose_data = breezy_desktop_reset_pose_data_func,
     .handle_device_disconnect = write_config_data,
     .handle_device_connect = breezy_desktop_device_connect_func
 };

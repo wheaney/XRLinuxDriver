@@ -57,7 +57,9 @@ const device_properties_type rayneo_properties = {
     .look_ahead_scanline_adjust         = 12.0,
     .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
-    .firmware_update_recommended        = false
+    .firmware_update_recommended        = false,
+    .provides_orientation               = true,
+    .provides_position                  = false
 };
 
 static uint32_t last_utilized_event_ts = 0;
@@ -81,7 +83,11 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
 
         imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
-        driver_handle_imu_event(ts, nwu_quat);
+        imu_pose_type pose = (imu_pose_type){0};
+        pose.orientation = nwu_quat;
+        pose.has_orientation = true;
+        pose.timestamp_ms = ts;
+        driver_handle_pose_event(pose);
 
         last_utilized_event_ts = ts;
     }

@@ -1,4 +1,5 @@
 #include "buffer.h"
+#include "driver.h"
 #include "config.h"
 #include "devices.h"
 #include "devices/viture.h"
@@ -27,6 +28,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/signalfd.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +45,7 @@
 #define MT_RECENTER_SCREEN 2
 #define MT_RESET_CALIBRATION 3
 
+
 device_driver_type *device_driver;
 ipc_values_type *ipc_values;
 
@@ -51,9 +54,9 @@ long int glasses_calibration_started_sec=0;
 bool force_quit=false;
 control_flags_type *control_flags;
 
-bool captured_screen_center=false;
-imu_quat_type screen_center;
-imu_quat_type screen_center_conjugate;
+bool captured_reference_pose=false;
+imu_pose_type reference_pose;
+imu_quat_type reference_orientation_conj;
 
 static bool is_driver_connected() {
     return device_driver != NULL && device_driver->is_connected_func();
@@ -62,7 +65,7 @@ static bool is_driver_connected() {
 void reset_calibration(bool reset_device) {
     glasses_calibration_started_sec=0;
     glasses_calibrated=false;
-    captured_screen_center=false;
+    captured_reference_pose=false;
     control_flags->recalibrate=false;
     state()->calibration_state = CALIBRATING;
 
@@ -72,28 +75,47 @@ void reset_calibration(bool reset_device) {
     } else log_message("Waiting on device calibration\n");
 }
 
-void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
+void driver_handle_pose_event(imu_pose_type pose) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
     static int multi_tap = 0;
 
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
-        if (config()->debug_device && imu_counter == 0)
-            log_debug("driver_handle_imu_event - quat: %f %f %f %f\n", quat.x, quat.y, quat.z, quat.w);
+        if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
+            log_debug("driver_handle_imu_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
             
         if (glasses_calibrated) {
-            if (!captured_screen_center || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
+            if (!captured_reference_pose || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
                 if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected.\n");
                 log_message("Centering screen\n");
 
-                screen_center = quat;
-                screen_center_conjugate = conjugate(screen_center);
-                captured_screen_center = true;
+                if (pose.has_orientation) {
+                    reference_pose.orientation = pose.orientation;
+                    reference_pose.has_orientation = true;
+                    reference_orientation_conj = conjugate(reference_pose.orientation);
+                } else {
+                    imu_quat_type tmp_screen_center = { .w = 1.0, .x = 0.0, .y = 0.0, .z = 0.0 };
+                    reference_pose.orientation = tmp_screen_center;
+                    reference_orientation_conj = tmp_screen_center;
+                    reference_pose.has_orientation = false;
+                }
+
+                if (pose.has_position) {
+                    reference_pose.position = pose.position;
+                    reference_pose.has_position = true;
+                } else {
+                    reference_pose.position = (imu_vec3_type){0.0f, 0.0f, 0.0f};
+                    reference_pose.has_position = false;
+                }
+                
+                captured_reference_pose = true;
                 control_flags->recenter_screen = false;
             } else {
-                screen_center = plugins.modify_screen_center(timestamp_ms, quat, screen_center);
-                screen_center_conjugate = conjugate(screen_center);
+                imu_pose_type current_pose = pose;
+                if (current_pose.has_orientation) current_pose.euler = quaternion_to_euler_zyx(current_pose.orientation);
+                bool pose_updated = plugins.modify_reference_pose(current_pose, &reference_pose);
+                if (pose_updated) reference_orientation_conj = conjugate(reference_pose.orientation);
             }
         } else {
             struct timeval tv;
@@ -102,11 +124,14 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
             if (glasses_calibration_started_sec == 0) {
                 // defaults used for mouse/joystick while waiting on calibration
                 imu_quat_type tmp_screen_center = { .w = 1.0, .x = 0.0, .y = 0.0, .z = 0.0 };
-                screen_center = tmp_screen_center;
-                screen_center_conjugate = conjugate(screen_center);
+                reference_pose.orientation = tmp_screen_center;
+                reference_orientation_conj = tmp_screen_center;
+                reference_pose.position = (imu_vec3_type){0.0f, 0.0f, 0.0f};
+                reference_pose.has_orientation = pose.has_orientation;
+                reference_pose.has_position = pose.has_position;
 
                 glasses_calibration_started_sec=tv.tv_sec;
-                if (ipc_values) reset_imu_data(ipc_values);
+                if (ipc_values) reset_pose_data(ipc_values);
             } else {
                 glasses_calibrated = (tv.tv_sec - glasses_calibration_started_sec) > device->calibration_wait_s;
                 if (glasses_calibrated) {
@@ -117,21 +142,29 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
         }
 
         // be resilient to bad values that may come from device drivers
-        if (!isnan(quat.w)) {
+        if (!isnan(pose.orientation.w)) {
             static imu_euler_type prev_unmodified_euler = {0.0f, 0.0f, 0.0f};
 
-            // adjust the current rotation by the conjugate of the screen placement quat
-            quat = multiply_quaternions(screen_center_conjugate, quat);
+            if (pose.has_orientation) {
+                pose.orientation = multiply_quaternions(reference_orientation_conj, pose.orientation);
+                pose.euler = quaternion_to_euler_zyx(pose.orientation);
+            }
+            // interpret all positions relative to the reference orientation
+            if (pose.has_position) {
+                imu_vec3_type rel = {
+                    .x = pose.position.x - reference_pose.position.x,
+                    .y = pose.position.y - reference_pose.position.y,
+                    .z = pose.position.z - reference_pose.position.z
+                };
+                pose.position = vector_rotate(rel, reference_orientation_conj);
+            }
 
-            imu_euler_type euler = quaternion_to_euler_zyx(quat);
             imu_euler_type euler_velocities;
             bool velocities_set = false;
             
             if (config()->multi_tap_enabled) {
-                euler_velocities = get_euler_velocities(&prev_unmodified_euler, euler, device->imu_cycles_per_s);
-                multi_tap = detect_multi_tap(euler_velocities,
-                                            timestamp_ms,
-                                            config()->debug_multi_tap);
+                euler_velocities = get_euler_velocities(&prev_unmodified_euler, pose.euler, device->imu_cycles_per_s);
+                multi_tap = detect_multi_tap(euler_velocities, pose.timestamp_ms, config()->debug_multi_tap);
                 velocities_set = true;
             }
 
@@ -143,18 +176,18 @@ void driver_handle_imu_event(uint32_t timestamp_ms, imu_quat_type quat) {
 
             if (glasses_calibrated) {
                 static imu_euler_type prev_modified_euler = {0.0f, 0.0f, 0.0f};
-                plugins.modify_pose(timestamp_ms, &quat, &euler);
+                plugins.modify_pose(&pose);
 
                 // recompute velocities after pose modification, since outputs that use them
                 // will want to be relative to the modified pose
-                euler_velocities = get_euler_velocities(&prev_modified_euler, euler, device->imu_cycles_per_s);
+                euler_velocities = get_euler_velocities(&prev_modified_euler, pose.euler, device->imu_cycles_per_s);
                 velocities_set = true;
             }
 
             if (!velocities_set) {
-                euler_velocities = get_euler_velocities(&prev_unmodified_euler, euler, device->imu_cycles_per_s);
+                euler_velocities = get_euler_velocities(&prev_unmodified_euler, pose.euler, device->imu_cycles_per_s);
             }
-            handle_imu_update(timestamp_ms, quat, euler, euler_velocities, glasses_calibrated, ipc_values);
+            handle_imu_update(pose, euler_velocities, glasses_calibrated, ipc_values);
         } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
 
         // reset the counter every second
@@ -181,7 +214,7 @@ void setup_ipc() {
 
     device_properties_type* device = device_checkout();
     if (device != NULL) {
-        plugins.reset_imu_data();
+        plugins.reset_pose_data();
 
         // set IPC values that won't change after a device is set
         ipc_values->display_res[0]        = (float) device->resolution_w;

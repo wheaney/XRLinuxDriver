@@ -19,6 +19,8 @@ struct driver_state_t {
     uint32_t heartbeat;
     char* connected_device_brand;
     char* connected_device_model;
+    float connected_device_full_distance_cm;
+    float connected_device_full_size_cm;
     calibration_setup_type calibration_setup;
     calibration_state_type calibration_state;
     bool sbs_mode_supported;
