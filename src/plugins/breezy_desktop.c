@@ -96,8 +96,9 @@ const int CONFIG_DATA_END_OFFSET =
     sizeof(uint8_t); // custom_banner_enabled
 
 const int IMU_RECORD_SIZE =
-    sizeof(float) * NUM_POSITION_VALUES + // pose_position
     sizeof(uint8_t) + // smooth_follow_enabled
+    sizeof(float) * NUM_ORIENTATION_VALUES + // smooth_follow_origin (4 quaternion rows, 4 values each)
+    sizeof(float) * NUM_POSITION_VALUES + // pose_position
     sizeof(uint64_t) + // imu_date_ms
     sizeof(float) * NUM_ORIENTATION_VALUES + // pose_orientation (4 quaternion rows, 4 values each)
     sizeof(uint8_t); // imu_parity_byte
