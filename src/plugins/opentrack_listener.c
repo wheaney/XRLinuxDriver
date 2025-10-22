@@ -146,7 +146,6 @@ static device_properties_type *make_opentrack_device_properties() {
     d->look_ahead_ms_cap = 40.0f;
     d->sbs_mode_supported = false;
     d->firmware_update_recommended = false;
-    // Capabilities: orientation + position, can be used as supplemental source
     d->provides_orientation = true;
     d->provides_position = true;
     return d;

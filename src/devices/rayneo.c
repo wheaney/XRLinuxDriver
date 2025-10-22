@@ -59,7 +59,7 @@ const device_properties_type rayneo_properties = {
     .sbs_mode_supported                 = true,
     .firmware_update_recommended        = false,
     .provides_orientation               = true,
-    .provides_position                  = true
+    .provides_position                  = false
 };
 
 static uint32_t last_utilized_event_ts = 0;

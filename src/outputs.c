@@ -331,8 +331,8 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
         // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
         // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
         // positive y.
-    int x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
-    int y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
+        int x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
+        int y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
         int next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
         int next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
 
