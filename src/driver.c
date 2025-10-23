@@ -78,7 +78,7 @@ void reset_calibration(bool reset_device) {
     } else log_message("Waiting on device calibration\n");
 }
 
-void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
+void driver_handle_pose(imu_pose_type pose) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
     static int multi_tap = 0;
@@ -86,7 +86,7 @@ void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
         if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
-            log_debug("driver_handle_imu_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
+            log_debug("driver_handle_pose - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
             
         if (glasses_calibrated) {
             if (!captured_reference_pose || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
@@ -190,8 +190,8 @@ void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
             if (!velocities_set) {
                 euler_velocities = get_euler_velocities(&prev_unmodified_euler, pose.euler, device->imu_cycles_per_s);
             }
-            handle_imu_update_ext(pose, euler_velocities, glasses_calibrated, ipc_values);
-        } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
+            handle_imu_update(pose, euler_velocities, glasses_calibrated, ipc_values);
+        } else if (config()->debug_device) log_debug("driver_handle_pose, received invalid quat\n");
 
         // reset the counter every second
         if ((++imu_counter % device->imu_cycles_per_s) == 0) {
@@ -578,6 +578,7 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
     if (is_added) {
         if (config()->debug_device) log_debug("handle_device_connection_changed driver %s added\n", device_info->driver->id);
         connection_pool_handle_device_added(device_info->driver, device_info->device);
+        captured_reference_pose = false;
         free(device_info);
     } else if (!is_added) {
         if (config()->debug_device) log_debug("handle_device_connection_changed driver %s removed\n", device_info->driver->id);
@@ -644,7 +645,7 @@ int main(int argc, const char** argv) {
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
-    connection_pool_init();
+    connection_pool_init(driver_handle_pose);
     config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
 

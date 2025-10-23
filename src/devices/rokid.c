@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "driver.h"
+#include "connection_pool.h"
 #include "imu.h"
 #include "logging.h"
 #include "outputs.h"
@@ -47,7 +48,7 @@ const device_properties_type rokid_one_properties = {
     .resolution_w                       = RESOLUTION_1080P_W,
     .resolution_h                       = RESOLUTION_1080P_H,
     .fov                                = 45,
-    .lens_distance_ratio                = 0.02,
+    .lens_distance_ratio                = 0.03125,
     .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 90,
     .imu_buffer_size                    = 1,
@@ -213,7 +214,7 @@ void rokid_block_on_device() {
                 pose.orientation = nwu_quat;
                 pose.has_orientation = true;
                 pose.timestamp_ms = timestamp;
-                driver_handle_pose_event(ROKID_DRIVER_ID, pose);
+                connection_pool_ingest_pose(ROKID_DRIVER_ID, pose);
             }
         }
         cleanup();

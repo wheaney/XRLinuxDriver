@@ -1,4 +1,5 @@
 #include "devices.h"
+#include "connection_pool.h"
 #include "device_imu.h"
 #include "device_mcu.h"
 #include "driver.h"
@@ -159,7 +160,7 @@ void handle_xreal_event(uint64_t timestamp,
         pose.orientation = nwu_quat;
         pose.has_orientation = true;
         pose.timestamp_ms = ts;
-        driver_handle_pose_event(XREAL_DRIVER_ID, pose);
+        connection_pool_ingest_pose(XREAL_DRIVER_ID, pose);
 
         last_utilized_event_ts = ts;
     }

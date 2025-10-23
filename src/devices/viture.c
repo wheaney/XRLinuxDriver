@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "driver.h"
+#include "connection_pool.h"
 #include "imu.h"
 #include "logging.h"
 #include "outputs.h"
@@ -190,7 +191,7 @@ void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
     pose.orientation = quat;
     pose.has_orientation = true;
     pose.timestamp_ms = timestamp;
-    driver_handle_pose_event(VITURE_DRIVER_ID, pose);
+    connection_pool_ingest_pose(VITURE_DRIVER_ID, pose);
 }
 
 bool sbs_mode_enabled = false;
