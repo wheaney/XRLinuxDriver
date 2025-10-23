@@ -78,7 +78,7 @@ void reset_calibration(bool reset_device) {
     } else log_message("Waiting on device calibration\n");
 }
 
-void driver_handle_pose_event(const char* driver_id, imu_pose_type pose) {
+void driver_handle_pose(imu_pose_type pose) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
     static int multi_tap = 0;
@@ -587,6 +587,7 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
     if (is_added) {
         if (config()->debug_device) log_debug("device added for driver %s\n", device_info->driver->id);
         connection_pool_handle_device_added(device_info->driver, device_info->device);
+        captured_reference_pose = false;
         free(device_info);
     } else if (!is_added) {
         if (config()->debug_device) log_debug("device removed for driver %s\n", device_info->driver->id);
@@ -653,6 +654,7 @@ int main(int argc, const char** argv) {
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
+    connection_pool_init(driver_handle_pose);
     config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
 

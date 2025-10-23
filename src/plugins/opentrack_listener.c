@@ -306,6 +306,25 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
     }
 }
 
+static void opentrack_set_config_func(void *new_config) {
+    opentrack_listener_config *new_cfg = (opentrack_listener_config *)new_config;
+    if (!new_cfg) return;
+
+    bool first = (ot_cfg == NULL);
+    bool was_enabled = ot_cfg && ot_cfg->enabled;
+    if (was_enabled != new_cfg->enabled)
+        log_message("OpenTrack listener has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
+
+    if (!first) {
+        free(ot_cfg->ip);
+        free(ot_cfg);
+    }
+    ot_cfg = new_cfg;
+
+    opentrack_start_func();
+    update_feedback_guard();
+}
+
 #define OT_UDP_TIMEOUT_MS 500
 static const struct timeval OT_SELECT_TIMEOUT = {
     .tv_sec = 0,
@@ -345,7 +364,7 @@ static void* opentrack_listener_thread_func(void* arg) {
             continue;
         }
 
-        if (!connected && !device_present()) {
+        if (!connected) {
             connected_device_type *nd = calloc(1, sizeof(connected_device_type));
             nd->driver = &opentrack_driver;
             nd->device = make_opentrack_device_properties();
@@ -385,7 +404,7 @@ static void* opentrack_listener_thread_func(void* arg) {
                 pose.has_orientation = true;
                 pose.has_position = true;
                 pose.timestamp_ms = ts_ms - start_ts_ms;
-                driver_handle_pose_event(OT_DRIVER_ID, pose);
+                connection_pool_ingest_pose(OT_DRIVER_ID, pose);
             }
             device_checkin(device);
         }

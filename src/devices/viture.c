@@ -1,3 +1,4 @@
+#include "connection_pool.h"
 #include "devices.h"
 #include "devices/viture.h"
 #include "driver.h"
@@ -350,7 +351,7 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
     pose.has_orientation = true;
     pose.has_position = has_position;
     pose.timestamp_ms = timestamp_ms;
-    driver_handle_pose_event(VITURE_DRIVER_ID, pose);
+    connection_pool_ingest_pose(VITURE_DRIVER_ID, pose);
 }
 
 static void viture_legacy_pose_callback(float* pose, uint64_t ts) {

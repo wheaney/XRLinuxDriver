@@ -1,9 +1,10 @@
 #pragma once
 
 #include "devices.h"
+#include "imu.h"
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
 
 typedef struct connection_t {
     const device_driver_type* driver;
@@ -27,7 +28,8 @@ struct connection_pool_t {
 typedef struct connection_pool_t connection_pool_type;
 
 // Create/destroy a connection pool instance
-void connection_pool_init();
+typedef void (*pose_handler_t)(imu_pose_type pose);
+void connection_pool_init(pose_handler_t pose_handler_callback);
 
 // Append a new connection (driver + device). The pool retains the driver pointer and
 // takes ownership of the device pointer. It will decide whether to make it the primary
@@ -62,3 +64,8 @@ void connection_pool_handle_device_removed(const char* driver_id);
 
 connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product);
 connection_t* connection_pool_find_driver_connection(const char* driver_id);
+
+void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose);
+
+// Returns true if the given driver id is currently the primary connection
+bool connection_pool_is_primary_driver_id(const char* driver_id);
