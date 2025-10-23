@@ -313,10 +313,10 @@ static void opentrack_set_config_func(void *new_config) {
 
     bool first = (ot_cfg == NULL);
     bool was_enabled = ot_cfg && ot_cfg->enabled;
+    if (was_enabled != new_cfg->enabled)
+        log_message("OpenTrack listener has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
 
     if (!first) {
-        if (was_enabled != new_cfg->enabled)
-            log_message("OpenTrack listener has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
         free(ot_cfg->ip);
         free(ot_cfg);
     }
@@ -367,7 +367,7 @@ static void* opentrack_listener_thread_func(void* arg) {
             continue;
         }
 
-        if (!connected && !device_present()) {
+        if (!connected) {
             connected_device_type *nd = calloc(1, sizeof(connected_device_type));
             nd->driver = &opentrack_driver;
             nd->device = make_opentrack_device_properties();
@@ -407,7 +407,7 @@ static void* opentrack_listener_thread_func(void* arg) {
                 pose.has_orientation = true;
                 pose.has_position = true;
                 pose.timestamp_ms = ts_ms - start_ts_ms;
-                driver_handle_pose_event(OT_DRIVER_ID, pose);
+                connection_pool_ingest_pose(OT_DRIVER_ID, pose);
             }
             device_checkin(device);
         }

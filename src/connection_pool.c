@@ -1,6 +1,7 @@
 #include "connection_pool.h"
 #include "logging.h"
 #include "runtime_context.h"
+#include "imu.h"
 
 #include <pthread.h>
 #include <stdint.h>
@@ -17,11 +18,13 @@ static void ensure_capacity() {
     }
 }
 
-void connection_pool_init() {
+static pose_handler_t pose_handler = NULL;
+void connection_pool_init(pose_handler_t pose_handler_callback) {
     pool = (connection_pool_type*)calloc(1, sizeof(*pool));
     pthread_mutex_init(&pool->mutex, NULL);
     pool->primary_index = -1;
     pool->supplemental_index = -1;
+    pose_handler = pose_handler_callback;
 }
 
 static int pick_primary_index() {
@@ -109,9 +112,25 @@ static connection_t* supplemental() {
     return pool->list[pool->supplemental_index];
 }
 
+static void* block_thread_func(void* arg) {
+    connection_t* c = (connection_t*)arg;
+    if (config()->debug_connections) log_debug("block_thread_func %s\n", c->driver->id);
+    c->driver->block_on_device_func();
+    c->thread_running = false;
+    return NULL;
+}
+
+static void connection_pool_start_connection_thread(connection_t* c) {
+    if (c && !c->thread_running) {
+        c->active = true;
+        c->thread_running = true;
+        pthread_create(&c->thread, NULL, block_thread_func, c);
+    }
+}
+
 bool connection_pool_is_connected() {
     pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
+    connection_t* p = primary();
     bool connected = p && p->driver->is_connected_func();
     pthread_mutex_unlock(&pool->mutex);
     return connected;
@@ -119,7 +138,7 @@ bool connection_pool_is_connected() {
 
 bool connection_pool_device_is_sbs_mode() {
     pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
+    connection_t* p = primary();
     bool enabled = p && p->driver->device_is_sbs_mode_func();
     pthread_mutex_unlock(&pool->mutex);
     return enabled;
@@ -127,7 +146,7 @@ bool connection_pool_device_is_sbs_mode() {
 
 bool connection_pool_device_set_sbs_mode(bool enabled) {
     pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
+    connection_t* p = primary();
     bool ok = p && p->driver->device_set_sbs_mode_func(enabled);
     pthread_mutex_unlock(&pool->mutex);
     return ok;
@@ -144,19 +163,11 @@ void connection_pool_disconnect_all(bool soft) {
     pthread_mutex_unlock(&pool->mutex);
 }
 
-static void* block_thread_func(void* arg) {
-    connection_t* c = (connection_t*)arg;
-    if (config()->debug_connections) log_debug("block_thread_func %s\n", c->driver->id);
-    c->driver->block_on_device_func();
-    c->thread_running = false;
-    return NULL;
-}
-
 bool connection_pool_connect_active() {
     if (config()->debug_connections) log_debug("connection_pool_connect_active\n");
     pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
-    connection_t* s = supplemental(pool);
+    connection_t* p = primary();
+    connection_t* s = supplemental();
     pthread_mutex_unlock(&pool->mutex);
 
     bool pr_ok = false;
@@ -167,20 +178,15 @@ bool connection_pool_connect_active() {
 
 void connection_pool_block_on_active() {
     if (config()->debug_connections) log_debug("connection_pool_block_on_active\n");
-    pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
-    connection_t* s = supplemental(pool);
 
-    if (p && !p->thread_running) {
-        p->active = true;
-        p->thread_running = true;
-        pthread_create(&p->thread, NULL, block_thread_func, p);
-    }
-    if (s && !s->thread_running) {
-        s->active = true;
-        s->thread_running = true;
-        pthread_create(&s->thread, NULL, block_thread_func, s);
-    }
+    pthread_mutex_lock(&pool->mutex);
+
+    connection_t* p = primary();
+    connection_pool_start_connection_thread(p);
+
+    connection_t* s = supplemental();
+    connection_pool_start_connection_thread(s);
+
     pthread_mutex_unlock(&pool->mutex);
 
     // Join the primary thread; when it exits, we stop. Supplemental will be joined afterwards.
@@ -201,7 +207,7 @@ void connection_pool_block_on_active() {
 
 device_properties_type* connection_pool_primary_device() {
     pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
+    connection_t* p = primary();
     device_properties_type* d = p ? p->device : NULL;
     pthread_mutex_unlock(&pool->mutex);
     return d;
@@ -209,31 +215,44 @@ device_properties_type* connection_pool_primary_device() {
 
 const device_driver_type* connection_pool_primary_driver() {
     pthread_mutex_lock(&pool->mutex);
-    connection_t* p = primary(pool);
+    connection_t* p = primary();
     const device_driver_type* d = p ? p->driver : NULL;
     pthread_mutex_unlock(&pool->mutex);
     return d;
 }
 
+static imu_pose_type last_supplemental_pose = {0};
 void connection_pool_handle_device_removed(const char* driver_id) {
     if (config()->debug_connections) log_debug("connection_pool_handle_device_removed for driver %s\n", driver_id);
 
     pthread_mutex_lock(&pool->mutex);
 
+    connection_t* p = primary();
+    bool blocked_on_active = p && p->active && p->thread_running;
+    bool primary_removed = false;
+    bool supplemental_removed = pool->supplemental_index == -1;
+
     int remove_index = find_driver_connection_index_locked(driver_id);
     if (remove_index >= 0) {
         connection_t* c = pool->list[remove_index];
+        
         // Request a soft disconnect; the driver threads will exit on their own.
-        if (c && c->driver && c->driver->disconnect_func) c->driver->disconnect_func(false);
+        c->driver->disconnect_func(false);
+
+        primary_removed = remove_index == pool->primary_index;
+        supplemental_removed |= remove_index == pool->supplemental_index;
+        if (primary_removed) {
+            // we'll be reevaluating selections below, so soft disconnect supplemental
+            connection_t* s = supplemental();
+            if (s) s->driver->disconnect_func(true);
+        }
+    }
+
+    if (supplemental_removed) {
+        last_supplemental_pose = (imu_pose_type){0};
     }
 
     if (remove_index >= 0) {
-        if (remove_index == pool->primary_index) {
-            // we'll be reevaluating selections below, so soft disconnect supplemental
-            connection_t* s = supplemental(pool);
-            if (s) s->driver->disconnect_func(true);
-        }
-
         connection_t* c = pool->list[remove_index];
         free(c);
 
@@ -245,10 +264,36 @@ void connection_pool_handle_device_removed(const char* driver_id) {
         pool->primary_index = pick_primary_index(pool);
         if (config()->debug_connections) log_debug("connection_pool_handle_device_removed picked primary %d\n", pool->primary_index);
         pool->supplemental_index = pick_supplemental_index(pool);
+        bool supplemental_changed = supplemental_removed && pool->supplemental_index != -1;
+        if (blocked_on_active && !primary_removed && supplemental_changed) {
+            connection_t* s = supplemental();
+            connection_pool_start_connection_thread(s);
+        }
         if (config()->debug_connections) log_debug("connection_pool_handle_device_removed picked supplemental %d\n", pool->supplemental_index);
     }
 
     pthread_mutex_unlock(&pool->mutex);
+}
+
+void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
+    connection_t* s = supplemental();
+    if (s && strcmp(s->driver->id, driver_id) == 0) {
+        // don't forward supplemental poses directly; store the last one for fusion
+        last_supplemental_pose = pose;
+        return;
+    }
+
+    // use the data from the supplemental pose to fill in any gaps in the primary pose
+    if (!pose.has_orientation && s && last_supplemental_pose.has_orientation) {
+        pose.orientation = last_supplemental_pose.orientation;
+        pose.has_orientation = true;
+    }
+    if (!pose.has_position && s && last_supplemental_pose.has_position) {
+        pose.position = last_supplemental_pose.position;
+        pose.has_position = true;
+    }
+    
+    pose_handler(pose);
 }
 
 connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product) {
