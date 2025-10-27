@@ -642,15 +642,16 @@ int main(int argc, const char** argv) {
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
-    config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
-    update_config_from_file(config_fp);
-
-    if (driver_disabled()) log_message("Driver is disabled\n");
 
     char** features = NULL;
     int feature_count = plugins.register_features(&features);
     state()->registered_features_count = feature_count;
     state()->registered_features = features;
+
+    config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
+    update_config_from_file(config_fp);
+
+    if (driver_disabled()) log_message("Driver is disabled\n");
 
     control_flags = calloc(1, sizeof(control_flags_type));
     control_flags->recenter_screen = false;
