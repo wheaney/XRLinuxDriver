@@ -405,7 +405,7 @@ bool smooth_follow_modify_reference_pose_func(imu_pose_type pose, imu_pose_type*
         state()->smooth_follow_origin_ready = false;
     }
 
-    ref_pose->orientation = slerp(ref_pose->orientation, origin_pose->orientation, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
+    ref_pose->orientation = slerp(ref_pose->orientation, pose.orientation, 1 - pow(1 - sf_params->interpolation_ratio_ms, elapsed_ms));
     return true;
 }
 
