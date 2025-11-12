@@ -206,6 +206,11 @@ then
                 hardware_id=$value
                 url="https://eu.driver-backend.xronlinux.com/tokens/v1"
 
+                if [[ "$1" == "--request-token" || "$1" == "--verify-token" ]] && ! command -v jq >/dev/null 2>&1; then
+                    echo "Error: jq utility not found. Install jq to use this feature." >&2
+                    exit 1
+                fi
+
                 if [ "$1" == "--request-token" ]; then
                     postbody=$(jq -n \
                                 --arg hardwareId "$hardware_id" \

@@ -8,6 +8,11 @@ if [ "$(id -u)" == "0" ]; then
    exit 1
 fi
 
+if ! command -v systemctl >/dev/null 2>&1; then
+  printf '\n\033[31mERROR\033[0m systemd was not found on this system. If you would still like to proceed without the background service, rerun this script with SKIP_SYSTEMD=1.\n'
+  exit 1
+fi
+
 echo "Setting up the systemd service"
 systemctl --user daemon-reload
 systemctl --user start xr-driver
