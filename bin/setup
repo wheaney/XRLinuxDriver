@@ -161,14 +161,21 @@ rm -f /dev/shm/breezy_desktop_imu
 ### END sudo required section
 ###############################
 
-# this part of the setup should be run as the user, not root
-su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/systemd_start)" $USER
+if [ -n "$SKIP_SYSTEMD" ]; then
+  printf "\n\033[1;33m!!! IMPORTANT !!!\033[0m\n"
+  echo "SKIP_SYSTEMD set; skipping systemd service startup."
+  echo "You are responsible for starting the driver manually when needed:"
+  printf "\tLD_LIBRARY_PATH=\"${DATA_DIR}/lib\" ${BIN_DIR}/xrDriver\n\n"
+else
+  # this part of the setup should be run as the user, not root
+  su -l -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/systemd_start)" $USER
 
-###############################
-### BEGIN sudo required section
+  ###############################
+  ### BEGIN sudo required section
 
-# Ensure the user service persists after logout
-loginctl enable-linger $USER
+  # Ensure the user service persists after logout
+  loginctl enable-linger $USER
 
-### END sudo required section
-###############################
+  ### END sudo required section
+  ###############################
+fi
