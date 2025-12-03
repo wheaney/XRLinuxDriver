@@ -4,10 +4,17 @@
 #include "logging.h"
 #include "outputs.h"
 #include "runtime_context.h"
-#include "sdks/viture_one.h"
+#include "sdks/viture_glasses_provider.h"
+#include "sdks/viture_device.h"
+#include "sdks/viture_device_carina.h"
 #include "strings.h"
 
+#define VITURE_INTERNAL 1
+#include "devices/viture.h"
+#undef VITURE_INTERNAL
+
 #include <math.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,6 +24,22 @@
 
 #define VITURE_ID_PRODUCT_COUNT 10
 #define VITURE_ID_VENDOR 0x35ca
+#define VITURE_DISPLAY_MODE_1920_1080_60HZ 0x31
+#define VITURE_DISPLAY_MODE_3840_1080_60HZ 0x32
+#define VITURE_DISPLAY_MODE_3840_1080_90HZ 0x35
+#define VITURE_DISPLAY_MODE_1920_1200_60HZ 0x41
+#define VITURE_DISPLAY_MODE_3840_1200_60HZ 0x42
+#define VITURE_DISPLAY_MODE_3840_1200_90HZ 0x45
+
+#define VITURE_IMU_MODE_RAW 0
+#define VITURE_IMU_MODE_POSE 1
+
+#define VITURE_IMU_FREQ_LOW 0
+#define VITURE_IMU_FREQ_MEDIUM_LOW 1
+#define VITURE_IMU_FREQ_MEDIUM 2
+#define VITURE_IMU_FREQ_MEDIUM_HIGH 3
+#define VITURE_IMU_FREQ_HIGH 4
+#define VITURE_IMU_FREQ_COUNT 5
 #define VITURE_ONE_MODEL_NAME "One"
 #define VITURE_ONE_LITE_MODEL_NAME "One Lite"
 #define VITURE_PRO_MODEL_NAME "Pro"
@@ -107,6 +130,30 @@ const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
 };
 
 static imu_quat_type adjustment_quat;
+static XRDeviceProviderHandle viture_provider = NULL;
+static XRDeviceType viture_device_type = XR_DEVICE_TYPE_VITURE_GEN1;
+static uint16_t viture_last_product_id = 0;
+static pthread_mutex_t viture_connection_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool connected = false;
+static bool initialized = false;
+static bool viture_callbacks_registered = false;
+static bool viture_imu_open = false;
+static uint8_t viture_requested_frequency = VITURE_IMU_FREQ_LOW;
+static bool sbs_mode_enabled = false;
+static int viture_saved_display_mode = -1;
+static int viture_saved_dof = -1;
+
+static const int viture_frequency_hz[VITURE_IMU_FREQ_COUNT] = {60, 90, 120, 240, 500};
+
+static const char* viture_open_imu_error_reason(int code) {
+    switch (code) {
+        case -1: return "param error";
+        case -2: return "USB execution error";
+        case -3: return "device type not supported";
+        case -4: return "other error";
+        default: return "unknown";
+    }
+}
 
 const device_properties_type viture_one_properties = {
     .brand                              = "VITURE",
@@ -131,77 +178,169 @@ const device_properties_type viture_one_properties = {
     .provides_position                  = false
 };
 
-const int frequency_enum_to_value[] = {
-    [IMU_FREQUENCE_60] = 60,
-    [IMU_FREQUENCE_90] = 90,
-    [IMU_FREQUENCE_120] = 120,
-    [IMU_FREQUENCE_240] = 240
-};
-
-const char* frequency_to_string[] = {
-    [IMU_FREQUENCE_60] = "60Hz",
-    [IMU_FREQUENCE_90] = "90Hz",
-    [IMU_FREQUENCE_120] = "120Hz",
-    [IMU_FREQUENCE_240] = "240Hz"
-};
-
-static float float_from_imu_data(uint8_t *data)
-{
-	float value = 0;
-	uint8_t tem[4];
-	tem[0] = data[3];
-	tem[1] = data[2];
-	tem[2] = data[1];
-	tem[3] = data[0];
-	memcpy(&value, tem, 4);
-	return value;
+static bool viture_display_mode_is_sbs(int mode) {
+    switch (mode) {
+        case VITURE_DISPLAY_MODE_3840_1080_60HZ:
+        case VITURE_DISPLAY_MODE_3840_1080_90HZ:
+        case VITURE_DISPLAY_MODE_3840_1200_60HZ:
+        case VITURE_DISPLAY_MODE_3840_1200_90HZ:
+            return true;
+        default:
+            return false;
+    }
 }
 
-static bool old_firmware_version = true;
-static bool connected = false;
-static bool initialized = false;
-void handle_viture_event(uint8_t *data, uint16_t len, uint32_t timestamp) {
-    if (!connected || driver_disabled()) return;
+static void viture_refresh_sbs_state_locked(void) {
+    if (viture_provider == NULL) return;
+    int mode = xr_device_provider_get_display_mode(viture_provider);
+    if (mode >= 0) sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+}
 
-    imu_quat_type quat;
-    if (len >= 36 && !old_firmware_version) {
-        quat.w = float_from_imu_data(data + 20);
-        quat.x = float_from_imu_data(data + 24);
-        quat.y = float_from_imu_data(data + 28);
-        quat.z = float_from_imu_data(data + 32);
-    } else {
-        float euler_roll = float_from_imu_data(data);
-        float euler_pitch = float_from_imu_data(data + 4);
-        float euler_yaw = float_from_imu_data(data + 8);
+static void viture_capture_and_override_display_mode_locked(void) {
+    viture_saved_display_mode = -1;
+    viture_saved_dof = -1;
 
-        imu_euler_type euler = {
-            .roll = euler_roll,
-            .pitch = euler_pitch,
-            .yaw = euler_yaw
-        };
-        quat = euler_to_quaternion_zxy(euler);
+    if (viture_provider == NULL) return;
+
+    int mode = 0;
+    int dof = 0;
+    if (xr_device_provider_get_display_mode_and_native_dof(viture_provider, &mode, &dof) != 0) {
+        return;
     }
+
+    viture_saved_display_mode = mode;
+    viture_saved_dof = dof;
+
+    if (xr_device_provider_set_display_mode_and_native_dof(viture_provider, mode, 0) == 0) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+    } else if (config()->debug_device) {
+        log_debug("VITURE: Failed to force 0DoF (mode=%d, dof=%d)\n", mode, dof);
+    }
+}
+
+static void viture_restore_display_mode_locked(void) {
+    if (viture_provider == NULL) {
+        viture_saved_display_mode = -1;
+        viture_saved_dof = -1;
+        return;
+    }
+
+    if (viture_saved_display_mode < 0 || viture_saved_dof < 0) return;
+
+    int restore_mode = viture_saved_display_mode;
+    int restore_dof = viture_saved_dof;
+    int result = xr_device_provider_set_display_mode_and_native_dof(
+        viture_provider, restore_mode, restore_dof);
+
+    if (result == 0) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(restore_mode);
+    } else if (config()->debug_device) {
+        log_debug("VITURE: Failed to restore display mode=%d dof=%d (err=%d)\n",
+                  restore_mode,
+                  restore_dof,
+                  result);
+    }
+
+    viture_saved_display_mode = -1;
+    viture_saved_dof = -1;
+}
+
+static bool viture_fetch_quaternion(imu_quat_type *quat) {
+    if (viture_provider == NULL || quat == NULL) return false;
+
+    float pose[7] = {0};
+    if (xr_device_provider_get_gl_pose(viture_provider, pose, 0.0) != 0) {
+        return false;
+    }
+
+    quat->x = pose[3];
+    quat->y = pose[4];
+    quat->z = pose[5];
+    quat->w = pose[6];
+    return true;
+}
+
+static void viture_publish_pose(imu_quat_type quat, uint32_t timestamp_ms) {
+    if (driver_disabled()) return;
 
     quat = multiply_quaternions(quat, adjustment_quat);
 
     imu_pose_type pose = {0};
     pose.orientation = quat;
     pose.has_orientation = true;
-    pose.timestamp_ms = timestamp;
+    pose.timestamp_ms = timestamp_ms;
     driver_handle_pose_event(pose);
 }
 
-bool sbs_mode_enabled = false;
-void viture_mcu_callback(uint16_t msgid, uint8_t *data, uint16_t len, uint32_t ts) {
-    if (msgid == MCU_SBS_ADJUSTMENT_MSG) {
-        sbs_mode_enabled = data[0] == MCU_SBS_ADJUSTMENT_ENABLED;
+static void viture_gen_imu_callback(float *imu, float *euler, uint64_t ts, uint64_t vsync) {
+    (void)imu;
+    (void)vsync;
+    if (!connected || driver_disabled()) return;
+
+    imu_quat_type quat = {0};
+    if (!viture_fetch_quaternion(&quat) && euler != NULL) {
+        imu_euler_type euler_angles = {
+            .roll = euler[0],
+            .pitch = euler[1],
+            .yaw = euler[2]
+        };
+        quat = euler_to_quaternion_zxy(euler_angles);
     }
+
+    if (quat.w == 0 && quat.x == 0 && quat.y == 0 && quat.z == 0) return;
+
+    uint32_t timestamp_ms = (uint32_t)(ts / 1000ULL);
+    viture_publish_pose(quat, timestamp_ms);
+}
+
+static void viture_carina_pose_callback(float *pose, double timestamp) {
+    if (!connected || driver_disabled() || pose == NULL) return;
+
+    imu_quat_type quat = {
+        .x = pose[3],
+        .y = pose[4],
+        .z = pose[5],
+        .w = pose[6]
+    };
+
+    uint32_t timestamp_ms = (uint32_t)(timestamp * 1000.0);
+    viture_publish_pose(quat, timestamp_ms);
+}
+
+static void viture_carina_vsync_callback(double timestamp) {
+    (void)timestamp;
+}
+
+static void viture_carina_imu_callback(float *imu, double timestamp) {
+    (void)imu;
+    (void)timestamp;
+}
+
+static void viture_carina_camera_callback(char *image_left0,
+                                          char *image_right0,
+                                          char *image_left1,
+                                          char *image_right1,
+                                          double timestamp,
+                                          int width,
+                                          int height) {
+    (void)image_left0;
+    (void)image_right0;
+    (void)image_left1;
+    (void)image_right1;
+    (void)timestamp;
+    (void)width;
+    (void)height;
 }
 
 device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == VITURE_ID_VENDOR) {
         for (int i=0; i < VITURE_ID_PRODUCT_COUNT; i++) {
             if (product_id == viture_supported_id_product[i]) {
+                if (!xr_device_provider_is_product_id_valid(product_id)) {
+                    log_message("VITURE: Product ID 0x%04x rejected by SDK\n", product_id);
+                    continue;
+                }
+
                 device_properties_type* device = calloc(1, sizeof(device_properties_type));
                 *device = viture_one_properties;
                 device->hid_vendor_id = vendor_id;
@@ -213,6 +352,8 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
 
                 adjustment_quat = device_pitch_adjustment(*viture_pitch_adjustments[i]);
 
+                viture_last_product_id = product_id;
+
                 return device;
             }
         }
@@ -221,57 +362,203 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
     return NULL;
 };
 
-static pthread_mutex_t viture_connection_mutex = PTHREAD_MUTEX_INITIALIZER;
-static void disconnect(bool soft) {
-    pthread_mutex_lock(&viture_connection_mutex);
-    if (connected) {
-        set_imu(false);
-        connected = false;
+static bool viture_initialize_provider_locked(uint16_t product_id) {
+    if (product_id == 0) return false;
+
+    viture_provider = xr_device_provider_create(product_id);
+    if (viture_provider == NULL) {
+        log_error("VITURE: Failed to create provider handle for product 0x%04x\n", product_id);
+        return false;
     }
 
-    // VITURE SDK freezes if we attempt deinit() while it's still physically connected, so only do this if the device is no longer present
-    if (initialized && (!soft || !device_present())) {
-        deinit();
-        initialized = false;
+    int sdk_device_type = xr_device_provider_get_device_type(viture_provider);
+    viture_device_type = sdk_device_type >= 0 ? (XRDeviceType)sdk_device_type : XR_DEVICE_TYPE_VITURE_GEN1;
+
+    int register_result = -1;
+    if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
+        register_result = register_callbacks_carina(viture_provider,
+                                                    viture_carina_pose_callback,
+                                                    viture_carina_vsync_callback,
+                                                    viture_carina_imu_callback,
+                                                    viture_carina_camera_callback);
+    } else {
+        register_result = register_callback(viture_provider, viture_gen_imu_callback);
     }
+
+    viture_callbacks_registered = (register_result == 0);
+    if (!viture_callbacks_registered) {
+        log_error("VITURE: Failed to register SDK callbacks (type=%d)\n", viture_device_type);
+        xr_device_provider_destroy(viture_provider);
+        viture_provider = NULL;
+        return false;
+    }
+
+    if (xr_device_provider_initialize(viture_provider, NULL) != 0) {
+        log_error("VITURE: Failed to initialize SDK provider\n");
+        xr_device_provider_destroy(viture_provider);
+        viture_provider = NULL;
+        return false;
+    }
+
+    initialized = true;
+    return true;
+}
+
+static uint8_t viture_pick_default_frequency(void) {
+    if (viture_device_type == XR_DEVICE_TYPE_VITURE_GEN2) return VITURE_IMU_FREQ_HIGH;
+    if (viture_device_type == XR_DEVICE_TYPE_VITURE_GEN1) return VITURE_IMU_FREQ_MEDIUM_HIGH;
+    return VITURE_IMU_FREQ_MEDIUM_HIGH;
+}
+
+static bool viture_open_imu_locked(uint8_t preferred_frequency) {
+    if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
+        viture_requested_frequency = VITURE_IMU_FREQ_MEDIUM_HIGH;
+        return true;
+    }
+
+    const uint8_t fallback_order[] = {
+        preferred_frequency,
+        VITURE_IMU_FREQ_MEDIUM_HIGH,
+        VITURE_IMU_FREQ_MEDIUM,
+        VITURE_IMU_FREQ_LOW
+    };
+
+    bool attempted[VITURE_IMU_FREQ_COUNT] = {0};
+    size_t fallback_count = 4;
+
+    for (size_t i = 0; i < fallback_count; i++) {
+        log_debug("VITURE: Attempting to open IMU at frequency %u\n", fallback_order[i]);
+        uint8_t freq = fallback_order[i];
+        if (freq >= VITURE_IMU_FREQ_COUNT) continue;
+        if (attempted[freq]) continue;
+
+        attempted[freq] = true;
+        int open_result = xr_device_provider_open_imu(viture_provider, VITURE_IMU_MODE_RAW, freq);
+        if (open_result == 0) {
+            viture_requested_frequency = freq;
+            viture_imu_open = true;
+            return true;
+        } else {
+            log_error("VITURE: xr_device_provider_open_imu(%u) failed (%d: %s)\n",
+                      freq,
+                      open_result,
+                      viture_open_imu_error_reason(open_result));
+        }
+    }
+
+    return false;
+}
+
+static bool viture_start_stream_locked(void) {
+    if (!initialized || viture_provider == NULL) return false;
+
+    if (xr_device_provider_start(viture_provider) != 0) {
+        log_error("VITURE: Failed to start SDK provider\n");
+        return false;
+    }
+
+    if (!viture_open_imu_locked(viture_pick_default_frequency())) {
+        log_error("VITURE: Failed to open IMU stream\n");
+        xr_device_provider_stop(viture_provider);
+        return false;
+    }
+
+    viture_capture_and_override_display_mode_locked();
+    connected = true;
+    viture_refresh_sbs_state_locked();
+    return true;
+}
+
+static void viture_stop_stream_locked(void) {
+    if (viture_provider == NULL) return;
+
+    viture_restore_display_mode_locked();
+
+    if (viture_imu_open) {
+        xr_device_provider_close_imu(viture_provider);
+        viture_imu_open = false;
+    }
+
+    if (connected) {
+        int stop_result = xr_device_provider_stop(viture_provider);
+        if (stop_result != 0 && config()->debug_device) {
+            log_debug("VITURE: xr_device_provider_stop returned %d\n", stop_result);
+        }
+        connected = false;
+    }
+}
+
+static void viture_shutdown_provider_locked(bool soft) {
+    if (!initialized || viture_provider == NULL) return;
+    if (soft && device_present()) return;
+
+    if (xr_device_provider_shutdown(viture_provider) != 0 && config()->debug_device) {
+        log_debug("VITURE: xr_device_provider_shutdown reported an error\n");
+    }
+    xr_device_provider_destroy(viture_provider);
+    viture_provider = NULL;
+    initialized = false;
+    viture_callbacks_registered = false;
+    viture_saved_display_mode = -1;
+    viture_saved_dof = -1;
+}
+
+static void viture_update_device_properties(device_properties_type *device) {
+    if (device == NULL) return;
+
+    uint8_t freq_index = viture_requested_frequency;
+    if (freq_index >= VITURE_IMU_FREQ_COUNT) freq_index = VITURE_IMU_FREQ_LOW;
+
+    int cycles_per_s = viture_frequency_hz[freq_index];
+    device->imu_cycles_per_s = cycles_per_s;
+    device->imu_buffer_size = cycles_per_s / 60;
+    if (device->imu_buffer_size < 1) device->imu_buffer_size = 1;
+    device->sbs_mode_supported = true;
+    device->firmware_update_recommended = false;
+}
+
+static void disconnect(bool soft) {
+    pthread_mutex_lock(&viture_connection_mutex);
+    viture_stop_stream_locked();
+    viture_shutdown_provider_locked(soft);
     pthread_mutex_unlock(&viture_connection_mutex);
 }
 
 bool viture_device_connect() {
-    if (!connected || get_imu_state() != STATE_ON) {
-        // newer firmware may require a bit of a wait after the device is plugged in before attempting to connect
-        sleep(2);
+    device_properties_type *device = device_checkout();
+    uint16_t product_id = device ? device->hid_product_id : viture_last_product_id;
+    bool success = true;
 
-        if (!initialized) initialized = init(handle_viture_event, viture_mcu_callback);
-        connected = initialized && set_imu(true) == ERR_SUCCESS;
+    pthread_mutex_lock(&viture_connection_mutex);
+    bool need_connect = !connected;
+    pthread_mutex_unlock(&viture_connection_mutex);
+
+    if (need_connect) {
+        sleep(2);
     }
 
-    if (connected) {
-        device_properties_type* device = device_checkout();
-        if (device != NULL) {
-            set_imu_fq(IMU_FREQUENCE_240);
-            int imu_freq = get_imu_fq();
-            if (imu_freq < IMU_FREQUENCE_60 || imu_freq > IMU_FREQUENCE_240) {
-                imu_freq = IMU_FREQUENCE_60;
-            }
+    pthread_mutex_lock(&viture_connection_mutex);
 
-            if (config()->debug_device) log_debug("VITURE: IMU frequency set to %s\n", frequency_to_string[imu_freq]);
-
-            // use the current value in case the frequency we requested isn't supported
-            device->imu_cycles_per_s = frequency_enum_to_value[imu_freq];
-            device->imu_buffer_size = (int) device->imu_cycles_per_s / 60;
-
-            // not a great way to check the firmware version but it's all we have
-            old_firmware_version = equal(VITURE_PRO_MODEL_NAME, device->model) ? false : (device->imu_cycles_per_s == 60);
-            if (old_firmware_version) log_message("VITURE: Detected old firmware version\n");
-
-            device->sbs_mode_supported = !old_firmware_version;
-            device->firmware_update_recommended = old_firmware_version;
-
-            sbs_mode_enabled = get_3d_state() == STATE_ON;
-        } else {
-            disconnect(false);
+    if (!connected) {
+        if (!initialized) {
+            success = viture_initialize_provider_locked(product_id);
         }
+
+        if (success && !connected) {
+            success = viture_start_stream_locked();
+        }
+    }
+
+    pthread_mutex_unlock(&viture_connection_mutex);
+
+    if (!success) {
+        if (device != NULL) device_checkin(device);
+        disconnect(false);
+        return false;
+    }
+
+    if (device != NULL) {
+        viture_update_device_properties(device);
         device_checkin(device);
     }
 
@@ -279,26 +566,36 @@ bool viture_device_connect() {
 }
 
 void viture_block_on_device() {
-    device_properties_type* device = device_checkout();
-    if (device != NULL) {
-        int imu_state = get_imu_state();
-        if (connected && imu_state != ERR_WRITE_FAIL) wait_for_imu_start();
-        while (connected && imu_state != ERR_WRITE_FAIL) {
+    if (connected) {
+        wait_for_imu_start();
+        while (connected) {
             sleep(1);
-            imu_state = get_imu_state();
         }
     }
+
     disconnect(true);
-    device_checkin(device);
 };
 
 bool viture_device_is_sbs_mode() {
-    return sbs_mode_enabled;
+    pthread_mutex_lock(&viture_connection_mutex);
+    bool enabled = sbs_mode_enabled;
+    if (viture_provider != NULL && connected) {
+        int mode = xr_device_provider_get_display_mode(viture_provider);
+        if (mode >= 0) enabled = viture_display_mode_is_sbs(mode);
+    }
+    pthread_mutex_unlock(&viture_connection_mutex);
+    return enabled;
 };
 
 bool viture_device_set_sbs_mode(bool enabled) {
-    sbs_mode_enabled = enabled;
-    return set_3d(enabled) == ERR_SUCCESS;
+    pthread_mutex_lock(&viture_connection_mutex);
+    bool success = false;
+    if (viture_provider != NULL && initialized) {
+        success = xr_device_provider_switch_dimension(viture_provider, enabled) == 0;
+        if (success) sbs_mode_enabled = enabled;
+    }
+    pthread_mutex_unlock(&viture_connection_mutex);
+    return success;
 };
 
 bool viture_is_connected() {
