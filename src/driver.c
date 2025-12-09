@@ -83,7 +83,7 @@ void driver_handle_pose_event(imu_pose_type pose) {
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
         if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
-            log_debug("driver_handle_imu_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
+            log_debug("driver_handle_pose_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
             
         if (glasses_calibrated) {
             if (!captured_reference_pose || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
@@ -188,7 +188,7 @@ void driver_handle_pose_event(imu_pose_type pose) {
                 euler_velocities = get_euler_velocities(&prev_unmodified_euler, pose.euler, device->imu_cycles_per_s);
             }
             handle_imu_update(pose, euler_velocities, glasses_calibrated, ipc_values);
-        } else if (config()->debug_device) log_debug("driver_handle_imu_event, received invalid quat\n");
+        } else if (config()->debug_device) log_debug("driver_handle_pose_event, received invalid quat\n");
 
         // reset the counter every second
         if ((++imu_counter % device->imu_cycles_per_s) == 0) {

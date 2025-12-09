@@ -122,8 +122,8 @@ const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
     1, // One
     1, // One Lite
     1, // One Lite
-    1, // Pro
-    1, // Pro
+    5, // Pro
+    5, // Pro
     5, // Luma Pro
     5, // Luma
     5  // Luma Pro
@@ -142,6 +142,8 @@ static uint8_t viture_requested_frequency = VITURE_IMU_FREQ_LOW;
 static bool sbs_mode_enabled = false;
 static int viture_saved_display_mode = -1;
 static int viture_saved_dof = -1;
+static int viture_callback_logs_remaining = 10;
+static int viture_carina_misc_logs_remaining = 5;
 
 static const int viture_frequency_hz[VITURE_IMU_FREQ_COUNT] = {60, 90, 120, 240, 500};
 
@@ -193,18 +195,31 @@ static bool viture_display_mode_is_sbs(int mode) {
 static void viture_refresh_sbs_state_locked(void) {
     if (viture_provider == NULL) return;
     int mode = xr_device_provider_get_display_mode(viture_provider);
-    if (mode >= 0) sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+    if (mode >= 0) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+        if (config()->debug_device) {
+            log_debug("VITURE: Refreshed SBS state, mode=%d enabled=%d\n", mode, sbs_mode_enabled);
+        }
+    }
 }
 
 static void viture_capture_and_override_display_mode_locked(void) {
     viture_saved_display_mode = -1;
     viture_saved_dof = -1;
 
-    if (viture_provider == NULL) return;
+    if (viture_provider == NULL) {
+        if (config()->debug_device) {
+            log_debug("VITURE: Cannot override display mode, provider NULL\n");
+        }
+        return;
+    }
 
     int mode = 0;
     int dof = 0;
     if (xr_device_provider_get_display_mode_and_native_dof(viture_provider, &mode, &dof) != 0) {
+        if (config()->debug_device) {
+            log_debug("VITURE: Unable to read display mode/dof during override\n");
+        }
         return;
     }
 
@@ -213,6 +228,9 @@ static void viture_capture_and_override_display_mode_locked(void) {
 
     if (xr_device_provider_set_display_mode_and_native_dof(viture_provider, mode, 0) == 0) {
         sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+        if (config()->debug_device) {
+            log_debug("VITURE: Forced display mode=%d to 0DoF\n", mode);
+        }
     } else if (config()->debug_device) {
         log_debug("VITURE: Failed to force 0DoF (mode=%d, dof=%d)\n", mode, dof);
     }
@@ -222,10 +240,18 @@ static void viture_restore_display_mode_locked(void) {
     if (viture_provider == NULL) {
         viture_saved_display_mode = -1;
         viture_saved_dof = -1;
+        if (config()->debug_device) {
+            log_debug("VITURE: Cannot restore display mode, provider NULL\n");
+        }
         return;
     }
 
-    if (viture_saved_display_mode < 0 || viture_saved_dof < 0) return;
+    if (viture_saved_display_mode < 0 || viture_saved_dof < 0) {
+        if (config()->debug_device) {
+            log_debug("VITURE: No saved display state to restore\n");
+        }
+        return;
+    }
 
     int restore_mode = viture_saved_display_mode;
     int restore_dof = viture_saved_dof;
@@ -234,6 +260,9 @@ static void viture_restore_display_mode_locked(void) {
 
     if (result == 0) {
         sbs_mode_enabled = viture_display_mode_is_sbs(restore_mode);
+        if (config()->debug_device) {
+            log_debug("VITURE: Restored display mode=%d dof=%d\n", restore_mode, restore_dof);
+        }
     } else if (config()->debug_device) {
         log_debug("VITURE: Failed to restore display mode=%d dof=%d (err=%d)\n",
                   restore_mode,
@@ -243,21 +272,6 @@ static void viture_restore_display_mode_locked(void) {
 
     viture_saved_display_mode = -1;
     viture_saved_dof = -1;
-}
-
-static bool viture_fetch_quaternion(imu_quat_type *quat) {
-    if (viture_provider == NULL || quat == NULL) return false;
-
-    float pose[7] = {0};
-    if (xr_device_provider_get_gl_pose(viture_provider, pose, 0.0) != 0) {
-        return false;
-    }
-
-    quat->x = pose[3];
-    quat->y = pose[4];
-    quat->z = pose[5];
-    quat->w = pose[6];
-    return true;
 }
 
 static void viture_publish_pose(imu_quat_type quat, uint32_t timestamp_ms) {
@@ -272,24 +286,33 @@ static void viture_publish_pose(imu_quat_type quat, uint32_t timestamp_ms) {
     driver_handle_pose_event(pose);
 }
 
-static void viture_gen_imu_callback(float *imu, float *euler, uint64_t ts, uint64_t vsync) {
+static void viture_legacy_imu_callback(float *imu, float *euler, uint64_t ts, uint64_t vsync) {
     (void)imu;
     (void)vsync;
     if (!connected || driver_disabled()) return;
 
-    imu_quat_type quat = {0};
-    if (!viture_fetch_quaternion(&quat) && euler != NULL) {
-        imu_euler_type euler_angles = {
-            .roll = euler[0],
-            .pitch = euler[1],
-            .yaw = euler[2]
-        };
-        quat = euler_to_quaternion_zxy(euler_angles);
+    if (config()->debug_device && viture_callback_logs_remaining > 0) {
+        log_debug("VITURE: Falling back to Euler angles in callback\n");
     }
+    imu_euler_type euler_angles = {
+        .roll = euler[0],
+        .pitch = euler[1],
+        .yaw = euler[2]
+    };
+    imu_quat_type quat = euler_to_quaternion_zxy(euler_angles);
 
     if (quat.w == 0 && quat.x == 0 && quat.y == 0 && quat.z == 0) return;
 
     uint32_t timestamp_ms = (uint32_t)(ts / 1000ULL);
+    if (config()->debug_device && viture_callback_logs_remaining > 0) {
+        log_debug("VITURE: gen callback fired ts=%u quat=(%f,%f,%f,%f)\n",
+                  timestamp_ms,
+                  quat.x,
+                  quat.y,
+                  quat.z,
+                  quat.w);
+        viture_callback_logs_remaining--;
+    }
     viture_publish_pose(quat, timestamp_ms);
 }
 
@@ -304,16 +327,35 @@ static void viture_carina_pose_callback(float *pose, double timestamp) {
     };
 
     uint32_t timestamp_ms = (uint32_t)(timestamp * 1000.0);
+    if (config()->debug_device && viture_callback_logs_remaining > 0) {
+        log_debug("VITURE: Carina pose callback ts=%u quat=(%f,%f,%f,%f,%f,%f,%f)\n",
+                  timestamp_ms,
+                  pose[0],
+                  pose[1],
+                  pose[2],
+                  pose[3],
+                  pose[4],
+                  pose[5],
+                  pose[6]);
+        viture_callback_logs_remaining--;
+    }
     viture_publish_pose(quat, timestamp_ms);
 }
 
 static void viture_carina_vsync_callback(double timestamp) {
-    (void)timestamp;
+    if (config()->debug_device && viture_carina_misc_logs_remaining > 0) {
+        log_debug("VITURE: Carina VSync callback ts=%f\n", timestamp);
+        viture_carina_misc_logs_remaining--;
+    }
 }
 
 static void viture_carina_imu_callback(float *imu, double timestamp) {
     (void)imu;
     (void)timestamp;
+    if (config()->debug_device && viture_carina_misc_logs_remaining > 0) {
+        log_debug("VITURE: Carina IMU callback ts=%f\n", timestamp);
+        viture_carina_misc_logs_remaining--;
+    }
 }
 
 static void viture_carina_camera_callback(char *image_left0,
@@ -330,6 +372,13 @@ static void viture_carina_camera_callback(char *image_left0,
     (void)timestamp;
     (void)width;
     (void)height;
+    if (config()->debug_device && viture_carina_misc_logs_remaining > 0) {
+        log_debug("VITURE: Carina camera callback ts=%f size=%dx%d\n",
+                  timestamp,
+                  width,
+                  height);
+        viture_carina_misc_logs_remaining--;
+    }
 }
 
 device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
@@ -339,6 +388,14 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 if (!xr_device_provider_is_product_id_valid(product_id)) {
                     log_message("VITURE: Product ID 0x%04x rejected by SDK\n", product_id);
                     continue;
+                }
+
+                if (config()->debug_device) {
+                    log_debug("VITURE: Found supported product 0x%04x (%s) bus=%u addr=%u\n",
+                              product_id,
+                              viture_supported_models[i],
+                              usb_bus,
+                              usb_address);
                 }
 
                 device_properties_type* device = calloc(1, sizeof(device_properties_type));
@@ -371,8 +428,16 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         return false;
     }
 
+    if (config()->debug_device) {
+        log_debug("VITURE: Provider handle created for product 0x%04x\n", product_id);
+    }
+
     int sdk_device_type = xr_device_provider_get_device_type(viture_provider);
     viture_device_type = sdk_device_type >= 0 ? (XRDeviceType)sdk_device_type : XR_DEVICE_TYPE_VITURE_GEN1;
+
+    if (config()->debug_device) {
+        log_debug("VITURE: SDK device type reported as %d\n", sdk_device_type);
+    }
 
     int register_result = -1;
     if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
@@ -382,7 +447,7 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
                                                     viture_carina_imu_callback,
                                                     viture_carina_camera_callback);
     } else {
-        register_result = register_callback(viture_provider, viture_gen_imu_callback);
+        register_result = register_callback(viture_provider, viture_legacy_imu_callback);
     }
 
     viture_callbacks_registered = (register_result == 0);
@@ -391,6 +456,8 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         xr_device_provider_destroy(viture_provider);
         viture_provider = NULL;
         return false;
+    } else if (config()->debug_device) {
+        log_debug("VITURE: Callback registration succeeded for type=%d\n", viture_device_type);
     }
 
     if (xr_device_provider_initialize(viture_provider, NULL) != 0) {
@@ -398,6 +465,10 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         xr_device_provider_destroy(viture_provider);
         viture_provider = NULL;
         return false;
+    }
+
+    if (config()->debug_device) {
+        log_debug("VITURE: SDK provider initialized\n");
     }
 
     initialized = true;
@@ -427,13 +498,15 @@ static bool viture_open_imu_locked(uint8_t preferred_frequency) {
     size_t fallback_count = 4;
 
     for (size_t i = 0; i < fallback_count; i++) {
-        log_debug("VITURE: Attempting to open IMU at frequency %u\n", fallback_order[i]);
         uint8_t freq = fallback_order[i];
         if (freq >= VITURE_IMU_FREQ_COUNT) continue;
         if (attempted[freq]) continue;
 
         attempted[freq] = true;
-        int open_result = xr_device_provider_open_imu(viture_provider, VITURE_IMU_MODE_RAW, freq);
+        if (config()->debug_device) {
+            log_debug("VITURE: Attempting IMU open at freq index %u\n", freq);
+        }
+        int open_result = xr_device_provider_open_imu(viture_provider, VITURE_IMU_MODE_POSE, freq);
         if (open_result == 0) {
             viture_requested_frequency = freq;
             viture_imu_open = true;
@@ -446,6 +519,9 @@ static bool viture_open_imu_locked(uint8_t preferred_frequency) {
         }
     }
 
+    if (config()->debug_device) {
+        log_debug("VITURE: All IMU frequency attempts failed\n");
+    }
     return false;
 }
 
@@ -457,15 +533,26 @@ static bool viture_start_stream_locked(void) {
         return false;
     }
 
+    if (config()->debug_device) {
+        log_debug("VITURE: Provider start succeeded\n");
+    }
+
     if (!viture_open_imu_locked(viture_pick_default_frequency())) {
         log_error("VITURE: Failed to open IMU stream\n");
         xr_device_provider_stop(viture_provider);
         return false;
     }
 
+    if (config()->debug_device) {
+        log_debug("VITURE: IMU stream opened at freq index %u\n", viture_requested_frequency);
+    }
+
     viture_capture_and_override_display_mode_locked();
     connected = true;
     viture_refresh_sbs_state_locked();
+    if (config()->debug_device) {
+        log_debug("VITURE: Connected, SBS=%d\n", sbs_mode_enabled);
+    }
     return true;
 }
 
@@ -477,12 +564,17 @@ static void viture_stop_stream_locked(void) {
     if (viture_imu_open) {
         xr_device_provider_close_imu(viture_provider);
         viture_imu_open = false;
+        if (config()->debug_device) {
+            log_debug("VITURE: Closed IMU stream\n");
+        }
     }
 
     if (connected) {
         int stop_result = xr_device_provider_stop(viture_provider);
         if (stop_result != 0 && config()->debug_device) {
             log_debug("VITURE: xr_device_provider_stop returned %d\n", stop_result);
+        } else if (config()->debug_device && stop_result == 0) {
+            log_debug("VITURE: Provider stop succeeded\n");
         }
         connected = false;
     }
@@ -490,7 +582,12 @@ static void viture_stop_stream_locked(void) {
 
 static void viture_shutdown_provider_locked(bool soft) {
     if (!initialized || viture_provider == NULL) return;
-    if (soft && device_present()) return;
+    if (soft && device_present()) {
+        if (config()->debug_device) {
+            log_debug("VITURE: Skipping provider shutdown (soft disconnect while device present)\n");
+        }
+        return;
+    }
 
     if (xr_device_provider_shutdown(viture_provider) != 0 && config()->debug_device) {
         log_debug("VITURE: xr_device_provider_shutdown reported an error\n");
@@ -501,6 +598,9 @@ static void viture_shutdown_provider_locked(bool soft) {
     viture_callbacks_registered = false;
     viture_saved_display_mode = -1;
     viture_saved_dof = -1;
+    if (config()->debug_device) {
+        log_debug("VITURE: Provider shutdown complete (soft=%d)\n", soft);
+    }
 }
 
 static void viture_update_device_properties(device_properties_type *device) {
@@ -518,6 +618,9 @@ static void viture_update_device_properties(device_properties_type *device) {
 }
 
 static void disconnect(bool soft) {
+    if (config()->debug_device) {
+        log_debug("VITURE: Disconnect requested (soft=%d)\n", soft);
+    }
     pthread_mutex_lock(&viture_connection_mutex);
     viture_stop_stream_locked();
     viture_shutdown_provider_locked(soft);
@@ -534,6 +637,9 @@ bool viture_device_connect() {
     pthread_mutex_unlock(&viture_connection_mutex);
 
     if (need_connect) {
+        if (config()->debug_device) {
+            log_debug("VITURE: Beginning connection attempt, sleeping before init\n");
+        }
         sleep(2);
     }
 
@@ -552,6 +658,9 @@ bool viture_device_connect() {
     pthread_mutex_unlock(&viture_connection_mutex);
 
     if (!success) {
+        if (config()->debug_device) {
+            log_debug("VITURE: Connection attempt failed, cleaning up\n");
+        }
         if (device != NULL) device_checkin(device);
         disconnect(false);
         return false;
@@ -562,14 +671,25 @@ bool viture_device_connect() {
         device_checkin(device);
     }
 
+    if (config()->debug_device) {
+        log_debug("VITURE: viture_device_connect completed (connected=%d)\n", connected);
+    }
+
     return connected;
 }
 
 void viture_block_on_device() {
     if (connected) {
+        if (config()->debug_device) {
+            log_debug("VITURE: block_on_device waiting for IMU start\n");
+        }
         wait_for_imu_start();
         while (connected) {
             sleep(1);
+            if (config()->debug_device) {
+                log_debug("VITURE: block_on_device heartbeat, connected=%d\n", connected);
+            }
+            connected = is_imu_alive();
         }
     }
 
@@ -584,6 +704,9 @@ bool viture_device_is_sbs_mode() {
         if (mode >= 0) enabled = viture_display_mode_is_sbs(mode);
     }
     pthread_mutex_unlock(&viture_connection_mutex);
+    if (config()->debug_device) {
+        log_debug("VITURE: Query SBS mode -> %d\n", enabled);
+    }
     return enabled;
 };
 
@@ -592,7 +715,14 @@ bool viture_device_set_sbs_mode(bool enabled) {
     bool success = false;
     if (viture_provider != NULL && initialized) {
         success = xr_device_provider_switch_dimension(viture_provider, enabled) == 0;
-        if (success) sbs_mode_enabled = enabled;
+        if (success) {
+            sbs_mode_enabled = enabled;
+            if (config()->debug_device) {
+                log_debug("VITURE: SBS mode set to %d\n", enabled);
+            }
+        } else if (config()->debug_device) {
+            log_debug("VITURE: Failed to set SBS mode to %d\n", enabled);
+        }
     }
     pthread_mutex_unlock(&viture_connection_mutex);
     return success;
