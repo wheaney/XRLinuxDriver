@@ -299,6 +299,18 @@ VITURE_API bool xr_device_provider_is_product_id_valid(int product_id);
  */
 VITURE_API int xr_device_provider_get_market_name(int product_id, char* market_name, int* length);
 
+/**
+ * Set log level
+ * @param level 0: No log, 1: Error, 2: Info, 3: Debug
+ */
+VITURE_API void xr_device_provider_set_log_level(int level);
+
+/**
+ * Get log level
+ * @return 0: No log, 1: Error, 2: Info, 3: Debug
+ */
+VITURE_API int xr_device_provider_get_log_level();
+
 #ifdef __cplusplus
 }
 #endif

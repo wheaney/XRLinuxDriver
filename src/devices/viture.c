@@ -42,6 +42,11 @@
 #define VITURE_IMU_FREQ_HIGH 4
 #define VITURE_IMU_FREQ_COUNT 5
 
+#define VITURE_LOG_LEVEL_NONE 0
+#define VITURE_LOG_LEVEL_ERROR 1
+#define VITURE_LOG_LEVEL_INFO 2
+#define VITURE_LOG_LEVEL_DEBUG 3
+
 const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
 const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
 const float VITURE_LUMA_PITCH_ADJUSTMENT = -8.5;
@@ -300,9 +305,6 @@ static void viture_legacy_imu_callback(float *imu, float *euler, uint64_t ts, ui
     (void)vsync;
     if (!connected || driver_disabled()) return;
 
-    if (config()->debug_device && viture_callback_logs_remaining > 0) {
-        log_debug("VITURE: Falling back to Euler angles in callback\n");
-    }
     imu_euler_type euler_angles = {
         .roll = euler[0],
         .pitch = euler[1],
@@ -313,15 +315,6 @@ static void viture_legacy_imu_callback(float *imu, float *euler, uint64_t ts, ui
     if (quat.w == 0 && quat.x == 0 && quat.y == 0 && quat.z == 0) return;
 
     uint32_t timestamp_ms = (uint32_t)(ts / 1000ULL);
-    if (config()->debug_device && viture_callback_logs_remaining > 0) {
-        log_debug("VITURE: gen callback fired ts=%u quat=(%f,%f,%f,%f)\n",
-                  timestamp_ms,
-                  quat.x,
-                  quat.y,
-                  quat.z,
-                  quat.w);
-        viture_callback_logs_remaining--;
-    }
     viture_publish_pose(quat, timestamp_ms);
 }
 
@@ -479,6 +472,8 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
 
 static bool viture_initialize_provider_locked(uint16_t product_id) {
     if (product_id == 0) return false;
+
+    xr_device_provider_set_log_level(VITURE_LOG_LEVEL_ERROR);
 
     viture_provider = xr_device_provider_create(product_id);
     if (viture_provider == NULL) {
@@ -751,13 +746,9 @@ void viture_block_on_device() {
             log_debug("VITURE: block_on_device waiting for IMU start\n");
         }
         wait_for_imu_start();
-        while (true) {
-            if (!connected) break;
+        while (connected) {
             if (!is_imu_alive()) break;
             sleep(1);
-            if (config()->debug_device) {
-                log_debug("VITURE: block_on_device heartbeat\n");
-            }
         }
     }
 
@@ -772,9 +763,6 @@ bool viture_device_is_sbs_mode() {
         if (mode >= 0) enabled = viture_display_mode_is_sbs(mode);
     }
     pthread_mutex_unlock(&viture_connection_mutex);
-    if (config()->debug_device) {
-        log_debug("VITURE: Query SBS mode -> %d\n", enabled);
-    }
     return enabled;
 };
 

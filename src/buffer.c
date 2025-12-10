@@ -23,6 +23,16 @@ buffer_type *create_buffer(int size) {
     return buffer;
 }
 
+void free_buffer(buffer_type *buffer) {
+    if (buffer != NULL) {
+        if (buffer->values != NULL) {
+            free(buffer->values);
+            buffer->values = NULL;
+        }
+        free(buffer);
+    }
+}
+
 bool is_full(buffer_type *buffer) {
     return buffer->count == buffer->size;
 }
@@ -57,6 +67,33 @@ imu_buffer_type *create_imu_buffer(int buffer_size) {
     }
 
     return gyro_buffer;
+}
+
+void free_imu_buffer(imu_buffer_type *gyro_buffer) {
+    if (gyro_buffer != NULL) {
+        if (gyro_buffer->stage_1 != NULL) {
+            for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                free_buffer(gyro_buffer->stage_1[i]);
+            }
+            free(gyro_buffer->stage_1);
+            gyro_buffer->stage_1 = NULL;
+        }
+        if (gyro_buffer->stage_2 != NULL) {
+            for (int i = 0; i < GYRO_BUFFERS_COUNT; i++) {
+                free_buffer(gyro_buffer->stage_2[i]);
+            }
+            free(gyro_buffer->stage_2);
+            gyro_buffer->stage_2 = NULL;
+        }
+        free(gyro_buffer);
+    }
+}
+
+int imu_buffer_size(imu_buffer_type *gyro_buffer) {
+    if (gyro_buffer != NULL && gyro_buffer->stage_1 != NULL && gyro_buffer->stage_1[0] != NULL) {
+        return gyro_buffer->stage_1[0]->size;
+    }
+    return 0;
 }
 
 imu_buffer_response_type *push_to_imu_buffer(imu_buffer_type *gyro_buffer, imu_quat_type quat, float timestamp_ms) {

@@ -29,6 +29,7 @@ struct imu_buffer_response_t {
 typedef struct imu_buffer_response_t imu_buffer_response_type;
 
 buffer_type *create_buffer(int size);
+void free_buffer(buffer_type *buffer);
 
 bool is_full(buffer_type *buffer);
 
@@ -36,5 +37,7 @@ bool is_full(buffer_type *buffer);
 float push(buffer_type *buffer, float next_value);
 
 imu_buffer_type *create_imu_buffer(int buffer_size);
+void free_imu_buffer(imu_buffer_type *gyro_buffer);
+int imu_buffer_size(imu_buffer_type *gyro_buffer);
 
 imu_buffer_response_type *push_to_imu_buffer(imu_buffer_type *gyro_buffer, imu_quat_type quat, float timestamp_ms);
