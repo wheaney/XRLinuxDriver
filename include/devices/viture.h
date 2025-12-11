@@ -12,7 +12,7 @@ extern const device_driver_type viture_driver;
 #ifdef VITURE_INTERNAL
 static bool viture_display_mode_is_sbs(int mode);
 static void viture_refresh_sbs_state_locked(void);
-static void viture_publish_pose(imu_quat_type quat, uint32_t timestamp_ms);
+static void viture_publish_pose(imu_quat_type orientation, bool has_position, imu_vec3_type position, uint32_t timestamp_ms);
 static void viture_legacy_imu_callback(float *imu, float *euler, uint64_t ts, uint64_t vsync);
 static void viture_carina_pose_callback(float *pose, double timestamp);
 static void viture_carina_vsync_callback(double timestamp);
@@ -29,8 +29,7 @@ static bool viture_start_stream_locked(void);
 static void viture_stop_stream_locked(void);
 static void viture_shutdown_provider_locked(bool soft);
 static void viture_update_device_properties(device_properties_type *device);
-static uint8_t viture_pick_default_frequency(void);
-static bool viture_open_imu_locked(uint8_t preferred_frequency);
+static bool viture_open_imu_locked();
 static void viture_capture_and_override_display_mode_locked(void);
 static void viture_restore_display_mode_locked(void);
 #endif
