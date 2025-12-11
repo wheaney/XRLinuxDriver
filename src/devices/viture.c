@@ -313,14 +313,8 @@ static void viture_legacy_imu_callback(float* imu, float* euler, uint64_t ts, ui
     (void)vsync;
     if (!connected || driver_disabled()) return;
 
-    imu_euler_type euler_angles = {
-        .roll = euler[0],
-        .pitch = euler[1],
-        .yaw = euler[2]
-    };
+    imu_euler_type euler_angles = {.roll = euler[0], .pitch = euler[1], .yaw = euler[2]};
     imu_quat_type quat = euler_to_quaternion_zxy(euler_angles);
-
-    if (quat.w == 0 && quat.x == 0 && quat.y == 0 && quat.z == 0) return;
 
     uint32_t timestamp_ms = (uint32_t)(ts / 1000ULL);
     viture_publish_pose(quat, false, (imu_vec3_type){0}, timestamp_ms);
@@ -355,10 +349,7 @@ static const char* viture_get_model_name(uint16_t product_id) {
     int requested_len = VITURE_MARKET_NAME_MAX;
     int result = xr_device_provider_get_market_name(product_id, model_name, &requested_len);
     if (result != 0) {
-        snprintf(model_name,
-                    VITURE_MARKET_NAME_MAX,
-                    "VITURE 0x%04X",
-                    product_id);
+        snprintf(model_name, VITURE_MARKET_NAME_MAX, "VITURE 0x%04X", product_id);
     }
 
     return model_name;
@@ -366,9 +357,7 @@ static const char* viture_get_model_name(uint16_t product_id) {
 
 static void viture_state_callback(int glass_state_id, int glass_value) {
     if (config()->debug_device) {
-        log_debug("VITURE: Glass state callback id=%d value=%d\n",
-                  glass_state_id,
-                  glass_value);
+        log_debug("VITURE: Glass state callback id=%d value=%d\n", glass_state_id, glass_value);
     }
 }
 
@@ -409,10 +398,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 const char* model_name = viture_get_model_name(product_id);
                 if (config()->debug_device) {
                     log_debug("VITURE: Found supported product 0x%04x (%s) bus=%u addr=%u\n",
-                              product_id,
-                              model_name,
-                              usb_bus,
-                              usb_address);
+                              product_id, model_name, usb_bus, usb_address);
                 }
 
                 device_properties_type* device = calloc(1, sizeof(device_properties_type));
@@ -522,9 +508,7 @@ static bool viture_open_imu_locked() {
             viture_imu_open = true;
             return true;
         } else {
-            log_error("VITURE: open_imu(%u) failed (%d: %s)\n",
-                      freq,
-                      open_result,
+            log_error("VITURE: open_imu(%u) failed (%d: %s)\n", freq, open_result,
                       viture_open_imu_error_reason(open_result));
         }
     }
@@ -696,9 +680,14 @@ bool viture_device_connect() {
 void viture_block_on_device() {
     if (connected) {
         if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
+            // carina API offers a pose callback that only triggers at 25Hz,
+            // requires manual polling instead to achieve desired rates
+            uint64_t carina_init_time_ms = get_epoch_time_ms();
             while (connected) {
-                if (!viture_carina_poll_pose_and_publish()) break;
                 usleep(VITURE_CARINA_POLL_INTERVAL_US);
+                if (!viture_carina_poll_pose_and_publish() &&
+                    get_epoch_time_ms() - carina_init_time_ms > 1000)
+                    break;
             }
         } else {
             wait_for_imu_start();
