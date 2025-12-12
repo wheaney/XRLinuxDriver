@@ -98,8 +98,13 @@ void set_virtual_display_ipc_values() {
         float fov_widths[2] = {fov_half_widths[0] * 2, fov_half_widths[1] * 2};
         float texcoord_x_limits[2] = {0.0, 1.0};
         float texcoord_x_limits_r[2] = {0.0, 1.0};
-        float lens_vector[3] = {device->lens_distance_ratio, 0.0, 0.0};
-        float lens_vector_r[3] = {device->lens_distance_ratio, 0.0, 0.0};
+
+        // for 3DoF-only devices, the north offset creates a realistic shift in viewport position based 
+        // on orientation, but 6DoF devices give us the actual position, so we don't use the lens north
+        // offset to avoid double shifting
+        float lens_north_offset = device->provides_position ? 0.0 : device->lens_distance_ratio;
+        float lens_vector[3] = {lens_north_offset, 0.0, 0.0};
+        float lens_vector_r[3] = {lens_north_offset, 0.0, 0.0};
 
         // gamescope's texture will always be full width (no black bars)
         bool sbs_mode_full_width = is_gamescope_reshade_ipc_connected() || vd_config->sbs_mode_stretched;

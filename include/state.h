@@ -21,6 +21,7 @@ struct driver_state_t {
     char* connected_device_model;
     float connected_device_full_distance_cm;
     float connected_device_full_size_cm;
+    bool connected_device_pose_has_position;
     calibration_setup_type calibration_setup;
     calibration_state_type calibration_state;
     bool sbs_mode_supported;

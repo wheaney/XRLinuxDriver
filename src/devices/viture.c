@@ -43,7 +43,7 @@
 #define VITURE_IMU_FREQ_MEDIUM_HIGH 3
 #define VITURE_IMU_FREQ_HIGH 4
 #define VITURE_IMU_FREQ_COUNT 5
-#define VITURE_CARINA_CYCLES_PER_S 240
+#define VITURE_CARINA_CYCLES_PER_S 1000
 #define VITURE_CARINA_POLL_INTERVAL_US (1000000 / VITURE_CARINA_CYCLES_PER_S)
 
 #define VITURE_LOG_LEVEL_NONE 0
@@ -320,28 +320,32 @@ static void viture_legacy_imu_callback(float* imu, float* euler, uint64_t ts, ui
     viture_publish_pose(quat, false, (imu_vec3_type){0}, timestamp_ms);
 }
 
-// Polls the Carina SDK for the latest pose sample and feeds driver outputs.
-static bool viture_carina_poll_pose_and_publish() {
-    if (!connected || viture_provider == NULL) return false;
+static void viture_carina_imu_callback(float* imu, double timestamp) {
+    (void)imu;
+    device_properties_type* device = device_checkout();
+    if (connected && viture_provider != NULL && device != NULL) {
+        float pose[9] = {0};
+        int result = get_gl_pose_carina(viture_provider, pose, 0.0);
+        if (result == 0) {
+            // convert to NWU from EUS
+            imu_quat_type quat = {.x = -pose[6], .y = -pose[4], .z = pose[5], .w = pose[3]};
 
-    float pose[9] = {0};
-    int result = get_gl_pose_carina(viture_provider, pose, 0.0);
-    if (result != 0) {
-        if (config()->debug_device && viture_carina_poll_logs_remaining > 0) {
+            float full_distance_cm = LENS_TO_PIVOT_CM / device->lens_distance_ratio;
+            float meters_to_full_distance_ratio = 100.0f / full_distance_cm;
+            imu_vec3_type position = {
+                .x = -pose[2] * meters_to_full_distance_ratio, 
+                .y = -pose[0] * meters_to_full_distance_ratio,
+                .z = pose[1] * meters_to_full_distance_ratio
+            };
+
+            uint32_t timestamp_ms = (uint32_t)(timestamp * 1000.0);
+            viture_publish_pose(quat, true, position, timestamp_ms);
+        } else if (config()->debug_device && viture_carina_poll_logs_remaining > 0) {
             log_debug("VITURE: get_gl_pose_carina failed (%d)\n", result);
             viture_carina_poll_logs_remaining--;
         }
-        return false;
     }
-
-    // convert to NWU from EUS
-    imu_quat_type quat = {.x = -pose[6], .y = -pose[4], .z = pose[5], .w = pose[3]};
-
-    imu_vec3_type position = {.x = -pose[2], .y = -pose[0], .z = pose[1]};
-
-    uint32_t timestamp_ms = (uint32_t)get_epoch_time_ms();
-    viture_publish_pose(quat, true, position, timestamp_ms);
-    return true;
+    device_checkin(device);
 }
 
 static const char* viture_get_model_name(uint16_t product_id) {
@@ -448,7 +452,8 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
     int register_result = -1;
     if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
         // TODO try removing this entirely since we don't need callbacks
-        register_result = register_callbacks_carina(viture_provider, NULL, NULL, NULL, NULL);
+        register_result =
+            register_callbacks_carina(viture_provider, NULL, NULL, viture_carina_imu_callback, NULL);
     } else {
         register_result = register_callback(viture_provider, viture_legacy_imu_callback);
     }
@@ -599,8 +604,10 @@ static void viture_update_device_properties(device_properties_type* device) {
     if (device == NULL) return;
 
     int cycles_per_s;
+    bool provides_position = false;
     if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
         cycles_per_s = VITURE_CARINA_CYCLES_PER_S;
+        provides_position = true;
     } else {
         cycles_per_s = viture_frequency_hz[viture_requested_frequency];
     }
@@ -608,6 +615,7 @@ static void viture_update_device_properties(device_properties_type* device) {
     device->imu_cycles_per_s = cycles_per_s;
     device->imu_buffer_size = cycles_per_s / 60;
     if (device->imu_buffer_size < 1) device->imu_buffer_size = 1;
+    device->provides_position = provides_position;
     device->sbs_mode_supported = true;
     device->firmware_update_recommended = false;
 }
@@ -679,22 +687,10 @@ bool viture_device_connect() {
 
 void viture_block_on_device() {
     if (connected) {
-        if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
-            // carina API offers a pose callback that only triggers at 25Hz,
-            // requires manual polling instead to achieve desired rates
-            uint64_t carina_init_time_ms = get_epoch_time_ms();
-            while (connected) {
-                usleep(VITURE_CARINA_POLL_INTERVAL_US);
-                if (!viture_carina_poll_pose_and_publish() &&
-                    get_epoch_time_ms() - carina_init_time_ms > 1000)
-                    break;
-            }
-        } else {
-            wait_for_imu_start();
-            while (connected) {
-                if (!is_imu_alive()) break;
-                sleep(1);
-            }
+        wait_for_imu_start();
+        while (connected) {
+            if (!is_imu_alive()) break;
+            sleep(1);
         }
     }
 
