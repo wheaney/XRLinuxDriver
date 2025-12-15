@@ -1,4 +1,5 @@
 #include "devices.h"
+#include "devices/viture.h"
 #include "driver.h"
 #include "epoch.h"
 #include "imu.h"
@@ -11,10 +12,6 @@
 #include "sdks/viture_glasses_provider.h"
 #include "strings.h"
 
-#define VITURE_INTERNAL 1
-#include "devices/viture.h"
-#undef VITURE_INTERNAL
-
 #include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -26,6 +23,15 @@
 
 #define VITURE_ID_PRODUCT_COUNT 14
 #define VITURE_ID_VENDOR 0x35ca
+#define VITURE_ONE_MODEL_NAME "One"
+#define VITURE_ONE_LITE_MODEL_NAME "One Lite"
+#define VITURE_PRO_MODEL_NAME "Pro"
+#define VITURE_LUMA_MODEL_NAME "Luma"
+#define VITURE_LUMA_PRO_MODEL_NAME "Luma Pro"
+#define VITURE_LUMA_ULTRA_MODEL_NAME "Luma Ultra"
+#define VITURE_LUMA_CYBER_MODEL_NAME "Luma Cyber"
+#define VITURE_BEAST_MODEL_NAME "Beast"
+
 #define VITURE_DISPLAY_MODE_1920_1080_60HZ 0x31
 #define VITURE_DISPLAY_MODE_3840_1080_60HZ 0x32
 #define VITURE_DISPLAY_MODE_3840_1080_90HZ 0x35
@@ -79,6 +85,22 @@ const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x1104, // Luma Ultra
     0x1151, // Luma Cyber
     0x1201  // Viture Beast
+};
+const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
+    VITURE_ONE_MODEL_NAME, 
+    VITURE_ONE_MODEL_NAME,
+    VITURE_ONE_MODEL_NAME,
+    VITURE_ONE_LITE_MODEL_NAME,
+    VITURE_ONE_LITE_MODEL_NAME,
+    VITURE_PRO_MODEL_NAME,
+    VITURE_PRO_MODEL_NAME,
+    VITURE_LUMA_MODEL_NAME,
+    VITURE_LUMA_PRO_MODEL_NAME,
+    VITURE_LUMA_PRO_MODEL_NAME,
+    VITURE_LUMA_ULTRA_MODEL_NAME,
+    VITURE_LUMA_ULTRA_MODEL_NAME,
+    VITURE_LUMA_CYBER_MODEL_NAME,
+    VITURE_BEAST_MODEL_NAME
 };
 const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
     &VITURE_ONE_PITCH_ADJUSTMENT,  // One
@@ -137,13 +159,13 @@ const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
     1, // One Lite
     1, // Pro
     1, // Pro
-    5, // Luma
-    5, // Luma Pro
-    5, // Luma Pro
-    5, // Luma Ultra
-    5, // Luma Ultra
-    5, // Luma Cyber
-    5  // Beast
+    1, // Luma
+    1, // Luma Pro
+    1, // Luma Pro
+    1, // Luma Ultra
+    1, // Luma Ultra
+    1, // Luma Cyber
+    1  // Beast
 };
 
 static imu_quat_type adjustment_quat;
@@ -211,7 +233,7 @@ static bool viture_display_mode_is_sbs(int mode) {
     }
 }
 
-static void viture_refresh_sbs_state_locked(void) {
+static void viture_refresh_sbs_state_locked() {
     if (viture_provider == NULL) return;
     int mode = xr_device_provider_get_display_mode(viture_provider);
     if (mode >= 0) {
@@ -222,7 +244,8 @@ static void viture_refresh_sbs_state_locked(void) {
     }
 }
 
-static void viture_capture_and_override_display_mode_locked(void) {
+// TODO - for eventual Beast integration
+static void viture_capture_and_override_display_mode_locked() {
     viture_saved_display_mode = -1;
     viture_saved_dof = -1;
 
@@ -255,7 +278,8 @@ static void viture_capture_and_override_display_mode_locked(void) {
     }
 }
 
-static void viture_restore_display_mode_locked(void) {
+// TODO - for eventual Beast integration
+static void viture_restore_display_mode_locked() {
     if (viture_provider == NULL) {
         viture_saved_display_mode = -1;
         viture_saved_dof = -1;
@@ -365,7 +389,7 @@ static void viture_state_callback(int glass_state_id, int glass_value) {
     }
 }
 
-static void viture_register_state_callback_locked(void) {
+static void viture_register_state_callback_locked() {
     if (viture_provider == NULL || viture_state_callback_registered) return;
 
     int result = xr_device_provider_register_state_callback(viture_provider, viture_state_callback);
@@ -379,7 +403,7 @@ static void viture_register_state_callback_locked(void) {
     }
 }
 
-static void viture_unregister_state_callback_locked(void) {
+static void viture_unregister_state_callback_locked() {
     if (viture_provider == NULL || !viture_state_callback_registered) return;
 
     int result = xr_device_provider_register_state_callback(viture_provider, NULL);
@@ -399,17 +423,11 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                     continue;
                 }
 
-                const char* model_name = viture_get_model_name(product_id);
-                if (config()->debug_device) {
-                    log_debug("VITURE: Found supported product 0x%04x (%s) bus=%u addr=%u\n",
-                              product_id, model_name, usb_bus, usb_address);
-                }
-
                 device_properties_type* device = calloc(1, sizeof(device_properties_type));
                 *device = viture_one_properties;
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
-                device->model = (char*)model_name;
+                device->model = (char *)viture_supported_models[i];
                 device->resolution_h = viture_resolution_heights[i];
                 device->fov = *viture_fovs[i];
                 device->calibration_wait_s = viture_calibration_wait_s[i];
@@ -524,7 +542,7 @@ static bool viture_open_imu_locked() {
     return false;
 }
 
-static bool viture_start_stream_locked(void) {
+static bool viture_start_stream_locked() {
     if (!initialized || viture_provider == NULL) return false;
 
     if (xr_device_provider_start(viture_provider) != 0) {
@@ -545,17 +563,17 @@ static bool viture_start_stream_locked(void) {
         return false;
     }
 
-    viture_capture_and_override_display_mode_locked();
+    // viture_capture_and_override_display_mode_locked();
     connected = true;
     viture_refresh_sbs_state_locked();
     return true;
 }
 
-static void viture_stop_stream_locked(void) {
+static void viture_stop_stream_locked() {
     if (viture_provider == NULL) return;
 
     viture_unregister_state_callback_locked();
-    viture_restore_display_mode_locked();
+    // viture_restore_display_mode_locked();
 
     if (viture_imu_open) {
         close_imu(viture_provider);
@@ -627,11 +645,8 @@ static void disconnect(bool soft) {
     pthread_mutex_lock(&viture_connection_mutex);
     viture_stop_stream_locked();
     viture_shutdown_provider_locked(soft);
-    pthread_mutex_unlock(&viture_connection_mutex);
 
-    device_properties_type* device = device_checkout();
-    if (device != NULL) free_and_clear(&device->model);
-    device_checkin(device);
+    pthread_mutex_unlock(&viture_connection_mutex);
 }
 
 bool viture_device_connect() {
