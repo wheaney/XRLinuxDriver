@@ -156,22 +156,20 @@ void set_virtual_display_ipc_values() {
         // don't set the "flush" flag here if gamescope is enabled, we'll let the frequent IMU data writes trigger the flush
         bool gamescope_enabled = enabled && is_gamescope_reshade_ipc_connected();
         set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &gamescope_enabled, 1, sizeof(bool), !gamescope_enabled);
-        if (gamescope_enabled) {
-            set_gamescope_reshade_effect_uniform_variable("show_banner", &show_banner, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("display_size", &vd_config->display_size, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("display_north_offset", &display_north_offset, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("half_fov_y_rads", &half_fov_y_rads, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("fov_half_widths", (void*) fov_half_widths, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("fov_widths", (void*) fov_widths, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits", (void*) texcoord_x_limits, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
-        }
+        set_gamescope_reshade_effect_uniform_variable("show_banner", &show_banner, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("display_size", &vd_config->display_size, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("display_north_offset", &display_north_offset, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("half_fov_y_rads", &half_fov_y_rads, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("fov_half_widths", (void*) fov_half_widths, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("fov_widths", (void*) fov_widths, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits", (void*) texcoord_x_limits, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
     } else {
         virtual_display_handle_device_disconnect_func();
     }
