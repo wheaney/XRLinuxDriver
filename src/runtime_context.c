@@ -39,12 +39,6 @@ static bool _check_and_set_queued_device() {
     return false;
 }
 
-static bool device_equal(device_properties_type* device, device_properties_type* device2) {
-    return device != NULL && device2 != NULL && 
-           device->hid_product_id == device2->hid_product_id && 
-           device->hid_vendor_id == device2->hid_vendor_id;
-}
-
 void set_device_and_checkout(device_properties_type* device) {
     bool device_changed = false;
     pthread_mutex_lock(&device_ref_count_mutex);

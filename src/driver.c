@@ -568,7 +568,7 @@ void handle_device_connection_changed(connected_device_type* new_device) {
     // it has the responsibility of always holding open at least one reference as long as a device remains connected.
     static device_properties_type* connected_device = NULL;
 
-    if (connected_device != NULL) {
+    if (connected_device != NULL && (new_device == NULL || !device_equal(connected_device, new_device->device))) {
         if (device_driver != NULL) {
             if (config()->debug_device) log_debug("handle_device_connection_changed, device_driver->disconnect_func(false)\n");
             device_driver->disconnect_func(false);

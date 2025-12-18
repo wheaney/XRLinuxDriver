@@ -338,7 +338,7 @@ bool smooth_follow_modify_reference_pose_func(imu_pose_type pose, imu_pose_type*
 
     // always keep position centered for smooth follow
     // TODO - would be pretty easy to slerp this towards center
-    ref_pose->position = (imu_vec3_type){0.0f, 0.0f, 0.0f};
+    ref_pose->position = pose.position;
 
     if (origin_pose) {
         if (!smooth_follow_imu_buffer) {

@@ -138,3 +138,9 @@ connected_device_type* find_connected_device() {
 
     return connected_device;
 }
+
+bool device_equal(device_properties_type* device, device_properties_type* device2) {
+    return device != NULL && device2 != NULL && 
+           device->hid_product_id == device2->hid_product_id && 
+           device->hid_vendor_id == device2->hid_vendor_id;
+}
