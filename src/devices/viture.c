@@ -172,6 +172,23 @@ const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
     1  // Beast
 };
 
+const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
+    20, // One
+    20, // One
+    20, // One
+    20, // One Lite
+    20, // One Lite
+    20, // Pro
+    20, // Pro
+    20, // Luma
+    20, // Luma Pro
+    20, // Luma Pro
+    10, // Luma Ultra
+    10, // Luma Ultra
+    10, // Luma Cyber
+    10  // Beast
+};
+
 static imu_quat_type adjustment_quat;
 static XRDeviceProviderHandle viture_provider = NULL;
 static XRDeviceType viture_device_type = XR_DEVICE_TYPE_VITURE_GEN1;
@@ -443,6 +460,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 device->resolution_h = viture_resolution_heights[i];
                 device->fov = *viture_fovs[i];
                 device->calibration_wait_s = viture_calibration_wait_s[i];
+                device->look_ahead_constant = (float)viture_look_ahead_constant[i];
 
                 adjustment_quat = device_pitch_adjustment(*viture_pitch_adjustments[i]);
 
