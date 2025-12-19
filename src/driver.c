@@ -580,7 +580,7 @@ void handle_device_connection_changed(connected_device_type* new_device) {
         block_on_device_ready = false;
     }
 
-    if (new_device != NULL) {
+    if (new_device != NULL && connected_device == NULL) {
         if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
         *device_driver = *new_device->driver;
         connected_device = new_device->device;

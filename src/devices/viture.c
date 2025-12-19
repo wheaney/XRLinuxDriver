@@ -63,7 +63,8 @@
 
 const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
 const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
-const float VITURE_LUMA_PITCH_ADJUSTMENT = -8.5;
+const float VITURE_LUMA_PITCH_ADJUSTMENT = 3.0;
+const float VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT = -8.5;
 const float VITURE_BEAST_PITCH_ADJUSTMENT = -8.5; // Placeholder until specs finalized
 
 const float VITURE_ONE_FOV = 40.0;
@@ -71,7 +72,7 @@ const float VITURE_PRO_FOV = 43.0;
 const float VITURE_LUMA_FOV = 50.0;
 const float VITURE_LUMA_PRO_FOV = 52.0;
 const float VITURE_LUMA_ULTRA_FOV = 52.0;
-const float VITURE_LUMA_CYBER_FOV = 52.0; // Placeholder until specs finalized
+const float VITURE_LUMA_CYBER_FOV = 52.0;
 const float VITURE_BEAST_FOV = 58.0;
 
 const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
@@ -117,8 +118,8 @@ const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
     &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma
     &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
     &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Ultra
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Ultra
+    &VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT, // Luma Ultra
+    &VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT, // Luma Ultra
     &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Cyber
     &VITURE_BEAST_PITCH_ADJUSTMENT // Beast
 };
@@ -204,8 +205,6 @@ static bool sbs_mode_enabled = false;
 static int viture_saved_display_mode = -1;
 static int viture_saved_dof = -1;
 static int viture_callback_logs_remaining = 10;
-static int viture_carina_misc_logs_remaining = 5;
-static int viture_carina_poll_logs_remaining = 5;
 
 static const int viture_frequency_hz[VITURE_IMU_FREQ_COUNT] = {60, 90, 120, 240, 500};
 
@@ -361,7 +360,7 @@ static void viture_legacy_imu_callback(float* imu, float* euler, uint64_t ts, ui
     imu_euler_type euler_angles = {.roll = euler[0], .pitch = euler[1], .yaw = euler[2]};
     imu_quat_type quat = euler_to_quaternion_zxy(euler_angles);
 
-    uint32_t timestamp_ms = (uint32_t)(ts / 1000ULL);
+    uint32_t timestamp_ms = (uint32_t)(ts / 1000000ULL);
     viture_publish_pose(quat, false, (imu_vec3_type){0}, timestamp_ms);
 }
 
@@ -385,9 +384,8 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
 
             uint32_t timestamp_ms = (uint32_t)(timestamp * 1000.0);
             viture_publish_pose(quat, true, position, timestamp_ms);
-        } else if (config()->debug_device && viture_carina_poll_logs_remaining > 0) {
+        } else if (config()->debug_device) {
             log_debug("VITURE: get_gl_pose_carina failed (%d)\n", result);
-            viture_carina_poll_logs_remaining--;
         }
     }
     device_checkin(device);
@@ -584,6 +582,8 @@ static bool viture_start_stream_locked() {
         log_debug("VITURE: Provider start succeeded\n");
     }
 
+    sleep(1);
+
     // viture_register_state_callback_locked();
 
     if (!viture_open_imu_locked()) {
@@ -726,18 +726,17 @@ bool viture_device_is_sbs_mode() {
     if (viture_provider == NULL || !connected) return false;
 
     pthread_mutex_lock(&viture_connection_mutex);
-    bool enabled = false;
     int mode = xr_device_provider_get_display_mode(viture_provider);
-    if (mode >= 0) enabled = viture_display_mode_is_sbs(mode);
+    if (mode >= 0) sbs_mode_enabled = viture_display_mode_is_sbs(mode);
     pthread_mutex_unlock(&viture_connection_mutex);
 
-    return enabled;
+    return sbs_mode_enabled;
 };
 
 bool viture_device_set_sbs_mode(bool enabled) {
     pthread_mutex_lock(&viture_connection_mutex);
     bool success = false;
-    if (viture_provider != NULL && initialized) {
+    if (viture_provider != NULL && connected) {
         success = xr_device_provider_switch_dimension(viture_provider, enabled) == 0;
         if (success) {
             sbs_mode_enabled = enabled;
