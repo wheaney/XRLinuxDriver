@@ -6,4 +6,4 @@
 #include "devices.h"
 #include "imu.h"
 
-extern const device_driver_type viture_driver;
+extern const device_driver_type viture_legacy_driver;

@@ -21,7 +21,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define VITURE_ID_PRODUCT_COUNT 14
+#define VITURE_ID_PRODUCT_COUNT 4
 #define VITURE_ID_VENDOR 0x35ca
 #define VITURE_ONE_MODEL_NAME "One"
 #define VITURE_ONE_LITE_MODEL_NAME "One Lite"
@@ -61,133 +61,132 @@
 #define VITURE_STATE_ID_DISPLAY_MODE 2
 #define VITURE_STATE_ID_ELECTROCHROMIC_FILM 3
 
-const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
-const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
-const float VITURE_LUMA_PITCH_ADJUSTMENT = 3.0;
-const float VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT = -8.5;
-const float VITURE_BEAST_PITCH_ADJUSTMENT = -8.5; // Placeholder until specs finalized
+static const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
+static const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
+static const float VITURE_LUMA_PITCH_ADJUSTMENT = 3.0;
+static const float VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT = -8.5;
+static const float VITURE_BEAST_PITCH_ADJUSTMENT = -8.5; // Placeholder until specs finalized
+static const float VITURE_ONE_FOV = 40.0;
+static const float VITURE_PRO_FOV = 43.0;
+static const float VITURE_LUMA_FOV = 50.0;
+static const float VITURE_LUMA_PRO_FOV = 52.0;
+static const float VITURE_LUMA_ULTRA_FOV = 52.0;
+static const float VITURE_LUMA_CYBER_FOV = 52.0;
+static const float VITURE_BEAST_FOV = 58.0;
 
-const float VITURE_ONE_FOV = 40.0;
-const float VITURE_PRO_FOV = 43.0;
-const float VITURE_LUMA_FOV = 50.0;
-const float VITURE_LUMA_PRO_FOV = 52.0;
-const float VITURE_LUMA_ULTRA_FOV = 52.0;
-const float VITURE_LUMA_CYBER_FOV = 52.0;
-const float VITURE_BEAST_FOV = 58.0;
-
-const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
-    0x1011, // One
-    0x1013, // One
-    0x1017, // One
-    0x1015, // One Lite
-    0x101b, // One Lite
-    0x1019, // Pro
-    0x101d, // Pro
-    0x1131, // Luma
-    0x1121, // Luma Pro
-    0x1141, // Luma Pro
+static const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
+    // 0x1011, // One
+    // 0x1013, // One
+    // 0x1017, // One
+    // 0x1015, // One Lite
+    // 0x101b, // One Lite
+    // 0x1019, // Pro
+    // 0x101d, // Pro
+    // 0x1131, // Luma
+    // 0x1121, // Luma Pro
+    // 0x1141, // Luma Pro
     0x1101, // Luma Ultra
     0x1104, // Luma Ultra
     0x1151, // Luma Cyber
     0x1201  // Viture Beast
 };
-const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
-    VITURE_ONE_MODEL_NAME, 
-    VITURE_ONE_MODEL_NAME,
-    VITURE_ONE_MODEL_NAME,
-    VITURE_ONE_LITE_MODEL_NAME,
-    VITURE_ONE_LITE_MODEL_NAME,
-    VITURE_PRO_MODEL_NAME,
-    VITURE_PRO_MODEL_NAME,
-    VITURE_LUMA_MODEL_NAME,
-    VITURE_LUMA_PRO_MODEL_NAME,
-    VITURE_LUMA_PRO_MODEL_NAME,
+static const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
+    // VITURE_ONE_MODEL_NAME, 
+    // VITURE_ONE_MODEL_NAME,
+    // VITURE_ONE_MODEL_NAME,
+    // VITURE_ONE_LITE_MODEL_NAME,
+    // VITURE_ONE_LITE_MODEL_NAME,
+    // VITURE_PRO_MODEL_NAME,
+    // VITURE_PRO_MODEL_NAME,
+    // VITURE_LUMA_MODEL_NAME,
+    // VITURE_LUMA_PRO_MODEL_NAME,
+    // VITURE_LUMA_PRO_MODEL_NAME,
     VITURE_LUMA_ULTRA_MODEL_NAME,
     VITURE_LUMA_ULTRA_MODEL_NAME,
     VITURE_LUMA_CYBER_MODEL_NAME,
     VITURE_BEAST_MODEL_NAME
 };
-const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One Lite
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One Lite
-    &VITURE_PRO_PITCH_ADJUSTMENT,  // Pro
-    &VITURE_PRO_PITCH_ADJUSTMENT,  // Pro
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
+static const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
+    // &VITURE_ONE_PITCH_ADJUSTMENT,  // One
+    // &VITURE_ONE_PITCH_ADJUSTMENT,  // One
+    // &VITURE_ONE_PITCH_ADJUSTMENT,  // One
+    // &VITURE_ONE_PITCH_ADJUSTMENT,  // One Lite
+    // &VITURE_ONE_PITCH_ADJUSTMENT,  // One Lite
+    // &VITURE_PRO_PITCH_ADJUSTMENT,  // Pro
+    // &VITURE_PRO_PITCH_ADJUSTMENT,  // Pro
+    // &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma
+    // &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
+    // &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
     &VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT, // Luma Ultra
     &VITURE_LUMA_ULTRA_PITCH_ADJUSTMENT, // Luma Ultra
     &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Cyber
     &VITURE_BEAST_PITCH_ADJUSTMENT // Beast
 };
-const float* viture_fovs[VITURE_ID_PRODUCT_COUNT] = {
-    &VITURE_ONE_FOV,        // One
-    &VITURE_ONE_FOV,        // One
-    &VITURE_ONE_FOV,        // One
-    &VITURE_ONE_FOV,        // One Lite
-    &VITURE_ONE_FOV,        // One Lite
-    &VITURE_PRO_FOV,        // Pro
-    &VITURE_PRO_FOV,        // Pro
-    &VITURE_LUMA_FOV,       // Luma
-    &VITURE_LUMA_PRO_FOV,   // Luma Pro
-    &VITURE_LUMA_PRO_FOV,   // Luma Pro
+static const float* viture_fovs[VITURE_ID_PRODUCT_COUNT] = {
+    // &VITURE_ONE_FOV,        // One
+    // &VITURE_ONE_FOV,        // One
+    // &VITURE_ONE_FOV,        // One
+    // &VITURE_ONE_FOV,        // One Lite
+    // &VITURE_ONE_FOV,        // One Lite
+    // &VITURE_PRO_FOV,        // Pro
+    // &VITURE_PRO_FOV,        // Pro
+    // &VITURE_LUMA_FOV,       // Luma
+    // &VITURE_LUMA_PRO_FOV,   // Luma Pro
+    // &VITURE_LUMA_PRO_FOV,   // Luma Pro
     &VITURE_LUMA_ULTRA_FOV, // Luma Ultra
     &VITURE_LUMA_ULTRA_FOV, // Luma Ultra
     &VITURE_LUMA_CYBER_FOV, // Luma Cyber
     &VITURE_BEAST_FOV       // Beast
 };
-const int viture_resolution_heights[VITURE_ID_PRODUCT_COUNT] = {
-    RESOLUTION_1080P_H, // One
-    RESOLUTION_1080P_H, // One
-    RESOLUTION_1080P_H, // One
-    RESOLUTION_1080P_H, // One Lite
-    RESOLUTION_1080P_H, // One Lite
-    RESOLUTION_1080P_H, // Pro
-    RESOLUTION_1080P_H, // Pro
-    RESOLUTION_1200P_H, // Luma
-    RESOLUTION_1200P_H, // Luma Pro
-    RESOLUTION_1200P_H, // Luma Pro
+static const int viture_resolution_heights[VITURE_ID_PRODUCT_COUNT] = {
+    // RESOLUTION_1080P_H, // One
+    // RESOLUTION_1080P_H, // One
+    // RESOLUTION_1080P_H, // One
+    // RESOLUTION_1080P_H, // One Lite
+    // RESOLUTION_1080P_H, // One Lite
+    // RESOLUTION_1080P_H, // Pro
+    // RESOLUTION_1080P_H, // Pro
+    // RESOLUTION_1200P_H, // Luma
+    // RESOLUTION_1200P_H, // Luma Pro
+    // RESOLUTION_1200P_H, // Luma Pro
     RESOLUTION_1200P_H, // Luma Ultra
     RESOLUTION_1200P_H, // Luma Ultra
     RESOLUTION_1200P_H, // Luma Cyber
     RESOLUTION_1200P_H  // Beast
 };
 
-const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
-    1, // One
-    1, // One
-    1, // One
-    1, // One Lite
-    1, // One Lite
-    1, // Pro
-    1, // Pro
-    1, // Luma
-    1, // Luma Pro
-    1, // Luma Pro
-    1, // Luma Ultra
-    1, // Luma Ultra
-    1, // Luma Cyber
-    1  // Beast
+static const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
+    // 1, // One
+    // 1, // One
+    // 1, // One
+    // 1, // One Lite
+    // 1, // One Lite
+    // 1, // Pro
+    // 1, // Pro
+    // 1, // Luma
+    // 1, // Luma Pro
+    // 1, // Luma Pro
+    5, // Luma Ultra
+    5, // Luma Ultra
+    1, // Luma Cyber (TBD)
+    1  // Beast (TBD)
 };
 
-const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
-    20, // One
-    20, // One
-    20, // One
-    20, // One Lite
-    20, // One Lite
-    20, // Pro
-    20, // Pro
-    20, // Luma
-    20, // Luma Pro
-    20, // Luma Pro
+static const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
+    // 20, // One
+    // 20, // One
+    // 20, // One
+    // 20, // One Lite
+    // 20, // One Lite
+    // 20, // Pro
+    // 20, // Pro
+    // 20, // Luma
+    // 20, // Luma Pro
+    // 20, // Luma Pro
     10, // Luma Ultra
     10, // Luma Ultra
-    10, // Luma Cyber
-    10  // Beast
+    10, // Luma Cyber (TBD)
+    10  // Beast (TBD)
 };
 
 static imu_quat_type adjustment_quat;
@@ -218,7 +217,7 @@ static const char* viture_open_imu_error_reason(int code) {
     }
 }
 
-const device_properties_type viture_one_properties = {
+static const device_properties_type viture_properties = {
     .brand                              = "VITURE",
     .model                              = NULL,
     .hid_vendor_id                      = 0x35ca,
@@ -355,7 +354,7 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
 static void viture_legacy_imu_callback(float* imu, float* euler, uint64_t ts, uint64_t vsync) {
     (void)imu;
     (void)vsync;
-    if (!connected || driver_disabled()) return;
+    if (!connected || driver_disabled() || euler == NULL) return;
 
     imu_euler_type euler_angles = {.roll = euler[0], .pitch = euler[1], .yaw = euler[2]};
     imu_quat_type quat = euler_to_quaternion_zxy(euler_angles);
@@ -365,9 +364,8 @@ static void viture_legacy_imu_callback(float* imu, float* euler, uint64_t ts, ui
 }
 
 static void viture_carina_imu_callback(float* imu, double timestamp) {
-    (void)imu;
     device_properties_type* device = device_checkout();
-    if (connected && viture_provider != NULL && device != NULL) {
+    if (connected && viture_provider != NULL && device != NULL && imu != NULL) {
         float pose[9] = {0};
         int result = get_gl_pose_carina(viture_provider, pose, 0.0);
         if (result == 0) {
@@ -440,7 +438,7 @@ static void viture_unregister_state_callback_locked() {
     viture_state_callback_registered = false;
 }
 
-device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id,
+static device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id,
                                                 uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == VITURE_ID_VENDOR) {
         for (int i = 0; i < VITURE_ID_PRODUCT_COUNT; i++) {
@@ -451,7 +449,7 @@ device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t pro
                 }
 
                 device_properties_type* device = calloc(1, sizeof(device_properties_type));
-                *device = viture_one_properties;
+                *device = viture_properties;
                 device->hid_vendor_id = vendor_id;
                 device->hid_product_id = product_id;
                 device->model = (char *)viture_supported_models[i];
@@ -521,9 +519,7 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         return false;
     }
 
-    if (config()->debug_device) {
-        log_debug("VITURE: SDK provider initialized\n");
-    }
+    if (config()->debug_device) log_debug("VITURE: SDK provider initialized\n");
 
     initialized = true;
     return true;
@@ -595,7 +591,7 @@ static bool viture_start_stream_locked() {
 
     // viture_capture_and_override_display_mode_locked();
     connected = true;
-    viture_refresh_sbs_state_locked();
+    // viture_refresh_sbs_state_locked();
     return true;
 }
 
@@ -672,7 +668,7 @@ static void disconnect(bool soft) {
     pthread_mutex_unlock(&viture_connection_mutex);
 }
 
-bool viture_device_connect() {
+static bool viture_device_connect() {
     if (connected) return true;
 
     device_properties_type* device = device_checkout();
@@ -710,7 +706,7 @@ bool viture_device_connect() {
     return connected;
 }
 
-void viture_block_on_device() {
+static void viture_block_on_device() {
     if (connected) {
         wait_for_imu_start();
         while (connected) {
@@ -722,7 +718,7 @@ void viture_block_on_device() {
     disconnect(true);
 };
 
-bool viture_device_is_sbs_mode() {
+static bool viture_device_is_sbs_mode() {
     if (viture_provider == NULL || !connected) return false;
 
     pthread_mutex_lock(&viture_connection_mutex);
@@ -733,7 +729,7 @@ bool viture_device_is_sbs_mode() {
     return sbs_mode_enabled;
 };
 
-bool viture_device_set_sbs_mode(bool enabled) {
+static bool viture_device_set_sbs_mode(bool enabled) {
     pthread_mutex_lock(&viture_connection_mutex);
     bool success = false;
     if (viture_provider != NULL && connected) {
@@ -751,11 +747,11 @@ bool viture_device_set_sbs_mode(bool enabled) {
     return success;
 };
 
-bool viture_is_connected() {
+static bool viture_is_connected() {
     return connected;
 };
 
-void viture_disconnect(bool soft) {
+static void viture_disconnect(bool soft) {
     disconnect(soft);
 };
 

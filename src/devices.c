@@ -2,6 +2,7 @@
 #include "devices/rayneo.h"
 #include "devices/rokid.h"
 #include "devices/viture.h"
+#include "devices/viture_legacy.h"
 #include "devices/xreal.h"
 #include "logging.h"
 #include "runtime_context.h"
@@ -18,12 +19,13 @@
         // &viture_driver
     };
 #elif defined(__x86_64__)
-    #define DEVICE_DRIVER_COUNT 4
+    #define DEVICE_DRIVER_COUNT 5
     const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
         &rayneo_driver,
         &rokid_driver,
         &xreal_driver,
-        &viture_driver
+        &viture_driver,
+        &viture_legacy_driver
     };
 #else
     #error "Unsupported architecture"
