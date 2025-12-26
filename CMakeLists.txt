@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.6.2 LANGUAGES C)
+project(xrDriver VERSION 2.6.1 LANGUAGES C)
 
 # Emit compile_commands.json for IDEs (VS Code IntelliSense)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -96,7 +96,7 @@ endforeach()
 
 # Define the mapping of binary names to source files
 set(DEVICE_MAPPINGS
-    "libviture_one_sdk.a:src/devices/viture_legacy.c"
+    "libviture_one_sdk.a:src/devices/viture.c"
     "libRayNeoXRMiniSDK.so:src/devices/rayneo.c"
     "libGlassSDK.so:src/devices/rokid.c"
 )
