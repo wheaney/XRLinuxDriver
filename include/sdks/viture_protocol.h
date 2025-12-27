@@ -26,7 +26,7 @@ namespace viture::protocol {
         constexpr const char* LUMA_ULTRA = "Luma Ultra";
         constexpr const char* LUMA_CYBER = "Luma Cyber";
         constexpr const char* BEAST = "Beast";
-    }
+    } // namespace MarketName
     /**
      * @brief Result codes used by various protocol helpers and APIs.
      */
@@ -34,6 +34,14 @@ namespace viture::protocol {
         constexpr int SUCCESS = 0; /**< Success code */
         constexpr int FAILURE = 1; /**< Failure code */
     }; // namespace Result
+
+    namespace DisplaySize {
+        constexpr uint8_t SMALL = 0x00;
+        constexpr uint8_t MEDIUM = 0x01;
+        constexpr uint8_t LARGE = 0x02;
+        constexpr uint8_t EXTRA = 0x03;
+        constexpr uint8_t ULTRA = 0x04;
+    } // namespace DisplaySize
 
     /**
      * @brief Display mode identifiers for switching device display output
@@ -45,16 +53,21 @@ namespace viture::protocol {
         constexpr uint8_t MODE_1920_1080_90HZ = 0x33; /**< 1920x1080 @ 90Hz */
         constexpr uint8_t MODE_1920_1080_120HZ = 0x34; /**< 1920x1080 @ 120Hz */
         constexpr uint8_t MODE_3840_1080_90HZ = 0x35; /**< 3840x1080 @ 90Hz */
+        constexpr uint8_t MODE_1920_1080_60HZ_120HZ =
+            0x36; /**< 1920x1080, input is 60Hz, output is 120Hz (frame interpolation) */
         constexpr uint8_t MODE_1920_1200_60HZ = 0x41; /**< 1920x1200 @ 60Hz */
         constexpr uint8_t MODE_3840_1200_60HZ = 0x42; /**< 3840x1200 @ 60Hz */
         constexpr uint8_t MODE_1920_1200_90HZ = 0x43; /**< 1920x1200 @ 90Hz */
         constexpr uint8_t MODE_1920_1200_120HZ = 0x44; /**< 1920x1200 @ 120Hz */
         constexpr uint8_t MODE_3840_1200_90HZ = 0x45; /**< 3840x1200 @ 90Hz */
+        constexpr uint8_t MODE_1920_1200_60HZ_120HZ =
+            0x46; /**< 1920x1280, input is 60Hz, output is 120Hz (frame interpolation) */
 
         /**
          * Added for Beast
          */
-        constexpr uint8_t MODE_ULTRAWIDE_60HZ = 0x51; /**< Ultrawide mode @ 60Hz */
+        constexpr uint8_t MODE_ULTRAWIDE_60HZ_120HZ =
+            0x51; /**< Ultrawide mode, input is 60Hz, output is 120Hz (frame interpolation) */
         constexpr uint8_t MODE_SIDEMODE_60HZ = 0x61; /**< Side-by-side mode @ 60Hz */
     } // namespace DisplayMode
 

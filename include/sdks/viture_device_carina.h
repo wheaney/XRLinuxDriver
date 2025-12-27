@@ -86,13 +86,21 @@ VITURE_API int register_callbacks_carina(XRDeviceProviderHandle handle,
 VITURE_API int reset_pose_carina(XRDeviceProviderHandle handle);
 
 /**
- * @brief Get GL pose with prediction time
+ * @brief Get IMU pose data with prediction time (Twb matrix in OpenGL coordinate system: x -> right, y -> up, z -> backward)
  * @param handle Handle to the XRDeviceProvider instance
  * @param pose Array to store pose data (7 floats for position and quaternion)
  * @param predict_time Prediction time in nanoseconds, 0 for current pose data
  * @return 0 on success, -1 on failure
  */
 VITURE_API int get_gl_pose_carina(XRDeviceProviderHandle handle, float* pose, double predict_time);
+
+/**
+ * Toggle glasses status report
+ * @param handle Handle to the XRDeviceProvider instance
+ * @param toggle Enable / disable
+ * @return 0 on success
+ */
+VITURE_API int toggle_status_report_carina(XRDeviceProviderHandle handle, bool toggle);
 
 #ifdef __cplusplus
 }

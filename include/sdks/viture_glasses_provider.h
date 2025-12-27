@@ -146,6 +146,17 @@ VITURE_API int xr_device_provider_execute_usb_command_with_response(
     XRDeviceProviderHandle handle, int msgId, const char* data, int length, char* response_data, int* response_length);
 
 /**
+ * @brief Get electrochomic film mode synchronously
+ * @param handle Handle to the XRDeviceProvider instance
+ * @param voltage Pointer to store voltage data.
+ *                Gen1 devices: 0.0F / 1.0F;
+ *                Gen2 devices: 0F / 0.125F ... / 0.875F / 1.0F.
+ * @return 0: Success, -1: Param error, -2: USB not available
+ * @return -3: USB execution error, -4: Other error
+ */
+VITURE_API int xr_device_provider_get_film_mode(XRDeviceProviderHandle handle, float* voltage);
+
+/**
  * @brief Set electrochomic film mode synchronously
  * @param handle Handle to the XRDeviceProvider instance
  * @param voltage Voltage parameter (0.0 - 1.0). Interpretation differs by
@@ -218,6 +229,45 @@ VITURE_API int xr_device_provider_set_display_mode_and_native_dof(XRDeviceProvid
                                                                   int dof_type);
 
 /**
+ * @brief Get display distance (only for Viture Beast)
+ * @param handle Handle to the XRDeviceProvider instance
+ * @param distance Pointer to store display distance data
+ * @return [1, 10]: Success, -1: Param error, -2: USB not available
+ * @return -3: Interface not support for device, -4: USB execution error
+ * @return -5: No valid data, -6: Other error
+ */
+VITURE_API int xr_device_provider_get_display_distance(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set display distance (only for Viture Beast)
+ * @param handle Handle to the XRDeviceProvider instance
+ * @param distance Range [1, 10]
+ * @return 0: Success, -1: Param error, -2: USB not available
+ * @return -3: Interface not support for device, -4: Display mode value incorrect
+ * @return -5: USB execution error, -6: Other error
+ */
+VITURE_API int xr_device_provider_set_display_distance(XRDeviceProviderHandle handle, int distance);
+
+/**
+ * @brief Get display mode and native dof type (only for devices with native 3DOF, e.g. Viture Beast)
+ * @param handle Handle to the XRDeviceProvider instance
+ * @return [0, 4]: Success (viture::protocol::DisplaySize), -1: Param error, -2: USB not available
+ * @return -3: Interface not support for device, -4: USB execution error
+ * @return -5: No valid data, -6: Other error
+ */
+VITURE_API int xr_device_provider_get_display_size(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set display size (only for Viture Beast)
+ * @param handle Handle to the XRDeviceProvider instance
+ * @param size See viture::protocol::DisplaySize
+ * @return 0: Success, -1: Param error, -2: USB not available
+ * @return -3: Interface not support for device, -4: Display mode value incorrect
+ * @return -5: USB execution error, -6: Other error
+ */
+VITURE_API int xr_device_provider_set_display_size(XRDeviceProviderHandle handle, int size);
+
+/**
  * @brief Recenter display (only for devices with native 3DOF, e.g. Viture Beast)
  * @param handle Handle to the XRDeviceProvider instance
  * @return 0: Success, -1: Param error, -2: USB not available
@@ -283,6 +333,16 @@ VITURE_API int xr_device_provider_set_volume_level(XRDeviceProviderHandle handle
  * @return XRDeviceType enum value, or -1 on failure
  */
 VITURE_API int xr_device_provider_get_device_type(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Get glasses firmware version
+ * @param handle Handle to the XRDeviceProvider instance
+ * @param response Store response
+ * @param length Store response length
+ * @return 0: Success, -1: Parameter error, -2: USB protocol not available
+ * @return -3: USB response error, -4: No valid data, -5: Exception happened
+ */
+VITURE_API int xr_device_provider_get_glasses_version(XRDeviceProviderHandle handle, char* response, int* length);
 
 /**
  * Check if product id is valid
