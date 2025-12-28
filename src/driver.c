@@ -157,8 +157,10 @@ void driver_handle_pose_event(imu_pose_type pose) {
                     .z = pose.position.z - reference_pose.position.z
                 };
                 pose.position = vector_rotate(rel, reference_orientation_conj);
+            } else {
+                pose.position = (imu_vec3_type){0.0f, 0.0f, 0.0f};
             }
-
+            
             imu_euler_type euler_velocities;
             bool velocities_set = false;
             
