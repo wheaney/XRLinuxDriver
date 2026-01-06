@@ -50,6 +50,8 @@
 #define VITURE_IMU_FREQ_COUNT 5
 #define VITURE_CARINA_CYCLES_PER_S 1000
 #define VITURE_CARINA_POLL_INTERVAL_US (1000000 / VITURE_CARINA_CYCLES_PER_S)
+#define VITURE_FLOAT_EXACT_MS_LIMIT 16777216.0 // 2^24, largest consecutive int in float
+#define VITURE_FLOAT_RESET_MARGIN_MS 1000.0 // avoid running right at the precision edge
 
 #define VITURE_LOG_LEVEL_NONE 0
 #define VITURE_LOG_LEVEL_ERROR 1
@@ -163,8 +165,8 @@ static const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
     1, // Pro
     1, // Pro
     1, // Luma
-    1, // Luma Pro
-    1, // Luma Pro
+    5, // Luma Pro
+    5, // Luma Pro
     5, // Luma Ultra
     5, // Luma Ultra
     1, // Luma Cyber (TBD)
@@ -361,6 +363,7 @@ static void viture_legacy_pose_callback(float* pose, uint64_t ts) {
 }
 
 static void viture_carina_imu_callback(float* imu, double timestamp) {
+    static double initial_timestamp = -1.0;
     device_properties_type* device = device_checkout();
     if (connected && viture_provider != NULL && device != NULL && imu != NULL) {
         float pose[9] = {0};
@@ -377,7 +380,16 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
                 .z = pose[1] * meters_to_full_distance_ratio
             };
 
-            uint32_t timestamp_ms = (uint32_t)(timestamp * 1000.0);
+            if (initial_timestamp < 0.0) initial_timestamp = timestamp;
+
+            double elapsed_ms = (timestamp - initial_timestamp) * 1000.0;
+            if (elapsed_ms >= VITURE_FLOAT_EXACT_MS_LIMIT - VITURE_FLOAT_RESET_MARGIN_MS) {
+                initial_timestamp = timestamp;
+                elapsed_ms = 0.0;
+            }
+
+            uint32_t timestamp_ms = (uint32_t)elapsed_ms;
+            
             viture_publish_pose(quat, true, position, timestamp_ms);
         } else if (config()->debug_device) {
             log_debug("VITURE: get_gl_pose_carina failed (%d)\n", result);
