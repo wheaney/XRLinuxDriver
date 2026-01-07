@@ -302,6 +302,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
             if (imu_calibrated) {
                 if (imu_buffer != NULL && imu_buffer_size(imu_buffer) != device->imu_buffer_size) {
                     free_imu_buffer(imu_buffer);
+                    imu_buffer = NULL;
                 }
 
                 if (imu_buffer == NULL) {
