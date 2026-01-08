@@ -10,6 +10,7 @@
 #include "plugins/smooth_follow.h"
 #include "plugins/virtual_display.h"
 #include "runtime_context.h"
+#include "state.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -80,6 +81,7 @@ void set_virtual_display_ipc_values() {
                             (vd_config->enabled ||
                             vd_config->follow_mode_enabled &&
                             vd_config->passthrough_smooth_follow_enabled);
+        bool show_banner = enabled && state()->calibration_state == CALIBRATING;
 
         float look_ahead_constant = vd_config->look_ahead_override == 0 ?
                                         device->look_ahead_constant :
@@ -90,6 +92,9 @@ void set_virtual_display_ipc_values() {
         float look_ahead_cfg[4] = {look_ahead_constant, look_ahead_ftm, device->look_ahead_scanline_adjust, device->look_ahead_ms_cap};
 
         // computed values based on display config/state
+        float display_north_offset = (device->provides_position || state()->sbs_mode_enabled)
+                                         ? vd_config->display_distance
+                                         : 1.0;
         float display_aspect_ratio = (float)device->resolution_w / (float)device->resolution_h;
         float diag_to_vert_ratio = sqrt(pow(display_aspect_ratio, 2) + 1);
         float half_fov_z_rads = degree_to_radian(device->fov / diag_to_vert_ratio) / 2;
@@ -98,8 +103,13 @@ void set_virtual_display_ipc_values() {
         float fov_widths[2] = {fov_half_widths[0] * 2, fov_half_widths[1] * 2};
         float texcoord_x_limits[2] = {0.0, 1.0};
         float texcoord_x_limits_r[2] = {0.0, 1.0};
-        float lens_vector[3] = {device->lens_distance_ratio, 0.0, 0.0};
-        float lens_vector_r[3] = {device->lens_distance_ratio, 0.0, 0.0};
+
+        // for 3DoF-only devices, the north offset creates a realistic shift in viewport position based 
+        // on orientation, but 6DoF devices give us the actual position, so we don't use the lens north
+        // offset to avoid double shifting
+        float lens_north_offset = device->provides_position ? 0.0 : device->lens_distance_ratio;
+        float lens_vector[3] = {lens_north_offset, 0.0, 0.0};
+        float lens_vector_r[3] = {lens_north_offset, 0.0, 0.0};
 
         // gamescope's texture will always be full width (no black bars)
         bool sbs_mode_full_width = is_gamescope_reshade_ipc_connected() || vd_config->sbs_mode_stretched;
@@ -127,9 +137,10 @@ void set_virtual_display_ipc_values() {
         }
         if (virtual_display_ipc_values) {
             *virtual_display_ipc_values->enabled                = enabled && !is_gamescope_reshade_ipc_connected();
+            *virtual_display_ipc_values->show_banner            = show_banner;
             *virtual_display_ipc_values->display_size           = vd_config->display_size;
             *virtual_display_ipc_values->sbs_mode_stretched     = sbs_mode_stretched;
-            *virtual_display_ipc_values->display_north_offset   = vd_config->display_distance;
+            *virtual_display_ipc_values->display_north_offset   = display_north_offset;
             *virtual_display_ipc_values->curved_display         = vd_config->curved_display;
             *virtual_display_ipc_values->half_fov_z_rads        = half_fov_z_rads;
             *virtual_display_ipc_values->half_fov_y_rads        = half_fov_y_rads;
@@ -145,21 +156,20 @@ void set_virtual_display_ipc_values() {
         // don't set the "flush" flag here if gamescope is enabled, we'll let the frequent IMU data writes trigger the flush
         bool gamescope_enabled = enabled && is_gamescope_reshade_ipc_connected();
         set_gamescope_reshade_effect_uniform_variable("virtual_display_enabled", &gamescope_enabled, 1, sizeof(bool), !gamescope_enabled);
-        if (gamescope_enabled) {
-            set_gamescope_reshade_effect_uniform_variable("display_size", &vd_config->display_size, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("display_north_offset", &vd_config->display_distance, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
-            set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("half_fov_y_rads", &half_fov_y_rads, 1, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("fov_half_widths", (void*) fov_half_widths, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("fov_widths", (void*) fov_widths, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits", (void*) texcoord_x_limits, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
-            set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
-        }
+        set_gamescope_reshade_effect_uniform_variable("show_banner", &show_banner, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("display_size", &vd_config->display_size, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("sbs_mode_stretched", &sbs_mode_stretched, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("display_north_offset", &display_north_offset, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("look_ahead_cfg", (void*) look_ahead_cfg, 4, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("curved_display", &vd_config->curved_display, 1, sizeof(bool), false);
+        set_gamescope_reshade_effect_uniform_variable("half_fov_z_rads", &half_fov_z_rads, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("half_fov_y_rads", &half_fov_y_rads, 1, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("fov_half_widths", (void*) fov_half_widths, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("fov_widths", (void*) fov_widths, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits", (void*) texcoord_x_limits, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("texcoord_x_limits_r", (void*) texcoord_x_limits_r, 2, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("lens_vector", (void*) lens_vector, 3, sizeof(float), false);
+        set_gamescope_reshade_effect_uniform_variable("lens_vector_r", (void*) lens_vector_r, 3, sizeof(float), false);
     } else {
         virtual_display_handle_device_disconnect_func();
     }
@@ -210,6 +220,7 @@ int virtual_display_register_features_func(char*** features) {
 }
 
 const char *virtual_display_enabled_ipc_name = "virtual_display_enabled";
+const char *virtual_display_show_banner_ipc_name = "show_banner";
 const char *virtual_display_look_ahead_cfg_ipc_name = "look_ahead_cfg";
 const char *virtual_display_display_size_ipc_name = "display_size";
 const char *virtual_display_display_north_offset_ipc_name = "display_north_offset";
@@ -230,6 +241,7 @@ bool virtual_display_setup_ipc_func() {
     bool debug = config()->debug_ipc;
     if (!virtual_display_ipc_values) virtual_display_ipc_values = calloc(1, sizeof(virtual_display_ipc_values_type));
     setup_ipc_value(virtual_display_enabled_ipc_name, (void**) &virtual_display_ipc_values->enabled, sizeof(bool), debug);
+    setup_ipc_value(virtual_display_show_banner_ipc_name, (void**) &virtual_display_ipc_values->show_banner, sizeof(bool), debug);
     setup_ipc_value(virtual_display_look_ahead_cfg_ipc_name, (void**) &virtual_display_ipc_values->look_ahead_cfg, sizeof(float) * 4, debug);
     setup_ipc_value(virtual_display_display_size_ipc_name, (void**) &virtual_display_ipc_values->display_size, sizeof(float), debug);
     setup_ipc_value(virtual_display_display_north_offset_ipc_name, (void**) &virtual_display_ipc_values->display_north_offset, sizeof(float), debug);

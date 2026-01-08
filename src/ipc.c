@@ -21,7 +21,7 @@ const char *display_res_ipc_name = "display_resolution";
 const char *disabled_ipc_name = "disabled";
 const char *date_ipc_name = "keepalive_date";
 const char *pose_orientation_ipc_name = "pose_orientation";
-const char *pose_data_mutex_ipc_name = "pose_data_mutex";
+const char *pose_orientation_mutex_ipc_name = "pose_orientation_mutex";
 const char *pose_position_ipc_name = "pose_position";
 
 // deprecated - can be removed once this version is widely distributed
@@ -39,8 +39,8 @@ bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
     setup_ipc_value(lens_distance_ratio_ipc_name, (void**) &ipc_values->lens_distance_ratio, sizeof(float), debug);
 
     // attempt to destroy the mutex if it already existed from a previous run
-    setup_ipc_value(pose_data_mutex_ipc_name, (void**) &ipc_values->pose_data_mutex, sizeof(pthread_mutex_t), debug);
-    int ret = pthread_mutex_destroy(ipc_values->pose_data_mutex);
+    setup_ipc_value(pose_orientation_mutex_ipc_name, (void**) &ipc_values->pose_orientation_mutex, sizeof(pthread_mutex_t), debug);
+    int ret = pthread_mutex_destroy(ipc_values->pose_orientation_mutex);
     if (ret != 0) {
         perror("pthread_mutex_destroy");
         if (ret != EINVAL) return false;
@@ -59,7 +59,7 @@ bool setup_ipc_values(ipc_values_type *ipc_values, bool debug) {
         perror("pthread_mutexattr_setrobust");
         return false;
     }
-    if (pthread_mutex_init(ipc_values->pose_data_mutex, &attr) != 0) {
+    if (pthread_mutex_init(ipc_values->pose_orientation_mutex, &attr) != 0) {
         perror("pthread_mutex_init");
         return false;
     }

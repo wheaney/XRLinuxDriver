@@ -12,7 +12,7 @@ extern const char *display_res_ipc_name;
 extern const char *disabled_ipc_name;
 extern const char *date_ipc_name;
 extern const char *pose_orientation_ipc_name;
-extern const char *pose_data_mutex_ipc_name;
+extern const char *pose_orientation_mutex_ipc_name;
 extern const char *pose_position_data_ipc_name;
 
 // deprecated - can be removed once this version is widely distributed
@@ -25,7 +25,7 @@ struct ipc_values_t {
     float *date;
     float *pose_orientation;
     float *pose_position;
-    pthread_mutex_t *pose_data_mutex;
+    pthread_mutex_t *pose_orientation_mutex;
 
     float *display_fov;
     float *lens_distance_ratio;

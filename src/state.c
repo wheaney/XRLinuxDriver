@@ -57,6 +57,7 @@ void write_state(driver_state_type *state) {
         fprintf(fp, "sbs_mode_enabled=%s\n", state->sbs_mode_enabled ? "true" : "false");
         fprintf(fp, "connected_device_full_distance_cm=%.2f\n", state->connected_device_full_distance_cm);
         fprintf(fp, "connected_device_full_size_cm=%.2f\n", state->connected_device_full_size_cm);
+        fprintf(fp, "connected_device_pose_has_position=%s\n", state->connected_device_pose_has_position ? "true" : "false");
         if (state->breezy_desktop_smooth_follow_enabled)
             fprintf(fp, "breezy_desktop_smooth_follow_enabled=true\n");
         if (state->is_gamescope_reshade_ipc_connected)
@@ -130,6 +131,7 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
         float full_distance_cm = LENS_TO_PIVOT_CM / device->lens_distance_ratio;
         state->connected_device_full_distance_cm = full_distance_cm;
         state->connected_device_full_size_cm = 2.0f * full_distance_cm * tanf(degree_to_radian(device->fov) * 0.5f);
+        state->connected_device_pose_has_position = device->provides_position;
 
         state->calibration_setup = device->calibration_setup;
         state->sbs_mode_supported = device->sbs_mode_supported;

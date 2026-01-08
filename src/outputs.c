@@ -300,6 +300,11 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
             }
 
             if (imu_calibrated) {
+                if (imu_buffer != NULL && imu_buffer_size(imu_buffer) != device->imu_buffer_size) {
+                    free_imu_buffer(imu_buffer);
+                    imu_buffer = NULL;
+                }
+
                 if (imu_buffer == NULL) {
                     imu_buffer = create_imu_buffer(device->imu_buffer_size);
                     if (imu_buffer == NULL) {
@@ -311,7 +316,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, pose.orientation, (float)pose.timestamp_ms);
 
                 if (response && response->ready) {
-                    pthread_mutex_lock(ipc_values->pose_data_mutex);
+                    pthread_mutex_lock(ipc_values->pose_orientation_mutex);
 
                     memcpy(ipc_values->pose_orientation, response->data, sizeof(float) * 16);
                     memcpy(ipc_values->pose_position, &pose.position, sizeof(float) * 3);
@@ -320,7 +325,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", ipc_values->pose_orientation, 16, sizeof(float), false);
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_position", ipc_values->pose_position, 3, sizeof(float), true);
 
-                    pthread_mutex_unlock(ipc_values->pose_data_mutex);
+                    pthread_mutex_unlock(ipc_values->pose_orientation_mutex);
                 }
                 free(response);
             }
@@ -395,9 +400,10 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
 
 void reset_pose_data(ipc_values_type *ipc_values) {
     if (ipc_values) {    
-        pthread_mutex_lock(ipc_values->pose_data_mutex);
-        memcpy(ipc_values->pose_orientation, imu_reset_data, sizeof(float) * 16);
-        pthread_mutex_unlock(ipc_values->pose_data_mutex);
+        pthread_mutex_lock(ipc_values->pose_orientation_mutex);
+        memcpy(ipc_values->pose_orientation, pose_orientation_reset_data, sizeof(float) * 16);
+        memcpy(ipc_values->pose_position, pose_position_reset_data, sizeof(float) * 3);
+        pthread_mutex_unlock(ipc_values->pose_orientation_mutex);
     }
 
     plugins.reset_pose_data();

@@ -20,6 +20,7 @@ extern const char *virtual_display_lens_vector_r_ipc_name;
 
 struct virtual_display_ipc_values_t {
     bool *enabled;
+    bool *show_banner;
     float *look_ahead_cfg;
     float *display_size;
     float *display_north_offset;

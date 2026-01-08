@@ -360,7 +360,8 @@ void gamescope_reshade_wl_handle_pose_data_func(imu_pose_type pose, imu_euler_ty
 }
 
 void gamescope_reshade_wl_reset_pose_data_func() {
-    set_gamescope_reshade_effect_uniform_variable("imu_quat_data", imu_reset_data, 16, sizeof(float), true);
+    set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", pose_orientation_reset_data, 16, sizeof(float), false);
+    set_skippable_gamescope_reshade_effect_uniform_variable("pose_position", pose_position_reset_data, 3, sizeof(float), true);
 }
 
 const plugin_type gamescope_reshade_wayland_plugin = {

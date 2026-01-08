@@ -19,4 +19,4 @@ fi
 
 echo "Building docker image"
 docker buildx build --platform linux/amd64 -f ./docker-build/Dockerfile -t "xr-driver:amd64" --load .
-docker buildx build --platform linux/arm64 -f ./docker-build/Dockerfile -t "xr-driver:arm64" --load .
+docker buildx build --platform linux/arm64 -f ./docker-build/Dockerfile.aarch64 -t "xr-driver:arm64" --load .

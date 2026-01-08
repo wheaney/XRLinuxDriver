@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.5.3 LANGUAGES C)
+project(xrDriver VERSION 2.6.5 LANGUAGES C)
 
 # Emit compile_commands.json for IDEs (VS Code IntelliSense)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -49,10 +49,18 @@ add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
 
 # Set the library directory based on architecture
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR})
+set(VITURE_LIB_DIR ${LIB_DIR}/viture)
 message(STATUS "LIB_DIR: ${LIB_DIR}")
+if(EXISTS ${VITURE_LIB_DIR})
+    message(STATUS "VITURE_LIB_DIR: ${VITURE_LIB_DIR}")
+endif()
 
 # Find all .a files in the library directory
 file(GLOB STATIC_LIBS ${LIB_DIR}/*.a)
+if(EXISTS ${VITURE_LIB_DIR})
+    file(GLOB VITURE_STATIC_LIBS ${VITURE_LIB_DIR}/*.a)
+    list(APPEND STATIC_LIBS ${VITURE_STATIC_LIBS})
+endif()
 message(STATUS "STATIC_LIBS: ${STATIC_LIBS}")
 
 # Add all static libraries
@@ -68,6 +76,10 @@ endforeach()
 
 # Find all .so files in the library directory
 file(GLOB SHARED_LIBS ${LIB_DIR}/*.so)
+if(EXISTS ${VITURE_LIB_DIR})
+    file(GLOB VITURE_SHARED_LIBS ${VITURE_LIB_DIR}/*.so)
+    list(APPEND SHARED_LIBS ${VITURE_SHARED_LIBS})
+endif()
 message(STATUS "SHARED_LIBS: ${SHARED_LIBS}")
 
 # Add all shared libraries
@@ -84,7 +96,6 @@ endforeach()
 
 # Define the mapping of binary names to source files
 set(DEVICE_MAPPINGS
-    "libviture_one_sdk.a:src/devices/viture.c"
     "libRayNeoXRMiniSDK.so:src/devices/rayneo.c"
     "libGlassSDK.so:src/devices/rokid.c"
 )
@@ -159,6 +170,12 @@ foreach(TARGET ${ALL_TARGETS})
         endif()
     endif()
 endforeach()
+
+if(EXISTS ${VITURE_LIB_DIR})
+    list(APPEND SOURCES src/devices/viture.c)
+    add_definitions(-DVITURE_SUPPORTED)
+    message(STATUS "VITURE support enabled, added src/devices/viture.c")
+endif()
 
 add_executable(xrDriver ${SOURCES})
 

@@ -3,11 +3,14 @@
 #include <math.h>
 #include <stdbool.h>
 
-const float imu_reset_data[16] = {
+const float pose_orientation_reset_data[16] = {
     0.0, 0.0, 0.0, 1.0,
     0.0, 0.0, 0.0, 1.0,
     0.0, 0.0, 0.0, 1.0,
     0.0, 0.0, 0.0, 1.0
+};
+const float pose_position_reset_data[3] = {
+    0.0, 0.0, 0.0
 };
 
 float degree_to_radian(float deg) {

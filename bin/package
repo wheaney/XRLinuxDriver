@@ -47,7 +47,17 @@ cp -r ../udev $PACKAGE_DIR
 if [ ! -d "$PACKAGE_DIR/lib" ]; then
   mkdir $PACKAGE_DIR/lib
 fi
-cp ../lib/$ARCH/*.so $PACKAGE_DIR/lib || true
+cp ../lib/$ARCH/*.so* $PACKAGE_DIR/lib || true
+
+BUILD_ARTIFACT_NAME="xrDriver-$ARCH.tar.gz"
+if [ -z "$STEAMOS" ]; then
+  cp ../lib/$ARCH/viture/*.so* $PACKAGE_DIR/lib || true
+else
+  cp ../lib/$ARCH/viture/*.so.4.2 $PACKAGE_DIR/lib || true
+  cp ../lib/$ARCH/viture/libglasses.so $PACKAGE_DIR/lib || true
+  cp ../lib/$ARCH/viture/libcarina_vio.so $PACKAGE_DIR/lib || true
+  BUILD_ARTIFACT_NAME="xrDriver-$ARCH.steamos.tar.gz"
+fi
 
 # create manifest file for verifying installed file checksums against the originally packaged versions
 # include any file that doesn't get modified during setup (e.g. the systemd service file)
@@ -57,11 +67,11 @@ popd
 echo $BIN_MANIFEST > $PACKAGE_DIR/manifest
 
 # bundle up the driver directory
-tar -zcvf xrDriver-$ARCH.tar.gz $PACKAGE_DIR
+tar -zcvf $BUILD_ARTIFACT_NAME $PACKAGE_DIR
 
 popd
 
 mkdir -p out
-cp $BUILD_PATH/xrDriver-$ARCH.tar.gz out/
+cp $BUILD_PATH/$BUILD_ARTIFACT_NAME out/
 
 rm -rf $BUILD_PATH
