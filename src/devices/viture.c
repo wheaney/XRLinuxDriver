@@ -167,9 +167,9 @@ static const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
     1, // Luma
     5, // Luma Pro
     5, // Luma Pro
-    5, // Luma Ultra
-    5, // Luma Ultra
-    1, // Luma Cyber (TBD)
+    10, // Luma Ultra
+    10, // Luma Ultra
+    5, // Luma Cyber (TBD)
     1  // Beast (TBD)
 };
 
