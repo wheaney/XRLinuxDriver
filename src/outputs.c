@@ -49,6 +49,92 @@ const int min_input = -max_input;
 
 float joystick_max_degrees_per_s;
 
+static float clampf(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static imu_quat_type quat_slerp(imu_quat_type a, imu_quat_type b, float t) {
+    t = clampf(t, 0.0f, 1.0f);
+
+    float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    if (dot < 0.0f) {
+        dot = -dot;
+        b.x = -b.x;
+        b.y = -b.y;
+        b.z = -b.z;
+        b.w = -b.w;
+    }
+
+    // When the quaternions are very close, fall back to lerp to avoid numeric issues.
+    if (dot > 0.9995f) {
+        imu_quat_type out = {
+            .x = a.x + (b.x - a.x) * t,
+            .y = a.y + (b.y - a.y) * t,
+            .z = a.z + (b.z - a.z) * t,
+            .w = a.w + (b.w - a.w) * t,
+        };
+        float len = sqrtf(out.x * out.x + out.y * out.y + out.z * out.z + out.w * out.w);
+        if (len > 0.0f) {
+            out.x /= len;
+            out.y /= len;
+            out.z /= len;
+            out.w /= len;
+        }
+        return out;
+    }
+
+    dot = clampf(dot, -1.0f, 1.0f);
+    float theta_0 = acosf(dot);
+    float sin_theta_0 = sinf(theta_0);
+    if (sin_theta_0 <= 0.0f) {
+        return b;
+    }
+
+    float theta = theta_0 * t;
+    float sin_theta = sinf(theta);
+
+    float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
+    float s1 = sin_theta / sin_theta_0;
+
+    imu_quat_type out = {
+        .x = (s0 * a.x) + (s1 * b.x),
+        .y = (s0 * a.y) + (s1 * b.y),
+        .z = (s0 * a.z) + (s1 * b.z),
+        .w = (s0 * a.w) + (s1 * b.w),
+    };
+
+    return out;
+}
+
+static float dead_zone_exponential_curve(float ratio01) {
+    // Exponential curve with very low values near 0 and a smooth rise towards 1.
+    // ratio01 is expected in [0, 1].
+    const float k = 8.0f;
+    ratio01 = clampf(ratio01, 0.0f, 1.0f);
+
+    float e0 = expf(-k);
+    float e = expf(k * (ratio01 - 1.0f));
+    return (e - e0) / (1.0f - e0);
+}
+
+static float dead_zone_slerp_alpha(float angle_rad, float threshold_rad, int imu_cycles_per_s) {
+    if (threshold_rad <= 0.0f) return 1.0f;
+    if (imu_cycles_per_s <= 0) return 1.0f;
+
+    float ratio = clampf(angle_rad / threshold_rad, 0.0f, 1.0f);
+    float curve = dead_zone_exponential_curve(ratio);
+
+    // Floor the alpha so extremely small deltas still converge over a few seconds.
+    // Using a time constant keeps behavior stable across different IMU rates.
+    const float tau_slow_s = 5.0f;
+    float dt_s = 1.0f / (float)imu_cycles_per_s;
+    float alpha_min = 1.0f - expf(-dt_s / tau_slow_s);
+    float alpha = alpha_min + curve * (1.0f - alpha_min);
+    return clampf(alpha, 0.0f, 1.0f);
+}
+
 static int evdev_check(char * function, int i) {
     if (i < 0) {
         log_message("libevdev.%s: %s\n", function, strerror(-i));
@@ -318,140 +404,57 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, pose.orientation, (float)pose.timestamp_ms);
 
                 if (response && response->ready) {
+                    // Deadzone smoothing (WIP): below the configured threshold, slerp towards the new quat.
+                    // The closer the angle is to the threshold, the more aggressively we slerp (exponential curve).
+                    // Past the threshold, we effectively "snap" (copy) to preserve responsiveness.
                     static bool dead_zone_initialized = false;
-                    static bool dead_zone_in_use = false;
-                    static bool dead_zone_slerping = false;
                     static imu_quat_type dead_zone_quat = {0};
-                    static imu_quat_type slerp_start_quat = {0};
-                    static imu_quat_type slerp_end_quat = {0};
-                    static uint32_t dead_zone_checkpoint_ms = 0;
-                    static uint32_t slerp_start_timestamp_ms = 0;
-                    static int dead_zone_lower_threshold_counter = 0;
-                    static float dead_zone_lower_threshold_total_angle = 0;
 
-                    static float dead_zone_lower_threshold_deg = 0.0;
-                    static float dead_zone_lower_threshold_rad = 0.0;
-                    static float dead_zone_upper_threshold_rad = 0.0;
-                    static int dead_zone_lower_stability_ms = 0;
-                    static int dead_zone_slerp_ms = 0;
-                    if (config()->dead_zone_threshold_deg != dead_zone_lower_threshold_deg) {
-                        dead_zone_lower_threshold_deg = config()->dead_zone_threshold_deg;
-                        dead_zone_lower_threshold_rad = degree_to_radian(dead_zone_lower_threshold_deg);
-                        dead_zone_upper_threshold_rad = dead_zone_lower_threshold_rad * 3.0;
-                        dead_zone_lower_stability_ms = 100.0 / dead_zone_lower_threshold_deg;
-                        dead_zone_slerp_ms = 250 * dead_zone_lower_threshold_deg;
+                    static float dead_zone_threshold_deg = 0.0f;
+                    static float dead_zone_threshold_rad = 0.0f;
+                    if (config()->dead_zone_threshold_deg != dead_zone_threshold_deg) {
+                        dead_zone_threshold_deg = config()->dead_zone_threshold_deg;
+                        dead_zone_threshold_rad = degree_to_radian(dead_zone_threshold_deg);
+                        dead_zone_initialized = false;
 
-                        log_message("dead zone data updated to lower threshold %.2f degrees, upper threshold %.2f degrees, stability time %d ms, slerp time %d ms\n",
-                                    dead_zone_lower_threshold_deg, radian_to_degree(dead_zone_upper_threshold_rad),
-                                    dead_zone_lower_stability_ms, dead_zone_slerp_ms);
+                        log_message("dead zone updated: threshold %.2f deg (%.4f rad), curve k=%.1f, tau_slow=%.1fs\n",
+                                    dead_zone_threshold_deg, dead_zone_threshold_rad, 8.0f, 5.0f);
                     }
 
-                    if (dead_zone_lower_threshold_deg > 0.0) {
+                    if (dead_zone_threshold_deg > 0.0f) {
+                        imu_quat_type current_quat = {
+                            .x = response->data[0],
+                            .y = response->data[1],
+                            .z = response->data[2],
+                            .w = response->data[3],
+                        };
+
                         if (!dead_zone_initialized) {
                             dead_zone_initialized = true;
-                            dead_zone_quat = quat;
-                            dead_zone_checkpoint_ms = timestamp_ms;
+                            dead_zone_quat = current_quat;
                         } else {
-                            float angle_rad = quat_small_angle_rad(dead_zone_slerping ? slerp_end_quat : dead_zone_quat, quat);
-                            uint32_t time_since_last_checkpoint_ms = timestamp_ms - dead_zone_checkpoint_ms;
-
-                            // if we exceed the outer threshold once, or the inner threshold a multiple times, break or reset the lock
-                            bool angle_threshold_met = angle_rad >= dead_zone_upper_threshold_rad;
-                            bool was_dead_zone_in_use = dead_zone_in_use;
-                            if (angle_threshold_met) {
-                                if (dead_zone_in_use) log_message("Large noise lock threshold exceeded, unlocking IMU output\n");
-                                dead_zone_in_use = false;
-                            }
-                            if (!angle_threshold_met) {
-                                dead_zone_lower_threshold_counter++;
-                                dead_zone_lower_threshold_total_angle += angle_rad;
-                                float avg_angle_rad = dead_zone_lower_threshold_total_angle / (float)dead_zone_lower_threshold_counter;
-                                if (avg_angle_rad >= dead_zone_lower_threshold_rad) {
-                                    if (time_since_last_checkpoint_ms >= dead_zone_lower_stability_ms) {
-                                        angle_threshold_met = true;
-                                        if (dead_zone_in_use) log_message("Small noise lock threshold exceeded, unlocking IMU output\n");
-                                    }
-                                } else if (dead_zone_in_use) {
-                                    dead_zone_checkpoint_ms = timestamp_ms;
-                                    dead_zone_lower_threshold_counter = 0;
-                                    dead_zone_lower_threshold_total_angle = 0;
-                                }
-                            }
-
-                            if (angle_threshold_met) {
-                                if (dead_zone_in_use || was_dead_zone_in_use) {
-                                    log_message("Beginning slerp\n");
-                                    slerp_start_quat = dead_zone_quat;
-                                    slerp_end_quat = quat;
-                                    dead_zone_slerping = true;
-                                    slerp_start_timestamp_ms = timestamp_ms;
-                                }
-                                dead_zone_lower_threshold_counter = 0;
-                                dead_zone_lower_threshold_total_angle = 0;
-                                dead_zone_checkpoint_ms = timestamp_ms;
-                                dead_zone_quat = quat;
-                            } else if (!dead_zone_in_use && time_since_last_checkpoint_ms >= IMU_DEAD_ZONE_STABILITY_MS) {
-                                log_message("IMU output stable, locking orientation\n");
-                                dead_zone_in_use = true;
-                                dead_zone_lower_threshold_counter = 0;
-                                dead_zone_lower_threshold_total_angle = 0;
-                                dead_zone_checkpoint_ms = timestamp_ms;
-
-                                // when the lock starts, capture the latest quat so it doesn't suddenly jump
-                                dead_zone_quat = quat;
-                            }
-
-                            if (dead_zone_slerping) {
-                                uint32_t slerp_progress_ms = timestamp_ms - slerp_start_timestamp_ms;
-                                if (slerp_progress_ms >= dead_zone_slerp_ms) {
-                                    log_message("Slerp finished\n");
-                                    dead_zone_slerping = false;
-                                    dead_zone_quat = quat;
-                                    dead_zone_lower_threshold_counter = 0;
-                                    dead_zone_lower_threshold_total_angle = 0;
-                                    dead_zone_checkpoint_ms = timestamp_ms;
-                                } else {
-                                    float t = (float)slerp_progress_ms / (float)dead_zone_slerp_ms;
-                                    float dot = slerp_start_quat.x * quat.x + slerp_start_quat.y * quat.y + slerp_start_quat.z * quat.z + slerp_start_quat.w * quat.w;
-                                    if (dot < 0.0f) {
-                                        dot = -dot;
-                                        quat.x = -quat.x;
-                                        quat.y = -quat.y;
-                                        quat.z = -quat.z;
-                                        quat.w = -quat.w;
-                                    }
-                                    float theta_0 = acosf(dot);
-                                    float theta = theta_0 * t;
-                                    float sin_theta = sinf(theta);
-                                    float sin_theta_0 = sinf(theta_0);
-
-                                    float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
-                                    float s1 = sin_theta / sin_theta_0;
-
-                                    dead_zone_quat.x = (s0 * slerp_start_quat.x) + (s1 * quat.x);
-                                    dead_zone_quat.y = (s0 * slerp_start_quat.y) + (s1 * quat.y);
-                                    dead_zone_quat.z = (s0 * slerp_start_quat.z) + (s1 * quat.z);
-                                    dead_zone_quat.w = (s0 * slerp_start_quat.w) + (s1 * quat.w);
-                                }
+                            float angle_rad = quat_small_angle_rad(dead_zone_quat, current_quat);
+                            if (angle_rad >= dead_zone_threshold_rad) {
+                                dead_zone_quat = current_quat;
+                            } else {
+                                float alpha = dead_zone_slerp_alpha(angle_rad, dead_zone_threshold_rad, device->imu_cycles_per_s);
+                                dead_zone_quat = quat_slerp(dead_zone_quat, current_quat, alpha);
                             }
                         }
 
-                        if (dead_zone_in_use || dead_zone_slerping) {
-                            // Overwrite quaternions with locked orientation
-                            response->data[0] = dead_zone_quat.x;
-                            response->data[1] = dead_zone_quat.y;
-                            response->data[2] = dead_zone_quat.z;
-                            response->data[3] = dead_zone_quat.w;
-                            response->data[4] = dead_zone_quat.x;
-                            response->data[5] = dead_zone_quat.y;
-                            response->data[6] = dead_zone_quat.z;
-                            response->data[7] = dead_zone_quat.w;
-                            response->data[8] = dead_zone_quat.x;
-                            response->data[9] = dead_zone_quat.y;
-                            response->data[10] = dead_zone_quat.z;
-                            response->data[11] = dead_zone_quat.w;
-                            // timestamps left unchanged
-                        }
+                        // Overwrite quaternions with smoothed orientation (timestamps left unchanged).
+                        response->data[0] = dead_zone_quat.x;
+                        response->data[1] = dead_zone_quat.y;
+                        response->data[2] = dead_zone_quat.z;
+                        response->data[3] = dead_zone_quat.w;
+                        response->data[4] = dead_zone_quat.x;
+                        response->data[5] = dead_zone_quat.y;
+                        response->data[6] = dead_zone_quat.z;
+                        response->data[7] = dead_zone_quat.w;
+                        response->data[8] = dead_zone_quat.x;
+                        response->data[9] = dead_zone_quat.y;
+                        response->data[10] = dead_zone_quat.z;
+                        response->data[11] = dead_zone_quat.w;
                     }
 
                     pthread_mutex_lock(ipc_values->pose_orientation_mutex);
