@@ -404,7 +404,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, pose.orientation, (float)pose.timestamp_ms);
 
                 if (response && response->ready) {
-                    // Deadzone smoothing (WIP): below the configured threshold, slerp towards the new quat.
+                    // Deadzone smoothing: below the configured threshold, slerp towards the new quat.
                     // The closer the angle is to the threshold, the more aggressively we slerp (exponential curve).
                     // Past the threshold, we effectively "snap" (copy) to preserve responsiveness.
                     static bool dead_zone_initialized = false;
@@ -416,9 +416,6 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                         dead_zone_threshold_deg = config()->dead_zone_threshold_deg;
                         dead_zone_threshold_rad = degree_to_radian(dead_zone_threshold_deg);
                         dead_zone_initialized = false;
-
-                        log_message("dead zone updated: threshold %.2f deg (%.4f rad), curve k=%.1f, tau_slow=%.1fs\n",
-                                    dead_zone_threshold_deg, dead_zone_threshold_rad, 8.0f, 5.0f);
                     }
 
                     if (dead_zone_threshold_deg > 0.0f) {
