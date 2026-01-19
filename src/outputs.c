@@ -26,6 +26,8 @@
 
 #define MS_PER_SEC 1000
 #define IMU_CHECKPOINT_MS MS_PER_SEC / 4
+#define IMU_DEAD_ZONE_STABILITY_MS 500
+
 
 imu_buffer_type *imu_buffer;
 
@@ -46,6 +48,92 @@ const int mid_input = 0;
 const int min_input = -max_input;
 
 float joystick_max_degrees_per_s;
+
+static float clampf(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static imu_quat_type quat_slerp(imu_quat_type a, imu_quat_type b, float t) {
+    t = clampf(t, 0.0f, 1.0f);
+
+    float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    if (dot < 0.0f) {
+        dot = -dot;
+        b.x = -b.x;
+        b.y = -b.y;
+        b.z = -b.z;
+        b.w = -b.w;
+    }
+
+    // When the quaternions are very close, fall back to lerp to avoid numeric issues.
+    if (dot > 0.9995f) {
+        imu_quat_type out = {
+            .x = a.x + (b.x - a.x) * t,
+            .y = a.y + (b.y - a.y) * t,
+            .z = a.z + (b.z - a.z) * t,
+            .w = a.w + (b.w - a.w) * t,
+        };
+        float len = sqrtf(out.x * out.x + out.y * out.y + out.z * out.z + out.w * out.w);
+        if (len > 0.0f) {
+            out.x /= len;
+            out.y /= len;
+            out.z /= len;
+            out.w /= len;
+        }
+        return out;
+    }
+
+    dot = clampf(dot, -1.0f, 1.0f);
+    float theta_0 = acosf(dot);
+    float sin_theta_0 = sinf(theta_0);
+    if (sin_theta_0 <= 0.0f) {
+        return b;
+    }
+
+    float theta = theta_0 * t;
+    float sin_theta = sinf(theta);
+
+    float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
+    float s1 = sin_theta / sin_theta_0;
+
+    imu_quat_type out = {
+        .x = (s0 * a.x) + (s1 * b.x),
+        .y = (s0 * a.y) + (s1 * b.y),
+        .z = (s0 * a.z) + (s1 * b.z),
+        .w = (s0 * a.w) + (s1 * b.w),
+    };
+
+    return out;
+}
+
+static float dead_zone_exponential_curve(float ratio01) {
+    // Exponential curve with very low values near 0 and a smooth rise towards 1.
+    // ratio01 is expected in [0, 1].
+    const float k = 8.0f;
+    ratio01 = clampf(ratio01, 0.0f, 1.0f);
+
+    float e0 = expf(-k);
+    float e = expf(k * (ratio01 - 1.0f));
+    return (e - e0) / (1.0f - e0);
+}
+
+static float dead_zone_slerp_alpha(float angle_rad, float threshold_rad, int imu_cycles_per_s) {
+    if (threshold_rad <= 0.0f) return 1.0f;
+    if (imu_cycles_per_s <= 0) return 1.0f;
+
+    float ratio = clampf(angle_rad / threshold_rad, 0.0f, 1.0f);
+    float curve = dead_zone_exponential_curve(ratio);
+
+    // Floor the alpha so extremely small deltas still converge over a few seconds.
+    // Using a time constant keeps behavior stable across different IMU rates.
+    const float tau_slow_s = 5.0f;
+    float dt_s = 1.0f / (float)imu_cycles_per_s;
+    float alpha_min = 1.0f - expf(-dt_s / tau_slow_s);
+    float alpha = alpha_min + curve * (1.0f - alpha_min);
+    return clampf(alpha, 0.0f, 1.0f);
+}
 
 static int evdev_check(char * function, int i) {
     if (i < 0) {
@@ -316,11 +404,60 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 imu_buffer_response_type *response = push_to_imu_buffer(imu_buffer, pose.orientation, (float)pose.timestamp_ms);
 
                 if (response && response->ready) {
+                    // Deadzone smoothing: below the configured threshold, slerp towards the new quat.
+                    // The closer the angle is to the threshold, the more aggressively we slerp (exponential curve).
+                    // Past the threshold, we effectively "snap" (copy) to preserve responsiveness.
+                    static bool dead_zone_initialized = false;
+                    static imu_quat_type dead_zone_quat = {0};
+
+                    static float dead_zone_threshold_deg = 0.0f;
+                    static float dead_zone_threshold_rad = 0.0f;
+                    if (config()->dead_zone_threshold_deg != dead_zone_threshold_deg) {
+                        dead_zone_threshold_deg = config()->dead_zone_threshold_deg;
+                        dead_zone_threshold_rad = degree_to_radian(dead_zone_threshold_deg);
+                        dead_zone_initialized = false;
+                    }
+
+                    if (dead_zone_threshold_deg > 0.0f) {
+                        imu_quat_type current_quat = {
+                            .x = response->data[0],
+                            .y = response->data[1],
+                            .z = response->data[2],
+                            .w = response->data[3],
+                        };
+
+                        if (!dead_zone_initialized) {
+                            dead_zone_initialized = true;
+                            dead_zone_quat = current_quat;
+                        } else {
+                            float angle_rad = quat_small_angle_rad(dead_zone_quat, current_quat);
+                            if (angle_rad >= dead_zone_threshold_rad) {
+                                dead_zone_quat = current_quat;
+                            } else {
+                                float alpha = dead_zone_slerp_alpha(angle_rad, dead_zone_threshold_rad, device->imu_cycles_per_s);
+                                dead_zone_quat = quat_slerp(dead_zone_quat, current_quat, alpha);
+                            }
+                        }
+
+                        // Overwrite quaternions with smoothed orientation (timestamps left unchanged).
+                        response->data[0] = dead_zone_quat.x;
+                        response->data[1] = dead_zone_quat.y;
+                        response->data[2] = dead_zone_quat.z;
+                        response->data[3] = dead_zone_quat.w;
+                        response->data[4] = dead_zone_quat.x;
+                        response->data[5] = dead_zone_quat.y;
+                        response->data[6] = dead_zone_quat.z;
+                        response->data[7] = dead_zone_quat.w;
+                        response->data[8] = dead_zone_quat.x;
+                        response->data[9] = dead_zone_quat.y;
+                        response->data[10] = dead_zone_quat.z;
+                        response->data[11] = dead_zone_quat.w;
+                    }
+
                     pthread_mutex_lock(ipc_values->pose_orientation_mutex);
 
                     memcpy(ipc_values->pose_orientation, response->data, sizeof(float) * 16);
                     memcpy(ipc_values->pose_position, &pose.position, sizeof(float) * 3);
-
                     // trigger flush on just the last write
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_orientation", ipc_values->pose_orientation, 16, sizeof(float), false);
                     set_skippable_gamescope_reshade_effect_uniform_variable("pose_position", ipc_values->pose_position, 3, sizeof(float), true);
@@ -331,15 +468,22 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
             }
         }
 
-        // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
-        // maps to horizontal movements (x) and pitch maps to vertical (y) movements. Because the euler values use a NWU
-        // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
-        // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
-        // positive y.
-        int x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
-        int y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
-        int next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
-        int next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
+        int x_velocity;
+        int y_velocity;
+        int next_joystick_x;
+        int next_joystick_y;
+        bool do_joystick_debug = config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0;
+        if (uinput || do_joystick_debug) {
+            // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
+            // maps to horizontal movements (x) and pitch maps to vertical (y) movements. Because the euler values use a NWU
+            // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
+            // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
+            // positive y.
+            x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
+            y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
+            next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
+            next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
+        }
 
         if (uinput) {
             if (config()->joystick_mode) {
@@ -381,7 +525,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
         }
 
         // always use joystick debugging as it adds a helpful visual
-        if (config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0)
+        if (do_joystick_debug)
             joystick_debug(prev_joystick_x, prev_joystick_y, next_joystick_x, next_joystick_y);
 
         prev_joystick_x = next_joystick_x;

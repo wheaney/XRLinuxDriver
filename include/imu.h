@@ -66,3 +66,5 @@ static inline void imu_pose_sync_orientation_from_euler(imu_pose_type *p) {
 		p->orientation = euler_to_quaternion_zyx(p->euler);
 	}
 }
+
+float quat_small_angle_rad(imu_quat_type q1, imu_quat_type q2);
