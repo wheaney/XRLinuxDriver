@@ -26,8 +26,6 @@
 
 #define MS_PER_SEC 1000
 #define IMU_CHECKPOINT_MS MS_PER_SEC / 4
-#define IMU_DEAD_ZONE_STABILITY_MS 500
-
 
 imu_buffer_type *imu_buffer;
 
@@ -155,7 +153,7 @@ static float dead_zone_min_visible_angle_rad(const device_properties_type* devic
     float fov_h_rad = fov_v_rad * aspect;
 
     // Conservative: use the smaller angular size-per-pixel so that being sub-pixel in either axis is treated as invisible.
-    float rad_per_px_h = fov_h_rad / (float)device->resolution_w / config()->neck_saver;
+    float rad_per_px_h = fov_h_rad / (float)device->resolution_w;
     float rad_per_px_v = fov_v_rad / (float)device->resolution_h;
     float rad_per_px = fminf(rad_per_px_h, rad_per_px_v);
     if (!isfinite(rad_per_px) || rad_per_px <= 0.0f) return 0.0f;
