@@ -58,6 +58,12 @@ then
         if [ -n "$2" ]; then
             config_value="$2"
         fi
+    elif [ "$1" == "--deadzone-threshold-degrees" ] || [ "$1" == "-dz" ]; then
+        config_key="dead_zone_threshold_deg"
+        config_type="string"
+        if [ -n "$2" ]; then
+            config_value="$2"
+        fi
     elif [ "$1" == "--debug" ]; then
         config_key="debug"
         config_type="string"
@@ -257,6 +263,7 @@ Options:
   -invy, --vr-lite-invert-y-enable
   -invyd, --vr-lite-invert-y-disable
   -ms, --mouse-sensitivity [sensitivity_value]
+  -dz, --deadzone-threshold-degrees [threshold_degrees]
   -mte, --multi-tap-enable
   -mtd, --multi-tap-disable
   -ds, --display-size [display_size]
