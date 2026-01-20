@@ -35,6 +35,11 @@ static int last_imu_checkpoint_ms = 0;
 static imu_quat_type last_imu_checkpoint_quat = {.x = 0.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};
 static uint64_t last_healthy_imu_timestamp_ms = 0;
 
+// Cached perceptual threshold for when tiny orientation changes become effectively invisible.
+// Reset on output deinit/reinit.
+static float dead_zone_cached_device_visible_angle_rad = -1.0f;
+static float dead_zone_cached_threshold_visible_angle_rad = -1.0f;
+
 static pthread_mutex_t outputs_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct libevdev* evdev;
 struct libevdev_uinput* uinput;
@@ -105,6 +110,14 @@ static imu_quat_type quat_slerp(imu_quat_type a, imu_quat_type b, float t) {
         .w = (s0 * a.w) + (s1 * b.w),
     };
 
+    float len = sqrtf(out.x * out.x + out.y * out.y + out.z * out.z + out.w * out.w);
+    if (len > 0.0f) {
+        out.x /= len;
+        out.y /= len;
+        out.z /= len;
+        out.w /= len;
+    }
+
     return out;
 }
 
@@ -120,9 +133,6 @@ static float dead_zone_exponential_curve(float ratio01) {
 }
 
 static float dead_zone_slerp_alpha(float angle_rad, float threshold_rad, int imu_cycles_per_s) {
-    if (threshold_rad <= 0.0f) return 1.0f;
-    if (imu_cycles_per_s <= 0) return 1.0f;
-
     float ratio = clampf(angle_rad / threshold_rad, 0.0f, 1.0f);
     float curve = dead_zone_exponential_curve(ratio);
 
@@ -133,6 +143,60 @@ static float dead_zone_slerp_alpha(float angle_rad, float threshold_rad, int imu
     float alpha_min = 1.0f - expf(-dt_s / tau_slow_s);
     float alpha = alpha_min + curve * (1.0f - alpha_min);
     return clampf(alpha, 0.0f, 1.0f);
+}
+
+static float dead_zone_min_visible_angle_rad(const device_properties_type* device) {
+    if (!device) return -1.0f;
+
+    // Convert the device's diagonal FOV into horizontal/vertical FOV using the display aspect ratio.
+    float aspect = (float)device->resolution_w / (float)device->resolution_h;
+    float diag_to_vert_ratio = sqrtf((aspect * aspect) + 1.0f);
+    float fov_v_rad = degree_to_radian(device->fov / diag_to_vert_ratio);
+    float fov_h_rad = fov_v_rad * aspect;
+
+    // Conservative: use the smaller angular size-per-pixel so that being sub-pixel in either axis is treated as invisible.
+    float rad_per_px_h = fov_h_rad / (float)device->resolution_w / config()->neck_saver;
+    float rad_per_px_v = fov_v_rad / (float)device->resolution_h;
+    float rad_per_px = fminf(rad_per_px_h, rad_per_px_v);
+    if (!isfinite(rad_per_px) || rad_per_px <= 0.0f) return 0.0f;
+
+    return rad_per_px;
+}
+
+// Given a desired angle change, find what initial angle would produce it
+static float inverse_angle_for_change(float desired_change_rad, float threshold_rad, int imu_cycles_per_s) {
+    if (desired_change_rad <= 0.0f) {
+        return 0.0f;
+    }
+    
+    // Use bisection search
+    float angle_low = 0.0f;
+    float angle_high = fmaxf(threshold_rad * 2.0f, desired_change_rad * 2.0f);
+    
+    const int max_iterations = 20;
+    const float tolerance = 1e-6f;
+    
+    for (int i = 0; i < max_iterations; i++) {
+        float angle_mid = (angle_low + angle_high) * 0.5f;
+        
+        // Compute what change this angle would produce
+        float alpha = dead_zone_slerp_alpha(angle_mid, threshold_rad, imu_cycles_per_s);
+        float cos_theta = cosf(angle_mid);
+        float theta_new = acosf(cos_theta + alpha * (1.0f - cos_theta));
+        float actual_change = angle_mid - theta_new;
+        
+        if (fabsf(actual_change - desired_change_rad) < tolerance) {
+            return angle_mid;
+        }
+        
+        if (actual_change < desired_change_rad) {
+            angle_low = angle_mid;
+        } else {
+            angle_high = angle_mid;
+        }
+    }
+    
+    return (angle_low + angle_high) * 0.5f;
 }
 
 static int evdev_check(char * function, int i) {
@@ -266,6 +330,12 @@ static void _init_outputs() {
     joystick_debug_imu_cycles = device == NULL ? 6 : ceil(100.0 * device->imu_cycles_per_s / 1000.0); // update joystick debug file roughly every 100 ms
     joystick_max_degrees_per_s = 360.0 / 4;
     float joystick_max_radians_per_s = joystick_max_degrees_per_s * M_PI / 180.0;
+
+    dead_zone_cached_device_visible_angle_rad = device ? dead_zone_min_visible_angle_rad(device) : -1.0f;
+    if (dead_zone_cached_device_visible_angle_rad > 0.0f && isfinite(dead_zone_cached_device_visible_angle_rad)) {
+        if (config()->debug_device) log_debug("dead_zone device visible angle: %.9f rad\n", dead_zone_cached_device_visible_angle_rad);
+    }
+    dead_zone_cached_threshold_visible_angle_rad = -1.0f;
     device_checkin(device);
 
     evdev = libevdev_new();
@@ -313,6 +383,8 @@ static void _init_outputs() {
 
 static void _deinit_outputs() {
     last_imu_checkpoint_ms = 0;
+    dead_zone_cached_device_visible_angle_rad = -1.0f;
+    dead_zone_cached_threshold_visible_angle_rad = -1.0f;
     if (uinput) {
         libevdev_uinput_destroy(uinput);
         uinput = NULL;
@@ -416,9 +488,22 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                         dead_zone_threshold_deg = config()->dead_zone_threshold_deg;
                         dead_zone_threshold_rad = degree_to_radian(dead_zone_threshold_deg);
                         dead_zone_initialized = false;
+                        dead_zone_cached_threshold_visible_angle_rad = -1.0f;
                     }
 
                     if (dead_zone_threshold_deg > 0.0f) {
+                        if (dead_zone_cached_threshold_visible_angle_rad < 0.0f && dead_zone_cached_device_visible_angle_rad > 0.0f) {
+                            // this is the minimum angle needed to produce a visible change when factoring in the lerp logic,
+                            // anything smaller than this should just be ignored
+                            dead_zone_cached_threshold_visible_angle_rad = inverse_angle_for_change(
+                                dead_zone_cached_device_visible_angle_rad,
+                                dead_zone_threshold_rad,
+                                device->imu_cycles_per_s
+                            );
+                            if (dead_zone_cached_threshold_visible_angle_rad > 0.0f && isfinite(dead_zone_cached_threshold_visible_angle_rad)) {
+                                if (config()->debug_device) log_debug("dead_zone threshold visible angle: %.9f rad\n", dead_zone_cached_threshold_visible_angle_rad);
+                            }
+                        }
                         imu_quat_type current_quat = {
                             .x = response->data[0],
                             .y = response->data[1],
@@ -434,8 +519,14 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                             if (angle_rad >= dead_zone_threshold_rad) {
                                 dead_zone_quat = current_quat;
                             } else {
-                                float alpha = dead_zone_slerp_alpha(angle_rad, dead_zone_threshold_rad, device->imu_cycles_per_s);
-                                dead_zone_quat = quat_slerp(dead_zone_quat, current_quat, alpha);
+                                if (dead_zone_cached_threshold_visible_angle_rad < 0.0f || angle_rad >= dead_zone_cached_threshold_visible_angle_rad) {
+                                    float alpha = dead_zone_slerp_alpha(angle_rad, dead_zone_threshold_rad, device->imu_cycles_per_s);
+                                    if (!isfinite(alpha) || alpha <= 0.0f) {
+                                        dead_zone_quat = current_quat;
+                                    } else {
+                                        dead_zone_quat = quat_slerp(dead_zone_quat, current_quat, alpha);
+                                    }
+                                }
                             }
                         }
 

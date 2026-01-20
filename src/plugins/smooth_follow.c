@@ -273,6 +273,12 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
         target = multiply_quaternions(origin_pose->orientation, euler_to_quaternion_zyx(target_euler));
     }
 
+    if (a < 0.0f) a = 0.0f;
+    if (a > 1.0f) a = 1.0f;
+
+    from = normalize_quaternion(from);
+    target = normalize_quaternion(target);
+
     float cosTheta = from.w * target.w + from.x * target.x + from.y * target.y + from.z * target.z;
     if (cosTheta < 0) {
         imu_quat_type tmp = {
@@ -284,7 +290,9 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
         target = tmp;
         cosTheta = -cosTheta;
     }
-    float half_angle = acos(cosTheta);
+    if (cosTheta > 1.0f) cosTheta = 1.0f;
+    if (cosTheta < -1.0f) cosTheta = -1.0f;
+    float half_angle = acosf(cosTheta);
     follow_state_type next_state = next_state_for_angle(radian_to_degree(2 * half_angle));
     if (next_state == FOLLOW_STATE_SLERPING || next_state == FOLLOW_STATE_INIT) {
         // our return-to-angle gives us a margin around the center of the target, and we want to stop when
@@ -296,15 +304,25 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
         float target_half_angle = degree_to_radian(sf_params->return_to_angle * 0.95) / 2.0;
 
         // how much of the current angle is the target angle, 100% means we're already at the desired return-to-angle
-        float target_percent = target_half_angle / half_angle;
+        float target_percent = half_angle > 0.0f ? (target_half_angle / half_angle) : 1.0f;
 
         // half of the remaining angle to the target
         half_angle -= target_half_angle;
 
         float a_compliment = 1 - a;
-        float sin_of_angle = sin(half_angle);
-        float from_weight = percent_adjust(sin(a_compliment * half_angle) / sin_of_angle, target_percent, false);
-        float target_weight = percent_adjust(sin(a * half_angle) / sin_of_angle, target_percent, true);
+        float sin_of_angle = sinf(half_angle);
+        if (fabsf(sin_of_angle) <= 1e-6f) {
+            imu_quat_type result = {
+                .w = (1.0f - a) * from.w + a * target.w,
+                .x = (1.0f - a) * from.x + a * target.x,
+                .y = (1.0f - a) * from.y + a * target.y,
+                .z = (1.0f - a) * from.z + a * target.z
+            };
+            return normalize_quaternion(result);
+        }
+
+        float from_weight = percent_adjust(sinf(a_compliment * half_angle) / sin_of_angle, target_percent, false);
+        float target_weight = percent_adjust(sinf(a * half_angle) / sin_of_angle, target_percent, true);
         imu_quat_type result = {
             .w = from_weight * from.w + target_weight * target.w,
             .x = from_weight * from.x + target_weight * target.x,
@@ -312,7 +330,7 @@ imu_quat_type slerp(imu_quat_type from, imu_quat_type to, float a) {
             .z = from_weight * from.z + target_weight * target.z
         };
 
-        return result;
+        return normalize_quaternion(result);
     }
 
     return from;

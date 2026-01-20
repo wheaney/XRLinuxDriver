@@ -22,7 +22,11 @@ float radian_to_degree(float rad) {
 }
 
 imu_quat_type normalize_quaternion(imu_quat_type q) {
-    float magnitude = sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z);
+    float magnitude = sqrtf(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z);
+    if (!isfinite(magnitude) || magnitude <= 0.0f) {
+        imu_quat_type identity = { .w = 1.0f, .x = 0.0f, .y = 0.0f, .z = 0.0f };
+        return identity;
+    }
     q.w /= magnitude;
     q.x /= magnitude;
     q.y /= magnitude;
@@ -248,7 +252,8 @@ imu_vec3_type vector_rotate(imu_vec3_type v, imu_quat_type q) {
 }
 
 float quat_small_angle_rad(imu_quat_type q1, imu_quat_type q2) {
-    float dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
-    if (dot > 1.0f) dot = 1.0f; else if (dot < -1.0f) dot = -1.0f;
-    return 2.0f * acosf(fabsf(dot));
+    imu_quat_type q_rel = multiply_quaternions(conjugate(q1), q2);
+    float v_norm = sqrtf(q_rel.x * q_rel.x + q_rel.y * q_rel.y + q_rel.z * q_rel.z);
+    float w_abs = fabsf(q_rel.w);
+    return 2.0f * atan2f(v_norm, w_abs);
 }
