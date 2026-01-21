@@ -19,6 +19,7 @@ typedef void (*start_func)();
 typedef bool (*setup_ipc_func)();
 typedef void (*handle_ipc_change_func)();
 typedef bool (*modify_reference_pose_func)(imu_pose_type pose, imu_pose_type* ref_pose);
+typedef void (*handle_reference_pose_updated_func)(imu_pose_type old_reference_pose, imu_pose_type new_reference_pose);
 typedef void (*modify_pose_func)(imu_pose_type* pose);
 typedef void (*handle_pose_data_func)(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values);
 typedef void (*reset_pose_data_func)();
@@ -40,6 +41,7 @@ struct plugin_t {
     setup_ipc_func setup_ipc;
     handle_ipc_change_func handle_ipc_change;
     modify_reference_pose_func modify_reference_pose;
+    handle_reference_pose_updated_func handle_reference_pose_updated;
     modify_pose_func modify_pose;
     handle_pose_data_func handle_pose_data;
     reset_pose_data_func reset_pose_data;

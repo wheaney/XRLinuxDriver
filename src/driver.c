@@ -90,6 +90,8 @@ void driver_handle_pose_event(imu_pose_type pose) {
                 if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected.\n");
                 log_message("Centering screen\n");
 
+                imu_pose_type old_reference_pose = reference_pose;
+
                 if (pose.has_orientation) {
                     reference_pose.orientation = pose.orientation;
                     reference_pose.has_orientation = true;
@@ -111,6 +113,8 @@ void driver_handle_pose_event(imu_pose_type pose) {
                 
                 captured_reference_pose = true;
                 control_flags->recenter_screen = false;
+
+                plugins.handle_reference_pose_updated(old_reference_pose, reference_pose);
             } else {
                 imu_pose_type current_pose = pose;
                 if (current_pose.has_orientation) current_pose.euler = quaternion_to_euler_zyx(current_pose.orientation);

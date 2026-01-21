@@ -111,6 +111,13 @@ bool all_plugins_modify_reference_pose_func(imu_pose_type pose, imu_pose_type* r
     return modified;
 }
 
+void all_plugins_handle_reference_pose_updated_func(imu_pose_type old_reference_pose, imu_pose_type new_reference_pose) {
+    for (int i = 0; i < PLUGIN_COUNT; i++) {
+        if (all_plugins[i]->handle_reference_pose_updated == NULL) continue;
+        all_plugins[i]->handle_reference_pose_updated(old_reference_pose, new_reference_pose);
+    }
+}
+
 void all_plugins_modify_pose_func(imu_pose_type* pose) {
     for (int i = 0; i < PLUGIN_COUNT; i++) {
         if (all_plugins[i]->modify_pose == NULL) continue;
@@ -160,6 +167,7 @@ const plugin_type plugins = {
     .setup_ipc = all_plugins_setup_ipc_func,
     .handle_ipc_change = all_plugins_handle_ipc_change_func,
     .modify_reference_pose = all_plugins_modify_reference_pose_func,
+    .handle_reference_pose_updated = all_plugins_handle_reference_pose_updated_func,
     .modify_pose = all_plugins_modify_pose_func,
     .handle_pose_data = all_plugins_handle_pose_data_func,
     .reset_pose_data = all_plugins_reset_pose_data_func,

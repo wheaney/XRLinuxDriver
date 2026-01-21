@@ -366,8 +366,6 @@ bool smooth_follow_modify_reference_pose_func(imu_pose_type pose, imu_pose_type*
             imu_vec3_type pose_local = vector_rotate(pose.position, inv_pose_orientation);
             imu_vec3_type ref_local = vector_rotate(ref_pose->position, inv_pose_orientation);
             float delta_forward = pose_local.x - ref_local.x;
-            log_message("Smooth follow clamp (forward): delta=%.4f, half_meter=%.4f\n",
-                        delta_forward, half_meter_units);
 
             // always follow in the up/down/left/right axes
             ref_local.y = pose_local.y;
@@ -493,6 +491,21 @@ static void handle_device_disconnect() {
     state()->smooth_follow_origin_ready = false;
 }
 
+static void smooth_follow_handle_reference_pose_updated_func(imu_pose_type old_reference_pose, imu_pose_type new_reference_pose) {
+    (void)old_reference_pose;
+
+    if (!origin_pose) return;
+
+    origin_pose->orientation = new_reference_pose.orientation;
+    origin_pose->position = new_reference_pose.position;
+    origin_pose->has_orientation = new_reference_pose.has_orientation;
+    origin_pose->has_position = new_reference_pose.has_position;
+
+    follow_state = FOLLOW_STATE_NONE;
+    follow_wait_time_start_ms = -1;
+    start_snap_back_timestamp_ms = -1;
+}
+
 const plugin_type smooth_follow_plugin = {
     .id = "smooth_follow",
     .default_config = smooth_follow_default_config_func,
@@ -502,6 +515,7 @@ const plugin_type smooth_follow_plugin = {
     .handle_state = smooth_follow_handle_state_func,
     .handle_ipc_change = update_smooth_follow_params,
     .modify_reference_pose = smooth_follow_modify_reference_pose_func,
+    .handle_reference_pose_updated = smooth_follow_handle_reference_pose_updated_func,
     .handle_device_connect = update_smooth_follow_params,
     .handle_device_disconnect = handle_device_disconnect
 };
