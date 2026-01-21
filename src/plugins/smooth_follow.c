@@ -354,11 +354,35 @@ bool smooth_follow_modify_reference_pose_func(imu_pose_type pose, imu_pose_type*
     uint32_t elapsed_ms = pose.timestamp_ms - last_timestamp_ms;
     last_timestamp_ms = pose.timestamp_ms;
 
-    // always keep position centered for smooth follow
-    // TODO - would be pretty easy to slerp this towards center
-    ref_pose->position = pose.position;
-
     if (origin_pose) {
+        // allow 6DoF some freedom to move around in the forward/back direction within a half-meter
+        float full_distance_cm = state()->connected_device_full_distance_cm;
+        if (full_distance_cm > 0.0f && state()->connected_device_pose_has_position) {
+            float half_meter_units = 50.0f / full_distance_cm;
+            
+            // transiently rotate into the current pose frame so we clamp along "forward"
+            // instead of a fixed world axis, then rotate back.
+            imu_quat_type inv_pose_orientation = conjugate(pose.orientation);
+            imu_vec3_type pose_local = vector_rotate(pose.position, inv_pose_orientation);
+            imu_vec3_type ref_local = vector_rotate(ref_pose->position, inv_pose_orientation);
+            float delta_forward = pose_local.x - ref_local.x;
+            log_message("Smooth follow clamp (forward): delta=%.4f, half_meter=%.4f\n",
+                        delta_forward, half_meter_units);
+
+            // always follow in the up/down/left/right axes
+            ref_local.y = pose_local.y;
+            ref_local.z = pose_local.z;
+
+            // forward axes has freedom to move around unless it's more than a half-meter away
+            if (fabsf(delta_forward) >= half_meter_units) {
+                float scale = half_meter_units / fabsf(delta_forward);
+                ref_local.x = pose_local.x - delta_forward * scale;
+            }
+            ref_pose->position = vector_rotate(ref_local, pose.orientation);
+        } else {
+            ref_pose->position = pose.position;
+        }
+
         if (!smooth_follow_imu_buffer) {
             device_properties_type* device = device_checkout();
             if (device != NULL) smooth_follow_imu_buffer = create_imu_buffer(device->imu_buffer_size);
