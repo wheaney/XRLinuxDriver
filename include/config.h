@@ -16,6 +16,7 @@ struct driver_config_t {
     bool multi_tap_enabled;
     bool metrics_disabled;
     float dead_zone_threshold_deg;
+    float viture_position_deadzone_cm;
 
     bool debug_threads;
     bool debug_joystick;

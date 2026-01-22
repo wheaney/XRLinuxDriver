@@ -53,6 +53,14 @@
 #define VITURE_FLOAT_EXACT_MS_LIMIT 16777216.0 // 2^24, largest consecutive int in float
 #define VITURE_FLOAT_RESET_MARGIN_MS 1000.0 // avoid running right at the precision edge
 
+// VITURE Carina position can be jittery while orientation is solid.
+// Apply an outputs.c-style dead-zone filter: large moves snap, small moves converge slowly,
+// and extremely tiny jitter is ignored.
+// All distance thresholds are derived from config()->viture_position_deadzone_cm.
+#define VITURE_POSITION_MIN_VISIBLE_RATIO 0.10f
+#define VITURE_POSITION_SPIKE_RESET_RATIO 15.0f
+#define VITURE_POSITION_TAU_SLOW_S 5.0f
+
 #define VITURE_LOG_LEVEL_NONE 0
 #define VITURE_LOG_LEVEL_ERROR 1
 #define VITURE_LOG_LEVEL_INFO 2
@@ -206,6 +214,13 @@ static int viture_saved_display_mode = -1;
 static int viture_saved_dof = -1;
 static int viture_callback_logs_remaining = 10;
 
+static bool viture_position_filter_initialized = false;
+static imu_vec3_type last_viture_position = {0};
+
+static float viture_position_threshold_units = 0.0f;
+static float viture_position_min_visible_units = 0.0f;
+static float viture_position_spike_reset_units = 0.0f;
+
 static const int viture_frequency_hz[VITURE_IMU_FREQ_COUNT] = {60, 90, 120, 240, 500};
 
 static const char* viture_open_imu_error_reason(int code) {
@@ -352,6 +367,95 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
     driver_handle_pose_event(pose);
 }
 
+static inline float viture_clampf(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static float viture_dead_zone_exponential_curve(float ratio01) {
+    // Match outputs.c shape: very low near 0, smooth rise towards 1.
+    const float k = 8.0f;
+    ratio01 = viture_clampf(ratio01, 0.0f, 1.0f);
+
+    float e0 = expf(-k);
+    float e = expf(k * (ratio01 - 1.0f));
+    return (e - e0) / (1.0f - e0);
+}
+
+static float viture_dead_zone_lerp_alpha(float distance_units, float threshold_units, int cycles_per_s) {
+    float ratio = viture_clampf(distance_units / threshold_units, 0.0f, 1.0f);
+    float curve = viture_dead_zone_exponential_curve(ratio);
+
+    // Floor alpha so small deltas still converge over a few seconds.
+    float dt_s = 1.0f / (float)cycles_per_s;
+    float alpha_min = 1.0f - expf(-dt_s / VITURE_POSITION_TAU_SLOW_S);
+    float alpha = alpha_min + curve * (1.0f - alpha_min);
+    return viture_clampf(alpha, 0.0f, 1.0f);
+}
+
+static float viture_position_dead_zone_cm = 0.0f;
+static void viture_position_units_configure(float full_distance_cm) {
+    viture_position_dead_zone_cm = config()->viture_position_deadzone_cm;
+
+    viture_position_threshold_units = viture_position_dead_zone_cm / full_distance_cm;
+    viture_position_min_visible_units = (viture_position_dead_zone_cm * VITURE_POSITION_MIN_VISIBLE_RATIO) / full_distance_cm;
+    viture_position_spike_reset_units = (viture_position_dead_zone_cm * VITURE_POSITION_SPIKE_RESET_RATIO) / full_distance_cm;
+}
+
+static imu_vec3_type viture_filter_position_dead_zone(imu_vec3_type raw_position, float full_distance_cm) {
+    if (viture_position_dead_zone_cm != config()->viture_position_deadzone_cm) {
+        viture_position_units_configure(full_distance_cm);
+    }
+
+    if (viture_position_dead_zone_cm <= 0.0f) {
+        return raw_position;
+    }
+    
+    const float threshold_units = viture_position_threshold_units;
+    const float min_visible_units = viture_position_min_visible_units;
+    const float spike_reset_units = viture_position_spike_reset_units;
+
+    if (!viture_position_filter_initialized) {
+        last_viture_position = raw_position;
+        viture_position_filter_initialized = true;
+        return last_viture_position;
+    }
+
+    float dx = raw_position.x - last_viture_position.x;
+    float dy = raw_position.y - last_viture_position.y;
+    float dz = raw_position.z - last_viture_position.z;
+
+    // Treat large discontinuities (tracking relocalization, bad frame) as a reset.
+    if (fabsf(dx) > spike_reset_units || fabsf(dy) > spike_reset_units || fabsf(dz) > spike_reset_units) {
+        last_viture_position = raw_position;
+        return last_viture_position;
+    }
+
+    float distance = sqrtf(dx * dx + dy * dy + dz * dz);
+
+    // Snap to preserve responsiveness when the move is meaningfully large.
+    if (distance >= threshold_units) {
+        last_viture_position = raw_position;
+        return last_viture_position;
+    }
+
+    // Ignore extremely tiny jitter entirely.
+    if (distance < min_visible_units) {
+        return last_viture_position;
+    }
+
+    float alpha = viture_dead_zone_lerp_alpha(distance, threshold_units, VITURE_CARINA_CYCLES_PER_S);
+    if (!isfinite(alpha) || alpha <= 0.0f) {
+        return last_viture_position;
+    }
+
+    last_viture_position.x += dx * alpha;
+    last_viture_position.y += dy * alpha;
+    last_viture_position.z += dz * alpha;
+    return last_viture_position;
+}
+
 static void viture_legacy_pose_callback(float* pose, uint64_t ts) {
     if (!connected || driver_disabled() || pose == NULL) return;
 
@@ -379,6 +483,8 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
                 .y = -pose[0] * meters_to_full_distance_ratio,
                 .z = pose[1] * meters_to_full_distance_ratio
             };
+
+            position = viture_filter_position_dead_zone(position, full_distance_cm);
 
             if (initial_timestamp < 0.0) initial_timestamp = timestamp;
 
@@ -631,6 +737,9 @@ static void viture_update_device_properties(device_properties_type* device) {
     if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
         cycles_per_s = VITURE_CARINA_CYCLES_PER_S;
         provides_position = true;
+
+        float full_distance_cm = LENS_TO_PIVOT_CM / device->lens_distance_ratio;
+        viture_position_units_configure(full_distance_cm);
     } else {
         cycles_per_s = viture_frequency_hz[viture_requested_frequency];
     }
@@ -650,6 +759,12 @@ static void disconnect(bool soft) {
     pthread_mutex_lock(&viture_connection_mutex);
     viture_stop_stream_locked();
     viture_shutdown_provider_locked();
+
+    viture_position_filter_initialized = false;
+    last_viture_position = (imu_vec3_type){0};
+    viture_position_threshold_units = 0.0f;
+    viture_position_min_visible_units = 0.0f;
+    viture_position_spike_reset_units = 0.0f;
     pthread_mutex_unlock(&viture_connection_mutex);
 }
 

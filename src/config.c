@@ -32,6 +32,7 @@ driver_config_type *default_config() {
     config->multi_tap_enabled = false;
     config->metrics_disabled = false;
     config->dead_zone_threshold_deg = 0.0f;
+    config->viture_position_deadzone_cm = 0.0f;
 
     config->debug_threads = false;
     config->debug_joystick = false;
@@ -132,6 +133,8 @@ driver_config_type* parse_config_file(FILE *fp) {
             boolean_config(key, value, &config->metrics_disabled);
         } else if (equal(key, "dead_zone_threshold_deg")) {
             float_config(key, value, &config->dead_zone_threshold_deg);
+        } else if (equal(key, "viture_position_deadzone_cm")) {
+            float_config(key, value, &config->viture_position_deadzone_cm);
         }
 
         plugins.handle_config_line(plugin_configs, key, value);

@@ -369,6 +369,9 @@ void update_config_from_file(FILE *fp) {
     if (config()->dead_zone_threshold_deg != new_config->dead_zone_threshold_deg)
         log_message("IMU dead zone threshold has been changed to %.2f degrees\n", new_config->dead_zone_threshold_deg);
 
+    if (config()->viture_position_deadzone_cm != new_config->viture_position_deadzone_cm)
+        log_message("VITURE position dead zone has been changed to %.2f cm\n", new_config->viture_position_deadzone_cm);
+
     update_config(config(), new_config);
 
     if (config()->disabled && is_driver_connected()) {
