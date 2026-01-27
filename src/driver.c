@@ -472,8 +472,9 @@ void *monitor_config_file_thread_func(void *arg) {
 void *manage_state_thread_func(void *arg) {
     while (!force_quit) {
         device_properties_type* device = device_checkout();
+        device_properties_type* supplemental_device = connection_pool_supplemental_device();
         const device_driver_type* primary_drv_in_loop = connection_pool_primary_driver();
-        update_state_from_device(state(), device, (device_driver_type*)primary_drv_in_loop);
+        update_state_from_device(state(), device, supplemental_device, (device_driver_type*)primary_drv_in_loop);
         device_checkin(device);
         write_state(state());
         plugins.handle_state();
@@ -613,7 +614,8 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
     }
 
     const device_driver_type* primary_drv = connection_pool_primary_driver();
-    update_state_from_device(state(), new_primary, (device_driver_type*)primary_drv);
+    device_properties_type* supplemental_device = connection_pool_supplemental_device();
+    update_state_from_device(state(), new_primary, supplemental_device, (device_driver_type*)primary_drv);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {

@@ -97,7 +97,7 @@ void read_control_flags(FILE *fp, control_flags_type *flags) {
     }
 }
 
-void update_state_from_device(driver_state_type *state, device_properties_type *device, device_driver_type *device_driver) {
+void update_state_from_device(driver_state_type *state, device_properties_type *primary_device, device_properties_type *supplemental_device, device_driver_type *device_driver) {
     pthread_mutex_lock(&state_mutex);
 
     bool was_sbs_mode_enabled = state->sbs_mode_enabled;
@@ -108,33 +108,33 @@ void update_state_from_device(driver_state_type *state, device_properties_type *
     state->sbs_mode_supported = false;
     state->sbs_mode_enabled = false;
     state->firmware_update_recommended = false;
-    if (device == NULL) {
+    if (primary_device == NULL) {
         // not connected
         free_and_clear(&state->connected_device_brand);
         free_and_clear(&state->connected_device_model);
     } else {
         state->sbs_mode_enabled = false;
-        if (device->sbs_mode_supported && device_driver != NULL && device_driver->is_connected_func()) {
+        if (primary_device->sbs_mode_supported && device_driver != NULL && device_driver->is_connected_func()) {
             state->sbs_mode_enabled = device_driver->device_is_sbs_mode_func();
         }
-        state->firmware_update_recommended = device->firmware_update_recommended;
-        if (state->connected_device_brand == NULL || !equal(state->connected_device_brand, device->brand)) {
+        state->firmware_update_recommended = primary_device->firmware_update_recommended;
+        if (state->connected_device_brand == NULL || !equal(state->connected_device_brand, primary_device->brand)) {
             free_and_clear(&state->connected_device_brand);
-            state->connected_device_brand = strdup(device->brand);
+            state->connected_device_brand = strdup(primary_device->brand);
         }
-        if (state->connected_device_model == NULL || !equal(state->connected_device_model, device->model)) {
+        if (state->connected_device_model == NULL || !equal(state->connected_device_model, primary_device->model)) {
             free_and_clear(&state->connected_device_model);
-            state->connected_device_model = strdup(device->model);
+            state->connected_device_model = strdup(primary_device->model);
         }
 
         // Rough estimate of display parameters based on lens distance ratio and FOV
-        float full_distance_cm = LENS_TO_PIVOT_CM / device->lens_distance_ratio;
+        float full_distance_cm = LENS_TO_PIVOT_CM / primary_device->lens_distance_ratio;
         state->connected_device_full_distance_cm = full_distance_cm;
-        state->connected_device_full_size_cm = 2.0f * full_distance_cm * tanf(degree_to_radian(device->fov) * 0.5f);
-        state->connected_device_pose_has_position = device->provides_position;
+        state->connected_device_full_size_cm = 2.0f * full_distance_cm * tanf(degree_to_radian(primary_device->fov) * 0.5f);
+        state->connected_device_pose_has_position = primary_device->provides_position || (supplemental_device != NULL && supplemental_device->provides_position);
 
-        state->calibration_setup = device->calibration_setup;
-        state->sbs_mode_supported = device->sbs_mode_supported;
+        state->calibration_setup = primary_device->calibration_setup;
+        state->sbs_mode_supported = primary_device->sbs_mode_supported;
     }
 
     if (was_sbs_mode_enabled != state->sbs_mode_enabled) {

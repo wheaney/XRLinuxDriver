@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.6.9 LANGUAGES C)
+project(xrDriver VERSION 2.7.0 LANGUAGES C)
 
 # Emit compile_commands.json for IDEs (VS Code IntelliSense)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

@@ -63,45 +63,6 @@ static connection_t* find_driver_connection_locked(const char* driver_id) {
     return idx >= 0 ? pool->list[idx] : NULL;
 }
 
-void connection_pool_handle_device_added(const device_driver_type* driver, device_properties_type* device) {
-    if (config()->debug_connections) log_debug("connection_pool_handle_device_added for driver %s\n", driver->id);
-
-    pthread_mutex_lock(&pool->mutex);
-    if (device && find_hid_connection_locked(device->hid_vendor_id, device->hid_product_id)) {
-        if (config()->debug_connections) {
-            log_debug(
-                "connection_pool_handle_device_added: ignoring duplicate HID device for driver %s (0x%04x:0x%04x)\n",
-                driver ? driver->id : "(null)",
-                (unsigned int)device->hid_vendor_id,
-                (unsigned int)device->hid_product_id);
-        }
-        free(device);
-        pthread_mutex_unlock(&pool->mutex);
-        return;
-    }
-
-    ensure_capacity(pool);
-    connection_t* c = (connection_t*)calloc(1, sizeof(*c));
-    c->driver = driver;
-    c->device = device; // take ownership
-    c->supplemental = device->can_be_supplemental;
-    c->active = false;
-    pool->list[pool->count++] = c;
-
-    // If no primary selected yet, pick one
-    if (pool->primary_index == -1) {
-        pool->primary_index = pick_primary_index(pool);
-        if (config()->debug_connections) log_debug("connection_pool_handle_device_added picked primary %d\n", pool->primary_index);
-    }
-    // If possible, choose a supplemental distinct from primary
-    if (pool->supplemental_index == -1) {
-        pool->supplemental_index = pick_supplemental_index(pool);
-        if (config()->debug_connections) log_debug("connection_pool_handle_device_added picked supplemental %d\n", pool->supplemental_index);
-    }
-
-    pthread_mutex_unlock(&pool->mutex);
-}
-
 static connection_t* primary() {
     if (pool->primary_index < 0 || pool->primary_index >= pool->count) return NULL;
     return pool->list[pool->primary_index];
@@ -172,7 +133,7 @@ bool connection_pool_connect_active() {
 
     bool pr_ok = false;
     if (p) pr_ok = p->driver->device_connect_func();
-    if (s) (void)s->driver->device_connect_func();
+    if (pr_ok && s) (void)s->driver->device_connect_func();
     return pr_ok;
 }
 
@@ -185,7 +146,7 @@ void connection_pool_block_on_active() {
     connection_pool_start_connection_thread(p);
 
     connection_t* s = supplemental();
-    connection_pool_start_connection_thread(s);
+    if (s && s->driver->is_connected_func()) connection_pool_start_connection_thread(s);
 
     pthread_mutex_unlock(&pool->mutex);
 
@@ -213,6 +174,14 @@ device_properties_type* connection_pool_primary_device() {
     return d;
 }
 
+device_properties_type* connection_pool_supplemental_device() {
+    pthread_mutex_lock(&pool->mutex);
+    connection_t* s = supplemental();
+    device_properties_type* d = s ? s->device : NULL;
+    pthread_mutex_unlock(&pool->mutex);
+    return d;
+}
+
 const device_driver_type* connection_pool_primary_driver() {
     pthread_mutex_lock(&pool->mutex);
     connection_t* p = primary();
@@ -221,7 +190,63 @@ const device_driver_type* connection_pool_primary_driver() {
     return d;
 }
 
+static bool supplemental_position_ready = false;
 static imu_pose_type last_supplemental_pose = {0};
+static imu_quat_type supplemental_reference_orientation_conj = {0};
+void connection_pool_handle_device_added(const device_driver_type* driver, device_properties_type* device) {
+    if (config()->debug_connections) log_debug("connection_pool_handle_device_added for driver %s, has_orientation %s, has_position %s\n", driver->id, device->provides_orientation ? "true" : "false", device->provides_position ? "true" : "false");
+
+    pthread_mutex_lock(&pool->mutex);
+    if (device && find_hid_connection_locked(device->hid_vendor_id, device->hid_product_id)) {
+        if (config()->debug_connections) {
+            log_debug(
+                "connection_pool_handle_device_added: ignoring duplicate HID device for driver %s (0x%04x:0x%04x)\n",
+                driver ? driver->id : "(null)",
+                (unsigned int)device->hid_vendor_id,
+                (unsigned int)device->hid_product_id);
+        }
+        free(device);
+        pthread_mutex_unlock(&pool->mutex);
+        return;
+    }
+
+    ensure_capacity(pool);
+    connection_t* c = (connection_t*)calloc(1, sizeof(*c));
+    c->driver = driver;
+    c->device = device;
+    c->supplemental = device->can_be_supplemental;
+    c->active = false;
+    pool->list[pool->count++] = c;
+
+    // If no primary selected yet, pick one
+    if (pool->primary_index == -1) {
+        pool->primary_index = pick_primary_index(pool);
+        if (config()->debug_connections) log_debug("connection_pool_handle_device_added picked primary %d\n", pool->primary_index);
+    }
+
+    // If possible, choose a supplemental distinct from primary
+    if (pool->supplemental_index == -1) {
+        pool->supplemental_index = pick_supplemental_index(pool);
+        if (config()->debug_connections) log_debug("connection_pool_handle_device_added picked supplemental %d\n", pool->supplemental_index);
+
+        connection_t* p = primary();
+        connection_t* s = supplemental();
+        if (p && s) {
+            last_supplemental_pose = (imu_pose_type){0};
+            bool blocked_on_active = p->active && p->thread_running;
+            if (blocked_on_active) {
+                // supplemental added and primary already connected and blocking.
+                // start supplemental connection thread now.
+                bool connected = s && s->driver->is_connected_func();
+                if (!connected && s) connected = s->driver->device_connect_func();
+                if (connected) connection_pool_start_connection_thread(s);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&pool->mutex);
+}
+
 void connection_pool_handle_device_removed(const char* driver_id) {
     if (config()->debug_connections) log_debug("connection_pool_handle_device_removed for driver %s\n", driver_id);
 
@@ -248,7 +273,8 @@ void connection_pool_handle_device_removed(const char* driver_id) {
         }
     }
 
-    if (supplemental_removed) {
+    if (primary_removed || supplemental_removed) {
+        supplemental_position_ready = false;
         last_supplemental_pose = (imu_pose_type){0};
     }
 
@@ -267,7 +293,9 @@ void connection_pool_handle_device_removed(const char* driver_id) {
         bool supplemental_changed = supplemental_removed && pool->supplemental_index != -1;
         if (blocked_on_active && !primary_removed && supplemental_changed) {
             connection_t* s = supplemental();
-            connection_pool_start_connection_thread(s);
+            bool connected = s && s->driver->is_connected_func();
+            if (!connected && s) connected = s->driver->device_connect_func();  
+            if (connected) connection_pool_start_connection_thread(s);
         }
         if (config()->debug_connections) log_debug("connection_pool_handle_device_removed picked supplemental %d\n", pool->supplemental_index);
     }
@@ -277,10 +305,23 @@ void connection_pool_handle_device_removed(const char* driver_id) {
 
 void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
     connection_t* s = supplemental();
-    if (s && strcmp(s->driver->id, driver_id) == 0) {
-        // don't forward supplemental poses directly; store the last one for fusion
-        last_supplemental_pose = pose;
-        return;
+    if (s) {
+        bool pose_from_supplemental = strcmp(s->driver->id, driver_id) == 0;
+        if (pose_from_supplemental) {
+            // don't forward supplemental poses directly,
+            // store the latest one to be forwarded with the next primary pose
+            if (supplemental_position_ready && pose.has_position) {
+                // reorient supplemental position into primary reference frame
+                pose.position = vector_rotate(pose.position, supplemental_reference_orientation_conj);
+            }
+            last_supplemental_pose = pose;
+            return;
+        } else if (!supplemental_position_ready && pose.has_orientation) {
+            // capture the first primary orientation after a supplemental device is connected
+            // so we can reorient supplemental position data into the primary frame
+            supplemental_position_ready = true;
+            supplemental_reference_orientation_conj = pose.orientation;
+        }
     }
 
     // use the data from the supplemental pose to fill in any gaps in the primary pose
@@ -288,7 +329,7 @@ void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
         pose.orientation = last_supplemental_pose.orientation;
         pose.has_orientation = true;
     }
-    if (!pose.has_position && s && last_supplemental_pose.has_position) {
+    if (!pose.has_position && s && last_supplemental_pose.has_position && supplemental_position_ready) {
         pose.position = last_supplemental_pose.position;
         pose.has_position = true;
     }
