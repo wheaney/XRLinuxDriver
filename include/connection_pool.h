@@ -53,6 +53,7 @@ bool connection_pool_connect_active();
 
 // Get the current primary device properties (borrowed; do not free). Returns NULL if none.
 device_properties_type* connection_pool_primary_device();
+device_properties_type* connection_pool_supplemental_device();
 
 // Get the primary driver pointer (borrowed; do not free). Returns NULL if none.
 const device_driver_type* connection_pool_primary_driver();
