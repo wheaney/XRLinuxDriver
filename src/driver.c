@@ -589,12 +589,11 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
         if (config()->debug_device) log_debug("device added for driver %s\n", device_info->driver->id);
         connection_pool_handle_device_added(device_info->driver, device_info->device);
         captured_reference_pose = false;
-        free(device_info);
-    } else if (!is_added) {
+    } else {
         if (config()->debug_device) log_debug("device removed for driver %s\n", device_info->driver->id);
         connection_pool_handle_device_removed(device_info->driver->id);
-        free(device_info);
     }
+    free(device_info);
 
     // Reflect the pool's current primary in the runtime context
     device_properties_type* new_primary = connection_pool_primary_device();

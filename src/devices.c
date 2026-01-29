@@ -94,6 +94,7 @@ void init_devices() {
         log_error("Failed to register hotplug callback\n");
     }
 
+    // TODO - we should find and register all connected devices
     connected_device_type* connected_device = find_connected_device();
     if (connected_device != NULL) {
         handle_device_connection_changed(true, connected_device);
