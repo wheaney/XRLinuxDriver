@@ -28,261 +28,376 @@ if [ -z "$XDG_STATE_HOME" ]; then
 fi
 LOG_FILE="$XDG_STATE_HOME/xr_driver/driver.log"
 
-if [ -n "$1" ]
-then
-    config_file="$CONFIG_DIR/config.ini"
-    config_value=""
-    if [ "$1" == "--disable" ] || [ "$1" == "-d" ]; then
-        config_key="disabled"
-        config_value="true"
-    elif [ "$1" == "--enable" ] || [ "$1" == "-e" ]; then
-        config_key="disabled"
-        config_value="false"
-    elif [ "$1" == "--status" ] || [ "$1" == "-s" ]; then
-        config_key="disabled"
-    elif [ "$1" == "--vr-lite-invert-x-enable" ] || [ "$1" == "-invx" ]; then
-        config_key="vr_lite_invert_x"
-        config_value="true"
-    elif [ "$1" == "--vr-lite-invert-x-disable" ] || [ "$1" == "-invxd" ]; then
-        config_key="vr_lite_invert_x"
-        config_value="false"
-    elif [ "$1" == "--vr-lite-invert-y-enable" ] || [ "$1" == "-invy" ]; then
-        config_key="vr_lite_invert_y"
-        config_value="true"
-    elif [ "$1" == "--vr-lite-invert-y-disable" ] || [ "$1" == "-invyd" ]; then
-        config_key="vr_lite_invert_y"
-        config_value="false"
-    elif [ "$1" == "--mouse-sensitivity" ] || [ "$1" == "-ms" ]; then
-        config_key="mouse_sensitivity"
-        config_type="string"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
-    elif [ "$1" == "--deadzone-threshold-degrees" ] || [ "$1" == "-dz" ]; then
-        config_key="dead_zone_threshold_deg"
-        config_type="string"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
-    elif [ "$1" == "--debug" ]; then
-        config_key="debug"
-        config_type="string"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
-    elif [ "$1" == "--use-joystick" ] || [ "$1" == "-j" ]; then
-        config_type="string"
-        config_key="output_mode"
-        config_value="joystick"
-        config_key2="external_mode"
-        config_value2="none"
-    elif [ "$1" == "--use-mouse" ] || [ "$1" == "-m" ]; then
-        config_type="string"
-        config_key="output_mode"
-        config_value="mouse"
-        config_key2="external_mode"
-        config_value2="none"
-    elif [ "$1" == "--display-size" ] || [ "$1" == "-ds" ]; then
-        config_type="string"
-        config_key="display_size"
-        config_value="$2"
-    elif [ "$1" == "--display-distance" ] || [ "$1" == "-dd" ]; then
-        config_type="string"
-        config_key="display_distance"
-        config_value="$2"
-    elif [ "$1" == "--external-mode" ] || [ "$1" == "-em" ]; then
-        config_type="string"
-        config_key="external_mode"
-    elif [ "$1" == "--disable-external" ] || [ "$1" == "-de" ]; then
-        config_type="string"
-        config_key="external_mode"
-        config_value="none"
-    elif [ "$1" == "--virtual-display" ] || [ "$1" == "-vd" ]; then
-        config_type="string"
-        config_key="output_mode"
-        config_value="external_only"
-        config_key2="external_mode"
-        config_value2="virtual_display"
-    elif [ "$1" == "--breezy-desktop" ] || [ "$1" == "-bd" ]; then
-        config_type="string"
-        config_key="output_mode"
-        config_value="external_only"
-        config_key2="external_mode"
-        config_value2="breezy_desktop"
-    elif [ "$1" == "--sideview" ] || [ "$1" == "-sv" ]; then
-        config_type="string"
-        config_key="output_mode"
-        config_value="external_only"
-        config_key2="external_mode"
-        config_value2="sideview"
-    elif [ "$1" == "--sbs-mode-stretched" ] || [ "$1" == "-sbsms" ]; then
-        config_type="string"
-        config_key="sbs_mode_stretched"
-        config_value="${2:-true}"
-    elif [ "$1" == "--sbs-content-3d" ] || [ "$1" == "-sbs3d" ]; then
-        config_type="string"
-        config_key="sbs_content"
-        config_value="${2:-true}"
-    elif [ "$1" == "--sideview-position" ] || [ "$1" == "-svp" ]; then
-        config_type="string"
-        config_key="sideview_position"
-        config_value="$2"
-    elif [ "$1" == "--smooth-follow-enable" ] || [ "$1" == "-sfe" ]; then
-        config_key="sideview_smooth_follow_enabled"
-        config_value="true"
-    elif [ "$1" == "--smooth-follow-disable" ] || [ "$1" == "-sfd" ]; then
-        config_key="sideview_smooth_follow_enabled"
-        config_value="false"
-    elif [ "$1" == "--multi-tap-enable" ] || [ "$1" == "-mte" ]; then
-        config_key="multi_tap_enabled"
-        config_value="true"
-    elif [ "$1" == "--multi-tap-disable" ] || [ "$1" == "-mtd" ]; then
-        config_key="multi_tap_enabled"
-        config_value="false"
-    elif [ "$1" == "--smooth-follow-threshold" ] || [ "$1" == "-sft" ]; then
-        config_key="sideview_follow_threshold"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
-    elif [ "$1" == "--neck-saver-horizontal" ] || [ "$1" == "-nsh" ]; then
-        config_type="string"
-        config_key="neck_saver_horizontal_multiplier"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
-    elif [ "$1" == "--neck-saver-vertical" ] || [ "$1" == "-nsv" ]; then
-        config_type="string"
-        config_key="neck_saver_vertical_multiplier"
-        if [ -n "$2" ]; then
-            config_value="$2"
-        fi
-    elif [ "$1" == "--disable-metrics" ] || [ "$1" == "-dm" ]; then
-        config_key="metrics_disabled"
-        config_value="true"
-    elif [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ] || [ "$1" == "--get-hardware-id" ]; then
-        config_type="string"
-        config_key="hardware_id"
-        config_file="/dev/shm/xr_driver_state"
-    elif [ "$1" == "--view-log" ] || [ "$1" == "-l" ]; then
-        less +F "$LOG_FILE"
+ensure_config_file() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        touch "$file"
+    fi
+}
+
+write_config_value() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    if grep -q "^$key=" "$file"; then
+        sed -i "s/^$key=.*/$key=$value/" "$file"
+    else
+        echo "$key=$value" >> "$file"
+    fi
+}
+
+read_config_value() {
+    local file="$1"
+    local key="$2"
+    local type="$3"
+    local value
+    if [ "$type" == "string" ]; then
+        value="Not set"
+    else
+        value="enabled"
     fi
 
-    if [[ -n $config_key ]]; then
-        if [ ! -f "$config_file" ]; then
-            touch "$config_file"
+    while read -r line; do
+        if [[ $line == "$key="* ]]; then
+            local raw_value=${line#*=}
+            if [ "$type" == "string" ]; then
+                value=$raw_value
+            else
+                if [ "$raw_value" == "true" ]; then
+                    value="disabled"
+                fi
+            fi
+            break
         fi
+    done < "$file"
 
-        # non-empty config_value implies write/update, empty implies read (report status)
-        if [[ -n $config_value ]]; then
-            # Check if the key already exists in the config file
-            if grep -q "^$config_key=" "$config_file"; then
-                # Replace the existing key/value pair
-                sed -i "s/^$config_key=.*/$config_key=$config_value/" "$config_file"
-            else
-                # Add the new key/value pair to the end of the file
-                echo "$config_key=$config_value" >> "$config_file"
-            fi
-            if [[ -n $config_key2 ]]; then
-                if grep -q "^$config_key2=" "$config_file"; then
-                    sed -i "s/^$config_key2=.*/$config_key2=$config_value2/" "$config_file"
-                else
-                    echo "$config_key2=$config_value2" >> "$config_file"
-                fi
-            fi
-        else
-            if [ "$config_type" == "string" ]; then
-              value="Not set"
-            else
-              value="enabled"
-            fi
+    echo "$value"
+}
 
-            while read -r line; do
-                if [[ $line == "$config_key="* ]]; then
-                    config_value=${line#*=}
-                    if [ "$config_type" == "string" ]; then
-                      value=$config_value
-                    else
-                      # Check if the value is "true"
-                      if [ "$config_value" == "true" ]; then
-                          value="disabled"
-                      fi
-                    fi
+process_config() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    local type="$4"
+    local key2="$5"
+    local value2="$6"
+    local token_action="$7"
+    local token_arg="$8"
 
-                    break
-                fi
-            done < "$config_file"
+    ensure_config_file "$file"
 
-            if [ "$1" == "--request-token" ] || [ "$1" == "--verify-token" ] || [ "$1" == "--refresh-license" ]; then
-                hardware_id=$value
-                url="https://eu.driver-backend.xronlinux.com/tokens/v1"
-
-                if [[ "$1" == "--request-token" || "$1" == "--verify-token" ]] && ! command -v jq >/dev/null 2>&1; then
-                    echo "Error: jq utility not found. Install jq to use this feature." >&2
-                    exit 1
-                fi
-
-                if [ "$1" == "--request-token" ]; then
-                    postbody=$(jq -n \
-                                --arg hardwareId "$hardware_id" \
-                                --arg email "$2" \
-                                '{hardwareId: $hardwareId, email: $email}')
-                    message=$(curl -s -X POST -H "Content-Type: application/json" -d "$postbody" "$url" | jq -r '.message')
-                elif [ "$1" == "--verify-token" ]; then
-                    postbody=$(jq -n \
-                                --arg hardwareId "$hardware_id" \
-                                --arg token "$2" \
-                                '{hardwareId: $hardwareId, token: $token}')
-                    message=$(curl -s -X PUT -H "Content-Type: application/json" -d "$postbody" "$url" | jq -r '.message')
-                elif [ "$1" == "--refresh-license" ]; then
-                    echo "refresh_device_license=true" > /dev/shm/xr_driver_control
-                    message="License refresh requested"
-                fi
-
-                if [ -n "$message" ]; then
-                    echo "$message"
-                fi
-            else
-                echo "$value"
-            fi
+    if [[ -n $value ]]; then
+        write_config_value "$file" "$key" "$value"
+        if [[ -n $key2 ]]; then
+            write_config_value "$file" "$key2" "$value2"
         fi
-
-        exit 0
+        return 0
     fi
+
+    local read_value
+    read_value=$(read_config_value "$file" "$key" "$type")
+
+    if [[ -n $token_action ]]; then
+        local hardware_id="$read_value"
+        local url="https://eu.driver-backend.xronlinux.com/tokens/v1"
+        local message=""
+
+        if [[ "$token_action" == "request" || "$token_action" == "verify" ]] && ! command -v jq >/dev/null 2>&1; then
+            echo "Error: jq utility not found. Install jq to use this feature." >&2
+            exit 1
+        fi
+
+        if [ "$token_action" == "request" ]; then
+            postbody=$(jq -n \
+                                    --arg hardwareId "$hardware_id" \
+                                    --arg email "$token_arg" \
+                                    '{hardwareId: $hardwareId, email: $email}')
+            message=$(curl -s -X POST -H "Content-Type: application/json" -d "$postbody" "$url" | jq -r '.message')
+        elif [ "$token_action" == "verify" ]; then
+            postbody=$(jq -n \
+                                    --arg hardwareId "$hardware_id" \
+                                    --arg token "$token_arg" \
+                                    '{hardwareId: $hardwareId, token: $token}')
+            message=$(curl -s -X PUT -H "Content-Type: application/json" -d "$postbody" "$url" | jq -r '.message')
+        elif [ "$token_action" == "refresh" ]; then
+            echo "refresh_device_license=true" > /dev/shm/xr_driver_control
+            message="License refresh requested"
+        elif [ "$token_action" == "get" ]; then
+            message="$hardware_id"
+        fi
+
+        if [ -n "$message" ]; then
+            echo "$message"
+        fi
+    else
+        echo "$read_value"
+    fi
+}
+
+require_arg() {
+    local opt="$1"
+    local arg="$2"
+    if [ -z "$arg" ] || [ "$arg" == "--" ]; then
+        echo "Error: $opt requires an argument." >&2
+        exit 1
+    fi
+}
+
+print_usage() {
+    echo "Usage: $0 [options]
+Options:
+    -h, --help
+    -l, --view-log
+    -d, --disable
+    -e, --enable
+    -s, --status
+    -j, --use-joystick
+    -m, --use-mouse
+    --vr-lite-invert-x, --no-vr-lite-invert-x
+    --vr-lite-invert-y, --no-vr-lite-invert-y
+    -ms, --mouse-sensitivity [sensitivity_value]
+    -dz, --deadzone-threshold-degrees [threshold_degrees]
+    --multi-tap, --no-multi-tap
+    -ds, --display-size [display_size]
+    -dd, --display-distance [display_distance]
+    -em, --external-mode
+    -de, --disable-external
+    -vd, --virtual-display
+    -bd, --breezy-desktop
+    -sv, --sideview
+    -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
+    --smooth-follow, --no-smooth-follow
+    -sft, --smooth-follow-threshold [threshold_value]
+    -sbsms, --sbs-mode-stretched, --no-sbs-mode-stretched
+    -sbs3d, --sbs-content-3d, --no-sbs-content-3d
+    -nsh, --neck-saver-horizontal [multiplier]
+    -nsv, --neck-saver-vertical [multiplier]
+    --metrics, --no-metrics
+    --request-token [email]
+    --verify-token [token]
+    --refresh-license
+    --get-hardware-id"
+}
+
+if [ $# -eq 0 ]; then
+    print_usage
+    exit 0
 fi
 
-echo "Usage: $0 [options]
-Options:
-  -l, --view-log
-  -d, --disable
-  -e, --enable
-  -s, --status
-  -j, --use-joystick
-  -m, --use-mouse
-  -invx, --vr-lite-invert-x-enable
-  -invxd, --vr-lite-invert-x-disable
-  -invy, --vr-lite-invert-y-enable
-  -invyd, --vr-lite-invert-y-disable
-  -ms, --mouse-sensitivity [sensitivity_value]
-  -dz, --deadzone-threshold-degrees [threshold_degrees]
-  -mte, --multi-tap-enable
-  -mtd, --multi-tap-disable
-  -ds, --display-size [display_size]
-  -dd, --display-distance [display_distance]
-  -em, --external-mode
-  -de, --disable-external
-  -vd, --virtual-display
-  -bd, --breezy-desktop
-  -sv, --sideview
-  -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
-  -sfe, --smooth-follow-enable
-  -sfd, --smooth-follow-disable
-  -sft, --smooth-follow-threshold [threshold_value]
-  -sbsms, --sbs-mode-stretched [true|false]
-  -sbs3d, --sbs-content-3d [true|false]
-  -nsh, --neck-saver-horizontal [multiplier]
-  -nsv, --neck-saver-vertical [multiplier]
-  -dm, --disable-metrics
-  --request-token [email]
-  --verify-token [token]
-  --refresh-license
-  --get-hardware-id"
+if [ -n "$1" ]; then
+    if ! command -v getopt >/dev/null 2>&1; then
+        echo "Error: getopt utility not found. Install getopt to use this CLI." >&2
+        exit 1
+    fi
+
+    normalized_args=()
+    for arg in "$@"; do
+        case "$arg" in
+            -ms) normalized_args+=("--mouse-sensitivity") ;;
+            -dz) normalized_args+=("--deadzone-threshold-degrees") ;;
+            -ds) normalized_args+=("--display-size") ;;
+            -dd) normalized_args+=("--display-distance") ;;
+            -em) normalized_args+=("--external-mode") ;;
+            -de) normalized_args+=("--disable-external") ;;
+            -vd) normalized_args+=("--virtual-display") ;;
+            -bd) normalized_args+=("--breezy-desktop") ;;
+            -sv) normalized_args+=("--sideview") ;;
+            -svp) normalized_args+=("--sideview-position") ;;
+            -sft) normalized_args+=("--smooth-follow-threshold") ;;
+            -sbsms) normalized_args+=("--sbs-mode-stretched") ;;
+            -sbs3d) normalized_args+=("--sbs-content-3d") ;;
+            -nsh) normalized_args+=("--neck-saver-horizontal") ;;
+            -nsv) normalized_args+=("--neck-saver-vertical") ;;
+            *) normalized_args+=("$arg") ;;
+        esac
+    done
+
+    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,vr-lite-invert-x,no-vr-lite-invert-x,vr-lite-invert-y,no-vr-lite-invert-y,mouse-sensitivity:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,neck-saver-horizontal:,neck-saver-vertical:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+
+    eval set -- "$PARSED"
+
+    default_config_file="$CONFIG_DIR/config.ini"
+    state_config_file="/dev/shm/xr_driver_state"
+
+    while true; do
+        case "$1" in
+            -h|--help)
+                print_usage
+                exit 0
+                ;;
+            -l|--view-log)
+                less +F "$LOG_FILE"
+                exit 0
+                ;;
+            -d|--disable)
+                process_config "$default_config_file" "disabled" "true"
+                shift
+                ;;
+            -e|--enable)
+                process_config "$default_config_file" "disabled" "false"
+                shift
+                ;;
+            -s|--status)
+                process_config "$default_config_file" "disabled" "" ""
+                shift
+                ;;
+            -j|--use-joystick)
+                process_config "$default_config_file" "output_mode" "joystick" "string" "external_mode" "none"
+                shift
+                ;;
+            -m|--use-mouse)
+                process_config "$default_config_file" "output_mode" "mouse" "string" "external_mode" "none"
+                shift
+                ;;
+            --vr-lite-invert-x)
+                process_config "$default_config_file" "vr_lite_invert_x" "true"
+                shift
+                ;;
+            --no-vr-lite-invert-x)
+                process_config "$default_config_file" "vr_lite_invert_x" "false"
+                shift
+                ;;
+            --vr-lite-invert-y)
+                process_config "$default_config_file" "vr_lite_invert_y" "true"
+                shift
+                ;;
+            --no-vr-lite-invert-y)
+                process_config "$default_config_file" "vr_lite_invert_y" "false"
+                shift
+                ;;
+            --mouse-sensitivity)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "mouse_sensitivity" "$2" "string"
+                shift 2
+                ;;
+            --deadzone-threshold-degrees)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "dead_zone_threshold_deg" "$2" "string"
+                shift 2
+                ;;
+            --debug)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "debug" "$2" "string"
+                shift 2
+                ;;
+            --display-size)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "display_size" "$2" "string"
+                shift 2
+                ;;
+            --display-distance)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "display_distance" "$2" "string"
+                shift 2
+                ;;
+            --external-mode)
+                process_config "$default_config_file" "external_mode" "" "string"
+                shift
+                ;;
+            --disable-external)
+                process_config "$default_config_file" "external_mode" "none" "string"
+                shift
+                ;;
+            --virtual-display)
+                process_config "$default_config_file" "output_mode" "external_only" "string" "external_mode" "virtual_display"
+                shift
+                ;;
+            --breezy-desktop)
+                process_config "$default_config_file" "output_mode" "external_only" "string" "external_mode" "breezy_desktop"
+                shift
+                ;;
+            --sideview)
+                process_config "$default_config_file" "output_mode" "external_only" "string" "external_mode" "sideview"
+                shift
+                ;;
+            --sideview-position)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "sideview_position" "$2" "string"
+                shift 2
+                ;;
+            --smooth-follow)
+                process_config "$default_config_file" "sideview_smooth_follow_enabled" "true"
+                shift
+                ;;
+            --no-smooth-follow)
+                process_config "$default_config_file" "sideview_smooth_follow_enabled" "false"
+                shift
+                ;;
+            --smooth-follow-threshold)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "sideview_follow_threshold" "$2" "string"
+                shift 2
+                ;;
+            --sbs-mode-stretched)
+                process_config "$default_config_file" "sbs_mode_stretched" "true" "string"
+                shift
+                ;;
+            --no-sbs-mode-stretched)
+                process_config "$default_config_file" "sbs_mode_stretched" "false" "string"
+                shift
+                ;;
+            --sbs-content-3d)
+                process_config "$default_config_file" "sbs_content" "true" "string"
+                shift
+                ;;
+            --no-sbs-content-3d)
+                process_config "$default_config_file" "sbs_content" "false" "string"
+                shift
+                ;;
+            --neck-saver-horizontal)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "neck_saver_horizontal_multiplier" "$2" "string"
+                shift 2
+                ;;
+            --neck-saver-vertical)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "neck_saver_vertical_multiplier" "$2" "string"
+                shift 2
+                ;;
+            --multi-tap)
+                process_config "$default_config_file" "multi_tap_enabled" "true"
+                shift
+                ;;
+            --no-multi-tap)
+                process_config "$default_config_file" "multi_tap_enabled" "false"
+                shift
+                ;;
+            --metrics)
+                process_config "$default_config_file" "metrics_disabled" "false"
+                shift
+                ;;
+            --no-metrics)
+                process_config "$default_config_file" "metrics_disabled" "true"
+                shift
+                ;;
+            --request-token)
+                require_arg "$1" "$2"
+                process_config "$state_config_file" "hardware_id" "" "string" "" "" "request" "$2"
+                shift 2
+                ;;
+            --verify-token)
+                require_arg "$1" "$2"
+                process_config "$state_config_file" "hardware_id" "" "string" "" "" "verify" "$2"
+                shift 2
+                ;;
+            --refresh-license)
+                process_config "$state_config_file" "hardware_id" "" "string" "" "" "refresh"
+                shift
+                ;;
+            --get-hardware-id)
+                process_config "$state_config_file" "hardware_id" "" "string" "" "" "get"
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+fi
