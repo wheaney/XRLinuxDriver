@@ -30,7 +30,6 @@
 // converts yaw/pitch/roll (degrees) to a quaternion, and feeds the driver loop.
 
 static opentrack_listener_config *ot_cfg = NULL;
-static void opentrack_start_func();
 
 // Socket state
 static int udp_fd = -1;
@@ -298,42 +297,21 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
     }
 }
 
-static void opentrack_set_config_func(void *new_config) {
-    opentrack_listener_config *new_cfg = (opentrack_listener_config *)new_config;
-    if (!new_cfg) return;
-
-    bool first = (ot_cfg == NULL);
-    bool was_enabled = ot_cfg && ot_cfg->enabled;
-
-    if (!first) {
-        if (was_enabled != new_cfg->enabled)
-            log_message("OpenTrack listener has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
-        free(ot_cfg->ip);
-        free(ot_cfg);
-    }
-    ot_cfg = new_cfg;
-
-    opentrack_start_func();
-    update_feedback_guard();
-}
-
-#define OT_DEVICE_CONNECTED_TIMEOUT_MS 500
+#define OT_UDP_TIMEOUT_MS 500
+static const struct timeval OT_SELECT_TIMEOUT = {
+    .tv_sec = 0,
+    .tv_usec = OT_UDP_TIMEOUT_MS * 1000
+};
 static void* opentrack_listener_thread_func(void* arg) {
     (void)arg;
     uint8_t buf[6 * sizeof(double) + sizeof(uint32_t)];
-    while (ot_cfg && ot_cfg->enabled && udp_fd != -1) {
+    while (!driver_disabled() && ot_cfg && ot_cfg->enabled && udp_fd != -1) {
         fd_set rfds; FD_ZERO(&rfds); FD_SET(udp_fd, &rfds);
-        struct timeval tv; struct timeval *tvp = NULL;
-        if (connected) {
-            // for an active connection, use a timeout to detect disconnect
-            tv.tv_sec = 0;
-            tv.tv_usec = OT_DEVICE_CONNECTED_TIMEOUT_MS * 1000;
-            tvp = &tv;
-        }
-        int sel = select(udp_fd + 1, &rfds, NULL, NULL, tvp);
+        struct timeval tv = OT_SELECT_TIMEOUT;
+        int sel = select(udp_fd + 1, &rfds, NULL, NULL, &tv);
         if (sel == 0) {
             // timed out
-            listener_device_disconnect();
+            if (connected) listener_device_disconnect();
             continue;
         } else if (sel < 0) {
             if (errno == EINTR) continue;
@@ -439,6 +417,25 @@ static void opentrack_start_func() {
         listener_running = true;
         pthread_create(&listener_thread, NULL, opentrack_listener_thread_func, NULL);
     }
+}
+
+static void opentrack_set_config_func(void *new_config) {
+    opentrack_listener_config *new_cfg = (opentrack_listener_config *)new_config;
+    if (!new_cfg) return;
+
+    bool first = (ot_cfg == NULL);
+    bool was_enabled = ot_cfg && ot_cfg->enabled;
+
+    if (!first) {
+        if (was_enabled != new_cfg->enabled)
+            log_message("OpenTrack listener has been %s\n", new_cfg->enabled ? "enabled" : "disabled");
+        free(ot_cfg->ip);
+        free(ot_cfg);
+    }
+    ot_cfg = new_cfg;
+
+    opentrack_start_func();
+    update_feedback_guard();
 }
 
 static void opentrack_handle_device_disconnect_func() {
