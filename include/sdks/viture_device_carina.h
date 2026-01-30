@@ -14,9 +14,11 @@
 #include "viture_glasses_provider.h"
 
 /**
- * @brief Callback invoked when a new pose sample is available.
+ * @brief Callback invoked when a new pose sample is available, This function
+ * returns pose data at the Camera's frequency (25 Hz). In most cases, this
+ * interface can be ignored.
  *
- * @param pose      Array of 7 floats: position (x,y,z) and quaternion (w,x,y,z).
+ * @param pose      Array of 32 float pose data.
  * @param timestamp Monotonic timestamp in seconds.
  */
 typedef void (*XRPoseCallback)(float* pose, double timestamp);
@@ -31,7 +33,7 @@ typedef void (*XRVSyncCallback)(double timestamp);
 /**
  * @brief IMU data callback for Carina device.
  *
- * @param imu       Pointer to IMU buffer (device-defined layout).
+ * @param imu       IMU data: [ax, ay, az, gx, gy, gz].
  * @param timestamp Timestamp in seconds for the IMU sample.
  */
 typedef void (*XRImuCallback)(float* imu, double timestamp);
@@ -72,35 +74,29 @@ extern "C" {
  * @param camera_callback Callback for stereo camera frames.
  * @return 0 on success, -1 on failure.
  */
-VITURE_API int register_callbacks_carina(XRDeviceProviderHandle handle,
-                                         XRPoseCallback pose_callback,
-                                         XRVSyncCallback vsync_callback,
-                                         XRImuCallback imu_callback,
-                                         XRCameraCallback camera_callback);
+VITURE_API int xr_device_provider_register_callbacks_carina(XRDeviceProviderHandle handle,
+                                                            XRPoseCallback pose_callback,
+                                                            XRVSyncCallback vsync_callback,
+                                                            XRImuCallback imu_callback,
+                                                            XRCameraCallback camera_callback);
 
 /**
  * @brief Reset position
  * @param handle Handle to the XRDeviceProvider instance
  * @return 0 on success, -1 on failure
  */
-VITURE_API int reset_pose_carina(XRDeviceProviderHandle handle);
+VITURE_API int xr_device_provider_reset_pose_carina(XRDeviceProviderHandle handle);
 
 /**
  * @brief Get IMU pose data with prediction time (Twb matrix in OpenGL coordinate system: x -> right, y -> up, z -> backward)
  * @param handle Handle to the XRDeviceProvider instance
  * @param pose Array to store pose data (7 floats for position and quaternion)
  * @param predict_time Prediction time in nanoseconds, 0 for current pose data
+ * @param pose_status Store pose status, 0 is good, 1 is bad. Can be null.
  * @return 0 on success, -1 on failure
  */
-VITURE_API int get_gl_pose_carina(XRDeviceProviderHandle handle, float* pose, double predict_time);
-
-/**
- * Toggle glasses status report
- * @param handle Handle to the XRDeviceProvider instance
- * @param toggle Enable / disable
- * @return 0 on success
- */
-VITURE_API int toggle_status_report_carina(XRDeviceProviderHandle handle, bool toggle);
+VITURE_API int xr_device_provider_get_gl_pose_carina(XRDeviceProviderHandle handle,
+                                                     float *pose, double predict_time, int *pose_status);
 
 #ifdef __cplusplus
 }

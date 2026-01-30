@@ -10,6 +10,7 @@
 #include "sdks/viture_device.h"
 #include "sdks/viture_device_carina.h"
 #include "sdks/viture_glasses_provider.h"
+#include "sdks/viture_protocol_public.h"
 #include "strings.h"
 
 #include <math.h>
@@ -367,8 +368,9 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
     device_properties_type* device = device_checkout();
     if (connected && viture_provider != NULL && device != NULL && imu != NULL) {
         float pose[9] = {0};
-        int result = get_gl_pose_carina(viture_provider, pose, 0.0);
-        if (result == 0) {
+        int pose_status = 0;
+        int result = xr_device_provider_get_gl_pose_carina(viture_provider, pose, 0.0, &pose_status);
+        if (result == 0 && pose_status == 0) {
             // pose received in EUS (GL) coordinate system, convert to NWU
             imu_quat_type quat = {.x = -pose[6], .y = -pose[4], .z = pose[5], .w = pose[3]};
 
@@ -392,7 +394,9 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
             
             viture_publish_pose(quat, true, position, timestamp_ms);
         } else if (config()->debug_device) {
-            log_debug("VITURE: get_gl_pose_carina failed (%d)\n", result);
+            log_debug("VITURE: get_gl_pose_carina failed (result=%d pose_status=%d)\n",
+                      result,
+                      pose_status);
         }
     }
     device_checkin(device);
@@ -506,9 +510,9 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
     if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
         // TODO try removing this entirely since we don't need callbacks
         register_result =
-            register_callbacks_carina(viture_provider, NULL, NULL, viture_carina_imu_callback, NULL);
+            xr_device_provider_register_callbacks_carina(viture_provider, NULL, NULL, viture_carina_imu_callback, NULL);
     } else {
-        register_result = register_pose_callback(viture_provider, viture_legacy_pose_callback);
+        register_result = xr_device_provider_register_imu_pose_callback(viture_provider, viture_legacy_pose_callback);
     }
 
     viture_callbacks_registered = (register_result == 0);
@@ -521,7 +525,7 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         log_debug("VITURE: Callback registration succeeded for type=%d\n", viture_device_type);
     }
 
-    if (xr_device_provider_initialize(viture_provider, NULL) != 0) {
+    if (xr_device_provider_initialize(viture_provider, NULL, NULL) != 0) {
         log_error("VITURE: Failed to initialize SDK provider\n");
         xr_device_provider_destroy(viture_provider);
         viture_provider = NULL;
@@ -539,7 +543,7 @@ static bool viture_open_imu_locked() {
         return true;
     }
 
-    int open_result = open_imu(viture_provider, VITURE_IMU_MODE_POSE, viture_requested_frequency);
+    int open_result = xr_device_provider_open_imu(viture_provider, VITURE_IMU_MODE_POSE, viture_requested_frequency);
     viture_imu_open = open_result == 0;
     if (viture_imu_open) {
         return true;
@@ -587,7 +591,7 @@ static void viture_stop_stream_locked() {
     // viture_restore_display_mode_locked();
 
     if (viture_imu_open) {
-        close_imu(viture_provider, VITURE_IMU_MODE_POSE);
+        xr_device_provider_close_imu(viture_provider, VITURE_IMU_MODE_POSE);
         viture_imu_open = false;
         if (config()->debug_device) {
             log_debug("VITURE: Closed IMU stream\n");
