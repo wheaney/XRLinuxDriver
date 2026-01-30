@@ -19,7 +19,7 @@
  * @param timestamp Timestamp in device timebase for IMU sample.
  * @param vsync     VSync timestamp associated with the sample.
  *
- * Should be set before calling open_imu with Imu::Mode::MODE_RAW
+ * Should be set before calling xr_device_provider_open_imu with VITURE_IMU_MODE_RAW
  * Data format:
  * 1. Viture One / Pro / Lite: [gyroscope_raw_x, gyroscope_raw_y, gyroscope_raw_z,
  *                              accelerometer_raw_x, accelerometer_raw_y, accelerometer_raw_z,
@@ -38,8 +38,9 @@ typedef void (*VitureImuRawCallback)(float* data, uint64_t timestamp, uint64_t v
  * @param data      Pointer to pose data buffer
  * @param timestamp Timestamp in device timebase for IMU sample.
  *
- * Should be set before calling open_imu with Imu::Mode::MODE_POSE
- * Data format: [roll, pitch, yaw, quaternion_0, quaternion_1, quaternion_2, quaternion_3]
+ * Should be set before calling xr_device_provider_open_imu with VITURE_IMU_MODE_POSE
+ * Coordinate system: North-West-Up (NWU), X->North, Y->West, Z->Up.
+ * Data format: [roll, pitch, yaw, quaternion_w, quaternion_x, quaternion_y, quaternion_z]
  */
 typedef void (*VitureImuPoseCallback)(float* data, uint64_t timestamp);
 
@@ -58,7 +59,8 @@ extern "C" {
  * @param imu_raw_callback Callback function pointer.
  * @return 0 on success, -1 on failure.
  */
-VITURE_API int register_raw_callback(XRDeviceProviderHandle handle, VitureImuRawCallback imu_raw_callback);
+VITURE_API int xr_device_provider_register_imu_raw_callback(XRDeviceProviderHandle handle,
+                                                            VitureImuRawCallback imu_raw_callback);
 
 /**
  * @brief Register a combined IMU + VSync callback for a Viture device.
@@ -71,7 +73,8 @@ VITURE_API int register_raw_callback(XRDeviceProviderHandle handle, VitureImuRaw
  * @param imu_pose_callback Callback function pointer.
  * @return 0 on success, -1 on failure.
  */
-VITURE_API int register_pose_callback(XRDeviceProviderHandle handle, VitureImuPoseCallback imu_pose_callback);
+VITURE_API int xr_device_provider_register_imu_pose_callback(XRDeviceProviderHandle handle,
+                                                             VitureImuPoseCallback imu_pose_callback);
 
 /**
  * @brief Open imu (no effect for carina device)
@@ -81,7 +84,7 @@ VITURE_API int register_pose_callback(XRDeviceProviderHandle handle, VitureImuPo
  * @return 0: Success, -1: Param error, -2: USB execution error
  * @return -3: Device type not supported, -4: Other error
  */
-VITURE_API int open_imu(XRDeviceProviderHandle handle, uint8_t imu_mode, uint8_t imu_report_frequency);
+VITURE_API int xr_device_provider_open_imu(XRDeviceProviderHandle handle, uint8_t imu_mode, uint8_t imu_report_frequency);
 
 /**
  * @brief Close IMU (no effect for Carina device)
@@ -90,7 +93,7 @@ VITURE_API int open_imu(XRDeviceProviderHandle handle, uint8_t imu_mode, uint8_t
  * @return 0: Success, -1: Param error, -2: USB execution error
  * @return -3: Device type not supported, -4: Other error
  */
-VITURE_API int close_imu(XRDeviceProviderHandle handle, uint8_t imu_mode);
+VITURE_API int xr_device_provider_close_imu(XRDeviceProviderHandle handle, uint8_t imu_mode);
 
 #ifdef __cplusplus
 }
