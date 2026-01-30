@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "viture_macros.h"
+#include "viture_macros_public.h"
 
 // Version defined as macros so they can be used in preprocessor checks
 #define VITURE_VERSION_MAJOR 2
-#define VITURE_VERSION_MINOR 0
-#define VITURE_VERSION_PATCH 0
+#define VITURE_VERSION_MINOR 1
+#define VITURE_VERSION_PATCH 1
 
 // Helper macros to stringify numeric macros after expansion.
 #define VITURE_STRINGIFY_IMPL(x) #x
