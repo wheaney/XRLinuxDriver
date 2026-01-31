@@ -155,7 +155,9 @@ Options:
     -m, --use-mouse
     --vr-lite-invert-x, --no-vr-lite-invert-x
     --vr-lite-invert-y, --no-vr-lite-invert-y
+    --gamescope-reshade-wayland, --no-gamescope-reshade-wayland
     -ms, --mouse-sensitivity [sensitivity_value]
+    --look-ahead-ms [milliseconds]
     -dz, --deadzone-threshold-degrees [threshold_degrees]
     --multi-tap, --no-multi-tap
     -ds, --display-size [display_size]
@@ -164,14 +166,24 @@ Options:
     -de, --disable-external
     -vd, --virtual-display
     -bd, --breezy-desktop
+    --opentrack-app
     -sv, --sideview
     -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
     --smooth-follow, --no-smooth-follow
     -sft, --smooth-follow-threshold [threshold_value]
+    --curved-display, --no-curved-display
+    --smooth-follow-track-roll, --no-smooth-follow-track-roll
+    --smooth-follow-track-pitch, --no-smooth-follow-track-pitch
+    --smooth-follow-track-yaw, --no-smooth-follow-track-yaw
     -sbsms, --sbs-mode-stretched, --no-sbs-mode-stretched
     -sbs3d, --sbs-content-3d, --no-sbs-content-3d
     -nsh, --neck-saver-horizontal [multiplier]
     -nsv, --neck-saver-vertical [multiplier]
+    --opentrack-app-ip [ip]
+    --opentrack-app-port [port]
+    --opentrack-listener, --no-opentrack-listener
+    --opentrack-listen-ip [ip]
+    --opentrack-listen-port [port]
     --metrics, --no-metrics
     --request-token [email]
     --verify-token [token]
@@ -212,7 +224,7 @@ if [ -n "$1" ]; then
         esac
     done
 
-    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,vr-lite-invert-x,no-vr-lite-invert-x,vr-lite-invert-y,no-vr-lite-invert-y,mouse-sensitivity:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,neck-saver-horizontal:,neck-saver-vertical:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
+    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,vr-lite-invert-x,no-vr-lite-invert-x,vr-lite-invert-y,no-vr-lite-invert-y,gamescope-reshade-wayland,no-gamescope-reshade-wayland,mouse-sensitivity:,look-ahead-ms:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,opentrack-app,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,curved-display,no-curved-display,smooth-follow-track-roll,no-smooth-follow-track-roll,smooth-follow-track-pitch,no-smooth-follow-track-pitch,smooth-follow-track-yaw,no-smooth-follow-track-yaw,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,neck-saver-horizontal:,neck-saver-vertical:,opentrack-app-ip:,opentrack-app-port:,opentrack-listener,no-opentrack-listener,opentrack-listen-ip:,opentrack-listen-port:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
     if [ $? -ne 0 ]; then
         exit 1
     fi
@@ -268,9 +280,22 @@ if [ -n "$1" ]; then
                 process_config "$default_config_file" "vr_lite_invert_y" "false"
                 shift
                 ;;
+            --gamescope-reshade-wayland)
+                process_config "$default_config_file" "gamescope_reshade_wayland_disabled" "false"
+                shift
+                ;;
+            --no-gamescope-reshade-wayland)
+                process_config "$default_config_file" "gamescope_reshade_wayland_disabled" "true"
+                shift
+                ;;
             --mouse-sensitivity)
                 require_arg "$1" "$2"
                 process_config "$default_config_file" "mouse_sensitivity" "$2" "string"
+                shift 2
+                ;;
+            --look-ahead-ms)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "look_ahead" "$2" "string"
                 shift 2
                 ;;
             --deadzone-threshold-degrees)
@@ -309,6 +334,10 @@ if [ -n "$1" ]; then
                 process_config "$default_config_file" "output_mode" "external_only" "string" "external_mode" "breezy_desktop"
                 shift
                 ;;
+            --opentrack-app)
+                process_config "$default_config_file" "output_mode" "external_only" "string" "external_mode" "opentrack"
+                shift
+                ;;
             --sideview)
                 process_config "$default_config_file" "output_mode" "external_only" "string" "external_mode" "sideview"
                 shift
@@ -330,6 +359,38 @@ if [ -n "$1" ]; then
                 require_arg "$1" "$2"
                 process_config "$default_config_file" "sideview_follow_threshold" "$2" "string"
                 shift 2
+                ;;
+            --curved-display)
+                process_config "$default_config_file" "curved_display" "true"
+                shift
+                ;;
+            --no-curved-display)
+                process_config "$default_config_file" "curved_display" "false"
+                shift
+                ;;
+            --smooth-follow-track-roll)
+                process_config "$default_config_file" "smooth_follow_track_roll" "true"
+                shift
+                ;;
+            --no-smooth-follow-track-roll)
+                process_config "$default_config_file" "smooth_follow_track_roll" "false"
+                shift
+                ;;
+            --smooth-follow-track-pitch)
+                process_config "$default_config_file" "smooth_follow_track_pitch" "true"
+                shift
+                ;;
+            --no-smooth-follow-track-pitch)
+                process_config "$default_config_file" "smooth_follow_track_pitch" "false"
+                shift
+                ;;
+            --smooth-follow-track-yaw)
+                process_config "$default_config_file" "smooth_follow_track_yaw" "true"
+                shift
+                ;;
+            --no-smooth-follow-track-yaw)
+                process_config "$default_config_file" "smooth_follow_track_yaw" "false"
+                shift
                 ;;
             --sbs-mode-stretched)
                 process_config "$default_config_file" "sbs_mode_stretched" "true" "string"
@@ -355,6 +416,34 @@ if [ -n "$1" ]; then
             --neck-saver-vertical)
                 require_arg "$1" "$2"
                 process_config "$default_config_file" "neck_saver_vertical_multiplier" "$2" "string"
+                shift 2
+                ;;
+            --opentrack-app-ip)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "opentrack_app_ip" "$2" "string"
+                shift 2
+                ;;
+            --opentrack-app-port)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "opentrack_app_port" "$2" "string"
+                shift 2
+                ;;
+            --opentrack-listener)
+                process_config "$default_config_file" "opentrack_listener_enabled" "true"
+                shift
+                ;;
+            --no-opentrack-listener)
+                process_config "$default_config_file" "opentrack_listener_enabled" "false"
+                shift
+                ;;
+            --opentrack-listen-ip)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "opentrack_listen_ip" "$2" "string"
+                shift 2
+                ;;
+            --opentrack-listen-port)
+                require_arg "$1" "$2"
+                process_config "$default_config_file" "opentrack_listen_port" "$2" "string"
                 shift 2
                 ;;
             --multi-tap)
