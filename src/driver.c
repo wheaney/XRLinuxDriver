@@ -602,7 +602,10 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
             // Release previous primary
             device_checkin(primary_device_ref);
             primary_device_ref = NULL;
+
+            pthread_mutex_lock(&block_on_device_mutex);
             block_on_device_ready = false;
+            pthread_mutex_unlock(&block_on_device_mutex);
         }
         if (new_primary) {
             state()->calibration_state = NOT_CALIBRATED;
@@ -656,10 +659,6 @@ int main(int argc, const char** argv) {
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
     connection_pool_init(driver_handle_pose);
-    config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
-    update_config_from_file(config_fp);
-
-    if (driver_disabled()) log_message("Driver is disabled\n");
 
     char** features = NULL;
     int feature_count = plugins.register_features(&features);
