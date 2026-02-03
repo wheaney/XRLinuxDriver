@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+default_ini=""
+
+# Pick the newest ~/.config/opentrack-*/default.ini.
+shopt -s nullglob
+candidates=("${HOME}/.config"/opentrack-*/default.ini)
+shopt -u nullglob
+if [[ ${#candidates[@]} -gt 0 ]]; then
+    # Sort naturally (version-like) and take the last.
+  default_ini="$(printf '%s\n' "${candidates[@]}" | sort -V | tail -n 1)"
+fi
+
+if [[ -z "$default_ini" ]]; then
+    cat >&2 <<EOF
+error: opentrack config not found
+
+Looked for:
+    ${HOME}/.config/opentrack-*/default.ini
+
+If you haven't already, run opentrack once to generate the config, then re-run this script.
+If issues persist, please open an Issue on this Github repository.
+EOF
+    exit 2
+fi
+
+cfg_dir="$(dirname "$default_ini")"
+dst="${cfg_dir}/xr-driver.ini"
+
+tmp="$(mktemp "${cfg_dir}/.xr-driver.ini.tmp.XXXXXX")"
+cat >"$tmp" <<'EOF'
+[modules]
+filter-dll=nm
+protocol-dll=udp
+tracker-dll=neuralnet
+
+[opentrack-mappings]
+x-max-output-value=-100
+x-max-value=100
+y-max-output-value=-100
+y-max-value=100
+z-max-output-value=-100
+z-max-value=100
+
+[opentrack-ui]
+pitch-invert-sign=true
+roll-invert-sign=true
+x-invert-sign=true
+x-source-index=0
+y-source-index=1
+yaw-invert-sign=true
+z-source-index=2
+
+[udp-proto]
+ip1=127
+ip2=0
+ip3=0
+ip4=1
+EOF
+
+chmod 0644 "$tmp" 2>/dev/null || true
+mv -f "$tmp" "$dst"
+
+echo "xr-driver profile created. Launch opentrack and choose "xr-driver.ini" from the Profile menu."
