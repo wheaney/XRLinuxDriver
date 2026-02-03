@@ -1,3 +1,4 @@
+#include "connection_pool.h"
 #include "devices.h"
 #include "devices/rayneo.h"
 #include "devices/rokid.h"
@@ -58,20 +59,20 @@ int hotplug_callback(libusb_context *ctx, libusb_device *usb_device, libusb_hotp
         return 1;
     }
 
-    device_properties_type* device = device_checkout();
-    if (device != NULL) {
-        if (descriptor.idVendor == device->hid_vendor_id && 
-            descriptor.idProduct == device->hid_product_id &&
-            event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
-            handle_device_connection_changed(NULL);
+    if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
+        connection_t* conn = connection_pool_find_hid_connection(descriptor.idVendor, descriptor.idProduct);
+        if (conn) {
+            connected_device_type* connected_device = calloc(1, sizeof(connected_device_type));
+            connected_device->driver = conn->driver;
+            connected_device->device = conn->device;
+            handle_device_connection_changed(false, connected_device);
         }
     } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
         connected_device_type* connected_device = _find_connected_device(usb_device, descriptor);
         if (connected_device != NULL) {
-            handle_device_connection_changed(connected_device);
+            handle_device_connection_changed(true, connected_device);
         }
     }
-    device_checkin(device);
 
     return 0;
 }
@@ -93,9 +94,10 @@ void init_devices() {
         log_error("Failed to register hotplug callback\n");
     }
 
+    // TODO - we should find and register all connected devices
     connected_device_type* connected_device = find_connected_device();
     if (connected_device != NULL) {
-        handle_device_connection_changed(connected_device);
+        handle_device_connection_changed(true, connected_device);
     }
 }
 

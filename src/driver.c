@@ -4,12 +4,14 @@
 #include "devices.h"
 #include "devices/viture.h"
 #include "devices/xreal.h"
+#include "connection_pool.h"
 #include "files.h"
 #include "imu.h"
 #include "ipc.h"
 #include "logging.h"
 #include "memory.h"
 #include "multitap.h"
+#include "ipc.h"
 #include "outputs.h"
 #include "plugins.h"
 #include "plugins/gamescope_reshade_wayland.h"
@@ -29,6 +31,8 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/signalfd.h>
+#include <netdb.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,7 +50,6 @@
 #define MT_RESET_CALIBRATION 3
 
 
-device_driver_type *device_driver;
 ipc_values_type *ipc_values;
 
 bool glasses_calibrated=false;
@@ -59,7 +62,7 @@ imu_pose_type reference_pose;
 imu_quat_type reference_orientation_conj;
 
 static bool is_driver_connected() {
-    return device_driver != NULL && device_driver->is_connected_func();
+    return connection_pool_is_connected();
 }
 
 void reset_calibration(bool reset_device) {
@@ -70,12 +73,12 @@ void reset_calibration(bool reset_device) {
     state()->calibration_state = CALIBRATING;
 
     if (reset_device && is_driver_connected()) {
-        if (config()->debug_device) log_debug("reset_calibration, device_driver->disconnect_func(true)\n");
-        device_driver->disconnect_func(true);
+        if (config()->debug_device) log_debug("reset_calibration, connection_pool_disconnect_all(true)\n");
+        connection_pool_disconnect_all(true);
     } else log_message("Waiting on device calibration\n");
 }
 
-void driver_handle_pose_event(imu_pose_type pose) {
+void driver_handle_pose(imu_pose_type pose) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
     static int multi_tap = 0;
@@ -282,9 +285,9 @@ void *block_on_device_thread_func(void *arg) {
         pthread_mutex_unlock(&block_on_device_mutex);
 
         if (!force_quit) {
-            if (config()->debug_device) log_debug("block_on_device_thread, device_driver->device_connect_func()\n");
+            if (config()->debug_device) log_debug("block_on_device_thread, connection_pool_connect_active()\n");
 
-            if (device_driver->device_connect_func()) {
+            if (connection_pool_connect_active()) {
                 log_message("Device connected, redirecting input to %s...\n", config()->output_mode);
 
                 setup_ipc();
@@ -293,8 +296,8 @@ void *block_on_device_thread_func(void *arg) {
                 plugins.handle_device_connect();
                 init_outputs();
 
-                if (config()->debug_device) log_debug("block_on_device_thread, device_driver->block_on_device_func()\n");
-                device_driver->block_on_device_func();
+                if (config()->debug_device) log_debug("block_on_device_thread, connection_pool_block_on_active()\n");
+                connection_pool_block_on_active();
 
                 plugins.handle_device_disconnect();
                 deinit_outputs();
@@ -369,11 +372,14 @@ void update_config_from_file(FILE *fp) {
     if (config()->dead_zone_threshold_deg != new_config->dead_zone_threshold_deg)
         log_message("IMU dead zone threshold has been changed to %.2f degrees\n", new_config->dead_zone_threshold_deg);
 
+    if (config()->debug_connections != new_config->debug_connections)
+        log_message("Connection pool debugging has been %s\n", new_config->debug_connections ? "enabled" : "disabled");
+
     update_config(config(), new_config);
 
     if (config()->disabled && is_driver_connected()) {
-        if (config()->debug_device) log_debug("update_config_from_file, device_driver->disconnect_func(true)\n");
-        device_driver->disconnect_func(true);
+        if (config()->debug_device) log_debug("update_config_from_file, connection_pool_disconnect_all(true)\n");
+        connection_pool_disconnect_all(true);
     }
     if (driver_reenabled) plugins.start();
 
@@ -466,7 +472,9 @@ void *monitor_config_file_thread_func(void *arg) {
 void *manage_state_thread_func(void *arg) {
     while (!force_quit) {
         device_properties_type* device = device_checkout();
-        update_state_from_device(state(), device, device_driver);
+        device_properties_type* supplemental_device = connection_pool_supplemental_device();
+        const device_driver_type* primary_drv_in_loop = connection_pool_primary_driver();
+        update_state_from_device(state(), device, supplemental_device, (device_driver_type*)primary_drv_in_loop);
         device_checkin(device);
         write_state(state());
         plugins.handle_state();
@@ -487,13 +495,13 @@ void handle_control_flags_update() {
         if (device != NULL && device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
             // glasses can be sensitive to rapid mode changes, so only request a change if necessary
             bool requesting_enabled = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
-            bool is_already_enabled = device_driver->device_is_sbs_mode_func();
+            bool is_already_enabled = connection_pool_device_is_sbs_mode();
             bool change_requested = is_already_enabled != requesting_enabled;
 
             if (change_requested && config()->debug_device) 
-                log_debug("handle_control_flags_update, device_driver->device_set_sbs_mode_func(%s)\n", requesting_enabled ? "true" : "false");
+                log_debug("handle_control_flags_update, connection_pool_device_set_sbs_mode(%s)\n", requesting_enabled ? "true" : "false");
 
-            if (change_requested && !device_driver->device_set_sbs_mode_func(requesting_enabled)) {
+            if (change_requested && !connection_pool_device_set_sbs_mode(requesting_enabled)) {
                 log_error("Error setting requested SBS mode\n");
             }
             control_flags->sbs_mode = SBS_CONTROL_UNSET;
@@ -502,8 +510,8 @@ void handle_control_flags_update() {
             log_message("Force quit requested, exiting\n");
             force_quit = true;
 
-            if (config()->debug_device) log_debug("handle_control_flags_update, device_driver->disconnect_func(true)\n");
-            device_driver->disconnect_func(true);
+            if (config()->debug_device) log_debug("handle_control_flags_update, connection_pool_disconnect_all(true)\n");
+            connection_pool_disconnect_all(true);
             evaluate_block_on_device_ready();
 
             control_flags->force_quit = false;
@@ -571,36 +579,45 @@ void *monitor_control_flags_file_thread_func(void *arg) {
         log_debug("Exiting monitor_control_flags_file_thread_func thread; force_quit: %d\n", force_quit);
 }
 
-void handle_device_connection_changed(connected_device_type* new_device) {
+void handle_device_connection_changed(bool is_added, connected_device_type* device_info) {
     // as long as we want a device to remain connected, we need to hold at least one checked out reference to it,
     // otherwise it will get freed prematurely. since this function manages device dis/connect events,
     // it has the responsibility of always holding open at least one reference as long as a device remains connected.
-    static device_properties_type* connected_device = NULL;
+    static device_properties_type* primary_device_ref = NULL;
 
-    if (connected_device != NULL && (new_device == NULL || !device_equal(connected_device, new_device->device))) {
-        if (device_driver != NULL) {
-            if (config()->debug_device) log_debug("handle_device_connection_changed, device_driver->disconnect_func(false)\n");
-            device_driver->disconnect_func(false);
+    if (is_added) {
+        if (config()->debug_device) log_debug("device added for driver %s\n", device_info->driver->id);
+        connection_pool_handle_device_added(device_info->driver, device_info->device);
+        captured_reference_pose = false;
+    } else {
+        if (config()->debug_device) log_debug("device removed for driver %s\n", device_info->driver->id);
+        connection_pool_handle_device_removed(device_info->driver->id);
+    }
+    free(device_info);
+
+    // Reflect the pool's current primary in the runtime context
+    device_properties_type* new_primary = connection_pool_primary_device();
+    if (new_primary != primary_device_ref) {
+        if (primary_device_ref) {
+            // Release previous primary
+            device_checkin(primary_device_ref);
+            primary_device_ref = NULL;
+
+            pthread_mutex_lock(&block_on_device_mutex);
+            block_on_device_ready = false;
+            pthread_mutex_unlock(&block_on_device_mutex);
         }
-
-        // the device is being disconnected, check it in to allow its refcount to hit 0 and be freed
-        device_checkin(connected_device);
-        connected_device = NULL;
-        block_on_device_ready = false;
+        if (new_primary) {
+            state()->calibration_state = NOT_CALIBRATED;
+            set_device_and_checkout(new_primary);
+            init_multi_tap(new_primary->imu_cycles_per_s);
+            primary_device_ref = new_primary;
+        }
     }
 
-    if (new_device != NULL && connected_device == NULL) {
-        if (!device_driver) device_driver = calloc(1, sizeof(device_driver_type));
-        *device_driver = *new_device->driver;
-        connected_device = new_device->device;
-        state()->calibration_state = NOT_CALIBRATED;
-        set_device_and_checkout(connected_device);
-        init_multi_tap(connected_device->imu_cycles_per_s);
-
-        free(new_device);
-    }
-
-    update_state_from_device(state(), connected_device, device_driver);
+    const device_driver_type* primary_drv = connection_pool_primary_driver();
+    device_properties_type* supplemental_device = connection_pool_supplemental_device();
+    update_state_from_device(state(), new_primary, supplemental_device, (device_driver_type*)primary_drv);
 }
 
 void *monitor_usb_devices_thread_func(void *arg) {
@@ -614,27 +631,17 @@ void *monitor_usb_devices_thread_func(void *arg) {
         log_debug("Exiting monitor_usb_devices_thread_func thread; force_quit: %d\n", force_quit);
 }
 
-void segfault_handler(int signal, siginfo_t *si, void *arg) {
-    void *error_addr = si->si_addr;
-
-    // Write the error address to stderr
-    log_error("Segmentation fault occurred at address: %p\n", error_addr);
-
-    // Write the backtrace to stderr
+void segfault_handler(int sig) {
+    (void)sig;
+    log_error("Segmentation fault occurred\n");
     void *buffer[10];
     int nptrs = backtrace(buffer, 10);
     backtrace_symbols_fd(buffer, nptrs, 2);
-
-    // End the process
     exit(EXIT_FAILURE);
 }
 
 int main(int argc, const char** argv) {
-    struct sigaction sa;
-    sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = segfault_handler;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGSEGV, &sa, NULL);
+    signal(SIGSEGV, segfault_handler);
 
     log_init();
 
@@ -651,6 +658,7 @@ int main(int argc, const char** argv) {
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
+    connection_pool_init(driver_handle_pose);
 
     char** features = NULL;
     int feature_count = plugins.register_features(&features);

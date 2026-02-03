@@ -1,5 +1,6 @@
 #include "devices.h"
 #include "devices/rayneo.h"
+#include "connection_pool.h"
 #include "driver.h"
 #include "imu.h"
 #include "logging.h"
@@ -29,6 +30,7 @@
 #define RAYNEO_ID_PRODUCT 0xaf50
 
 #define STATE_EVENT_DEVICE_INFO 0x4000
+#define RAYNEO_DRIVER_ID "rayneo"
 
 // RayNeo SDK is returning rotations relative to an east-up-south coordinate system,
 // this converts to to north-west-up, and applies a 15-degree offset based on factory device calibration
@@ -87,7 +89,7 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
         pose.orientation = nwu_quat;
         pose.has_orientation = true;
         pose.timestamp_ms = ts;
-        driver_handle_pose_event(pose);
+        connection_pool_ingest_pose(RAYNEO_DRIVER_ID, pose);
 
         last_utilized_event_ts = ts;
     }
@@ -254,6 +256,7 @@ void rayneo_disconnect(bool soft) {
 };
 
 const device_driver_type rayneo_driver = {
+    .id                                 = RAYNEO_DRIVER_ID,
     .supported_device_func              = rayneo_supported_device,
     .device_connect_func                = rayneo_device_connect,
     .block_on_device_func               = rayneo_block_on_device,

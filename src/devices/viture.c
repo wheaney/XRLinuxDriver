@@ -1,3 +1,4 @@
+#include "connection_pool.h"
 #include "devices.h"
 #include "devices/viture.h"
 #include "driver.h"
@@ -23,6 +24,7 @@
 
 #define VITURE_ID_PRODUCT_COUNT 14
 #define VITURE_ID_VENDOR 0x35ca
+#define VITURE_DRIVER_ID "viture"
 #define VITURE_ONE_MODEL_NAME "One"
 #define VITURE_ONE_LITE_MODEL_NAME "One Lite"
 #define VITURE_PRO_MODEL_NAME "Pro"
@@ -197,7 +199,6 @@ static uint16_t viture_last_product_id = 0;
 static pthread_mutex_t viture_connection_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool connected = false;
 static bool initialized = false;
-static bool viture_callbacks_registered = false;
 static bool viture_state_callback_registered = false;
 static bool viture_imu_open = false;
 static uint8_t viture_requested_frequency = VITURE_IMU_FREQ_MEDIUM_HIGH;
@@ -349,7 +350,7 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
     pose.has_orientation = true;
     pose.has_position = has_position;
     pose.timestamp_ms = timestamp_ms;
-    driver_handle_pose_event(pose);
+    connection_pool_ingest_pose(VITURE_DRIVER_ID, pose);
 }
 
 static void viture_legacy_pose_callback(float* pose, uint64_t ts) {
@@ -511,7 +512,7 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         register_result = register_pose_callback(viture_provider, viture_legacy_pose_callback);
     }
 
-    viture_callbacks_registered = (register_result == 0);
+    bool viture_callbacks_registered = (register_result == 0);
     if (!viture_callbacks_registered) {
         log_error("VITURE: Failed to register SDK callbacks (type=%d)\n", viture_device_type);
         xr_device_provider_destroy(viture_provider);
@@ -569,8 +570,6 @@ static bool viture_start_stream_locked() {
 
     if (!viture_open_imu_locked()) {
         log_error("VITURE: Failed to open IMU stream\n");
-        // viture_unregister_state_callback_locked();
-        xr_device_provider_stop(viture_provider);
         return false;
     }
 
@@ -614,7 +613,7 @@ static void viture_shutdown_provider_locked() {
     xr_device_provider_destroy(viture_provider);
     viture_provider = NULL;
     initialized = false;
-    viture_callbacks_registered = false;
+    viture_device_type = XR_DEVICE_TYPE_VITURE_GEN1;
     viture_state_callback_registered = false;
     viture_saved_display_mode = -1;
     viture_saved_dof = -1;
@@ -649,7 +648,7 @@ static void disconnect(bool soft) {
     }
     pthread_mutex_lock(&viture_connection_mutex);
     viture_stop_stream_locked();
-    viture_shutdown_provider_locked();
+    if (!soft) viture_shutdown_provider_locked();
     pthread_mutex_unlock(&viture_connection_mutex);
 }
 
@@ -675,7 +674,10 @@ static bool viture_device_connect() {
             log_debug("VITURE: Connection attempt failed, cleaning up\n");
         }
         if (device != NULL) device_checkin(device);
-        disconnect(true);
+
+        // do a hard disconnect even though the device is still physically connected
+        disconnect(false);
+        
         return false;
     }
 
@@ -741,6 +743,7 @@ static void viture_disconnect(bool soft) {
 };
 
 const device_driver_type viture_driver = {
+    .id                                 = VITURE_DRIVER_ID,
     .supported_device_func              = viture_supported_device,
     .device_connect_func                = viture_device_connect,
     .block_on_device_func               = viture_block_on_device,
