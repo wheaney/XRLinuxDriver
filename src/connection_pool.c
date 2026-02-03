@@ -261,7 +261,7 @@ void connection_pool_handle_device_removed(const char* driver_id) {
     if (remove_index >= 0) {
         connection_t* c = pool->list[remove_index];
         
-        // Request a soft disconnect; the driver threads will exit on their own.
+        // Request a hard disconnect; the driver threads will exit on their own.
         c->driver->disconnect_func(false);
 
         primary_removed = remove_index == pool->primary_index;
