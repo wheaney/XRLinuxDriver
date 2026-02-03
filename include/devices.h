@@ -118,8 +118,6 @@ typedef struct connected_device_t connected_device_type;
 
 bool device_equal(device_properties_type* device, device_properties_type* device2);
 
-bool device_equal(device_properties_type* device, device_properties_type* device2);
-
 void handle_device_connection_changed(bool is_added, connected_device_type* device);
 
 void init_devices();
