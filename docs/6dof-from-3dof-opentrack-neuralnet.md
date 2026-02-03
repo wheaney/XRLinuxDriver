@@ -34,7 +34,7 @@ yay -S opentrack
 This script configures an OpenTrack profile tuned for the XR Linux Driver listener. Before running this script, you will need to launch OpenTrack at least once to create the default profile.
 
 ```bash
-curl -fsSL https://github.com/wheaney/XRLinuxDriver/releases/download/v2.7.0/xr_driver_ot_profile_setup | bash
+curl -fsSL https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xr_driver_ot_profile_setup | bash
 ```
 
 Note: piping a remote script to `bash` trades convenience for auditability. If you prefer to review it first, download it and inspect before running.

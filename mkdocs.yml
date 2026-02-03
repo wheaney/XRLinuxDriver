@@ -27,7 +27,10 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Usage:
+    - Mouse / joystick modes: mouse-and-joystick-modes.md
   - OpenTrack:
       - Listener (Input): opentrack-listener.md
       - App (Output): opentrack-app.md
-  - 6DoF from 3DoF (NeuralNet): 6dof-from-3dof-opentrack-neuralnet.md
+      - 6DoF from 3DoF glasses + a webcam: 6dof-from-3dof-opentrack-neuralnet.md
+  - Development: development.md

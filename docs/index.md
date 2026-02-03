@@ -11,9 +11,11 @@ There are two separate OpenTrack-related components:
 
 ### Quick links
 
+- [Mouse / joystick modes](mouse-and-joystick-modes.md)
 - [OpenTrack app (output/source)](opentrack-app.md)
 - [OpenTrack listener (input)](opentrack-listener.md)
 - [6DoF with any supported 3DoF glasses + a webcam (OpenTrack + NeuralNet)](6dof-from-3dof-opentrack-neuralnet.md)
+- [Development](development.md)
 
 ## Where settings live
 
