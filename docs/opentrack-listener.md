@@ -67,7 +67,8 @@ To prevent an accidental “send → receive → send …” feedback loop when 
 
 - the listener is enabled, **and**
 - OpenTrack app/output mode is enabled (`external_mode` includes `opentrack`), **and**
-- `opentrack_app_ip` is set to a localhost/unspecified address (e.g. `127.0.0.1`, `localhost`, `0.0.0.0`, `::1`, `::`).
+- `opentrack_app_ip` is set to a localhost/unspecified address (e.g. `127.0.0.1`, `localhost`, `0.0.0.0`, `::1`, `::`), **and**
+- `opentrack_app_port` matches `opentrack_listen_port` (both default to `4242`).
 
 If you want to use the listener, typically you should:
 

@@ -4,6 +4,7 @@
 #include "driver.h"
 #include "imu.h"
 #include "logging.h"
+#include "memory.h"
 #include "plugins/opentrack_listener.h"
 #include "runtime_context.h"
 #include "strings.h"
@@ -48,7 +49,7 @@ static volatile bool block_active = false;
 // Track OpenTrack source plugin config to prevent feedback loops
 static bool ot_source_enabled = false;
 static char *ot_source_ip = NULL;
-static int ot_source_port = 0;
+static int ot_source_port = 4242;
 static volatile bool feedback_loop_ignore = false;
 
 static void listener_device_disconnect() {
@@ -122,11 +123,10 @@ static bool is_localhostish_ip(const char *ip_raw) {
 static void update_feedback_guard() {
     bool prev = feedback_loop_ignore;
     int listener_port = (ot_cfg && ot_cfg->port > 0) ? ot_cfg->port : 4242;
-    int source_port = (ot_source_port > 0) ? ot_source_port : 4242;
-    feedback_loop_ignore = (ot_cfg && ot_cfg->enabled && ot_source_enabled && is_localhostish_ip(ot_source_ip) && (source_port == listener_port));
+    feedback_loop_ignore = (ot_cfg && ot_cfg->enabled && ot_source_enabled && is_localhostish_ip(ot_source_ip) && (ot_source_port == listener_port));
     if (feedback_loop_ignore && !prev) {
         log_message("OpenTrack listener: ignoring loopback packets (source enabled; target %s:%d matches listen port %d)\n",
-                    ot_source_ip ? ot_source_ip : "127.0.0.1", source_port, listener_port);
+                    ot_source_ip ? ot_source_ip : "127.0.0.1", ot_source_port, listener_port);
         listener_device_disconnect();
     } else if (!feedback_loop_ignore && prev) {
         log_message("OpenTrack listener: feedback guard disabled; accepting packets\n");
@@ -286,6 +286,11 @@ static const device_driver_type opentrack_driver = {
 
 // --- plugin impl ---
 static void *opentrack_default_config_func() {
+    // Reset static variables tied to the opentrack_source plugin
+    ot_source_enabled = false;
+    if (ot_source_ip) free_and_clear(&ot_source_ip);
+    ot_source_port = 4242;
+
     opentrack_listener_config *cfg = calloc(1, sizeof(*cfg));
     cfg->enabled = false;
     cfg->ip = strdup("0.0.0.0");
