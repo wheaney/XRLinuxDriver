@@ -10,7 +10,7 @@
 
 This driver allows your Linux device (including Steam Deck) to automatically recognize supported XR glasses (see [Supported Devices](#supported-devices)) when they're plugged in, and convert the movements of the glasses into mouse movements and an external broadcast that games or any application can utilize.
 
-If you're looking for a 3dof virtual display, this driver by itself does not provide that functionality; instead, see [Breezy](https://github.com/wheaney/breezy-desktop) or [use the Steam Deck plugin](#steam-deck-via-decky-loader) which installs Breezy under the hood.
+If you're looking for a 3DoF virtual display, this driver by itself does not provide that functionality; instead, see [Breezy Desktop](https://github.com/wheaney/breezy-desktop) or [use the Steam Deck plugin](#steam-deck-via-decky-loader).
 
 ## Supported Devices
 Check below to see if your device is supported. **Note: be sure you're on the latest firmware for your device.**
@@ -25,17 +25,11 @@ Check below to see if your device is supported. **Note: be sure you're on the la
 | XREAL    | Air<br/>Air&nbsp;2<br/>Air&nbsp;2&nbsp;Pro<br/>Air&nbsp;2&nbsp;Ultra  | :heavy_check_mark: | :-1: | :heavy_check_mark: | :heavy_check_mark: | [Official update site](https://www.xreal.com/support/update/). Requires Chrome. | Unwilling to collaborate. [Unofficial, open-source SDK](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver). Exhibits drift. |
 | XREAL    | One<br/>One&nbsp;Pro | :heavy_check_mark:&nbsp;XR&nbsp;driver&nbsp;v2.4.x<br/><br/>:heavy_check_mark:&nbsp;Breezy&nbsp;Desktop&nbsp;v2.4.x<br/><br/>:heavy_check_mark:&nbsp;Decky XR Gaming v1.3.x<br/><br/>**See notes before use** | :-1: | :heavy_check_mark: | :heavy_check_mark: | [Official update site](https://www.xreal.com/support/update/). Requires Chrome. | **Important** - Disable stabilizer/anchor features on glasses. Must be on latest firmware. |
 
-## Usage
-
-### Steam Deck via Decky Loader
-
-For Steam Deck users, the driver is available via the [Decky plugin loader](https://github.com/SteamDeckHomebrew/decky-loader). Just search "xr" in the Decky store to install and use without leaving Gaming Mode. You can now enable or disable the driver and manage other driver settings via the Decky sidebar menu.
-
-You may still opt to do a manual installation using the instructions below if you enter Desktop Mode.
+## Setup
 
 ### Manual installation
 
-*Note: this installation is for just the base driver with mouse/joystick support. If you're looking for virtual display mode, check out the [breezy-desktop setup](https://github.com/wheaney/breezy-desktop#setup).*
+*Note: this installation is for just the base driver with mouse/joystick support. If you're looking for virtual display or workspace tools, check out [Breezy Desktop](https://github.com/wheaney/breezy-desktop).*
 
 1. [Download the setup script](https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xr_driver_setup) and set the execute flag (e.g. from the terminal: `chmod +x ~/Downloads/xr_driver_setup`)
 2. Run the setup script as root (e.g. `sudo ~/Downloads/xr_driver_setup`)
@@ -54,7 +48,7 @@ Otherwise, just rerun the `xr_driver_setup` file. No need to redownload this scr
 
 ### Uninstalling
 
-If you wish to completely remove the installation, run the following script as root: `~/.local/bin/xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface, but you'll still need to manually run the terminal command from Desktop Mode to complete the uninstall until [this Decky feature request](https://github.com/SteamDeckHomebrew/decky-loader/issues/536) is addressed.
+If you wish to completely remove the installation, run the following script as root: `~/.local/bin/xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface.
 
 ## Data Privacy Notice
 
@@ -67,7 +61,7 @@ In order to provide you with Supporter Tier features, this application and its b
 * Your email address is sent to this application's backend server from either the payment vendor (Ko-fi) or from your device (at your request). Your email address may be used immediately upon receipt in its unaltered form to send you a transactional email, but it is then hashed prior to storage. The unaltered form of your email address is never stored and can no longer be referenced. The hashed value is stored for later reference.
   * Other personal data may be sent from the payment vendor, but is never utilized nor stored. 
 * Your device's MAC address is hashed on your device. It never leaves your device in its original, unaltered form. The hashed value is sent to this application's backend server and stored for later reference.
-* Metrics are collected using Google Analytics. No personal information is explicitly collected, and Google Analytics will anonymize the IP address that's sent as part of the HTTP request.
+* Metrics are collected using Google Analytics. No personal information is explicitly collected, and Google Analytics will anonymize the IP address that's sent as part of the HTTP request. You can disable metrics collection using `xr_driver_cli --no-metrics`.
 
 Hashing functions are a one-way process that serve to anonymize your personal data by irreversibly changing them. Once hashed, they can never be unhashed or traced back to their original values.
 

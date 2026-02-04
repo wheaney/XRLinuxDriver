@@ -48,6 +48,7 @@ static volatile bool block_active = false;
 // Track OpenTrack source plugin config to prevent feedback loops
 static bool ot_source_enabled = false;
 static char *ot_source_ip = NULL;
+static int ot_source_port = 0;
 static volatile bool feedback_loop_ignore = false;
 
 static void listener_device_disconnect() {
@@ -120,9 +121,12 @@ static bool is_localhostish_ip(const char *ip_raw) {
 
 static void update_feedback_guard() {
     bool prev = feedback_loop_ignore;
-    feedback_loop_ignore = (ot_cfg && ot_cfg->enabled && ot_source_enabled && is_localhostish_ip(ot_source_ip));
+    int listener_port = (ot_cfg && ot_cfg->port > 0) ? ot_cfg->port : 4242;
+    int source_port = (ot_source_port > 0) ? ot_source_port : 4242;
+    feedback_loop_ignore = (ot_cfg && ot_cfg->enabled && ot_source_enabled && is_localhostish_ip(ot_source_ip) && (source_port == listener_port));
     if (feedback_loop_ignore && !prev) {
-        log_message("OpenTrack listener: ignoring loopback packets (source enabled; target %s)\n", ot_source_ip ? ot_source_ip : "127.0.0.1");
+        log_message("OpenTrack listener: ignoring loopback packets (source enabled; target %s:%d matches listen port %d)\n",
+                    ot_source_ip ? ot_source_ip : "127.0.0.1", source_port, listener_port);
         listener_device_disconnect();
     } else if (!feedback_loop_ignore && prev) {
         log_message("OpenTrack listener: feedback guard disabled; accepting packets\n");
@@ -303,6 +307,8 @@ static void opentrack_handle_config_line_func(void *config, char *key, char *val
         ot_source_enabled = list_string_contains("opentrack", value);
     } else if (equal(key, "opentrack_app_ip")) {
         string_config(key, value, &ot_source_ip);
+    } else if (equal(key, "opentrack_app_port")) {
+        int_config(key, value, &ot_source_port);
     }
 }
 

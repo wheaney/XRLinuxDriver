@@ -8,10 +8,10 @@ This guide describes how to get **6DoF positional tracking** from any supported 
 
 The high-level idea:
 
-1. Let the glasses provide **orientation** (3DoF) as usual.
-2. Use a webcam + NeuralNet in OpenTrack to estimate **position** (XYZ).
-3. Output OpenTrack’s combined pose over UDP.
-4. Have XR Linux Driver’s **OpenTrack listener** ingest that pose as a synthetic IMU device.
+1. Have XR Linux Driver consume a pose orientation from a set of 3DoF glasses acting as a "primary" device.
+2. Use a webcam + NeuralNet in OpenTrack to estimate a 6DoF pose, including **position** (XYZ).
+3. Have XR Linux Driver’s **OpenTrack listener** ingest that pose as a synthetic "supplemental" device.
+4. Merge the glasses' 3DoF orientation + OpenTrack's 6DoF position for use with Breezy Desktop, XR Gaming, or other external applications.
 
 ## Prereqs
 
@@ -56,11 +56,11 @@ xr_driver_cli --opentrack-listen-port 4242
 ## Run it
 
 1. Plug in your glasses first (confirm normal **3DoF** tracking is working).
-2. Launch OpenTrack and select the Profile named "xr-driver.ini". If you have more than one camera source on your PC, hit the settings icon next to the NeuralNet input and make sure the appropriate camera is selected.
+2. Launch OpenTrack and select the Profile named "xr-driver.ini". Hit the settings icon next to the NeuralNet input and make sure the appropriate camera is selected, set the `Diagonal FOV` and `Resolution` values to match your camera.
 3. Click **Start** in OpenTrack.
 4. Launch Breezy Desktop and enable the effect. You should now be able to lean in to see a closer view of your screens.
 
-**Note** - This can also be used with XR Gaming, if you've set up your deck with a webcam or you're sending the UDP data over the network.
+**Note** - This will also be available in a future update of XR Gaming, if you've set up your deck with a webcam or you're sending the UDP data over the network.
 
 ## Troubleshooting
 
