@@ -48,7 +48,7 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE_MCU_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
-#define XREAL_ID_PRODUCT_COUNT 8
+#define XREAL_ID_PRODUCT_COUNT 10
 #define XREAL_ID_VENDOR 0x3318
 const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0424, // XREAL Air
@@ -58,7 +58,9 @@ const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0435, // XREAL One Pro
     0x0436, // XREAL One Pro
     0x0437, // XREAL One
-    0x0438  // XREAL One
+    0x0438, // XREAL One
+    0x043e, // XREAL One S
+    0x043d  // XREAL One S
 };
 const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     45.0, // XREAL Air
@@ -68,7 +70,9 @@ const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     57.0, // XREAL One Pro
     57.0, // XREAL One Pro
     50.0, // XREAL One
-    50.0  // XREAL One
+    50.0, // XREAL One
+    52.0, // XREAL One S
+    52.0  // XREAL One S
 };
 const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     10.0, // XREAL Air
@@ -78,7 +82,9 @@ const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     25.0, // XREAL One Pro
     25.0, // XREAL One Pro
     25.0, // XREAL One
-    25.0  // XREAL One
+    25.0, // XREAL One
+    25.0, // XREAL One S
+    25.0  // XREAL One S
 };
 const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     15, // XREAL Air
@@ -88,7 +94,9 @@ const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     5,  // XREAL One Pro
     5,  // XREAL One Pro
     5,  // XREAL One
-    5   // XREAL One
+    5,  // XREAL One
+    5,  // XREAL One S
+    5   // XREAL One S
 };
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "Air",
@@ -98,7 +106,9 @@ const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "One Pro",
     "One Pro",
     "One",
-    "One"
+    "One",
+    "1S",
+    "1S"
 };
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
@@ -111,7 +121,9 @@ const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
     35.0, // XREAL One Pro
     35.0, // XREAL One Pro
     0.0,  // XREAL One
-    0.0   // XREAL One
+    0.0,  // XREAL One
+    0.0,  // XREAL One S
+    0.0   // XREAL One S
 };
 
 const device_properties_type xreal_air_properties = {
