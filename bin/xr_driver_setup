@@ -23,15 +23,6 @@ check_command "curl"
 
 ARCH=$(uname -m)
 
-# Detect SteamOS for lib archive variant
-STEAMOS_SUFFIX=""
-if [ -f /etc/os-release ]; then
-  . /etc/os-release
-  if [ "$ID" == "steamos" ]; then
-    STEAMOS_SUFFIX=".steamos"
-  fi
-fi
-
 start_dir=$(pwd)
 
 # create temp directory
@@ -40,7 +31,7 @@ pushd $tmp_dir > /dev/null
 echo "Created temp directory: ${tmp_dir}"
 
 binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-$ARCH.tar.gz"
-lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-libs-$ARCH${STEAMOS_SUFFIX}.tar.gz"
+lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-libs-$ARCH.tar.gz"
 if [ "$1" = "-v" ]
 then
   metrics_version="$2"
@@ -48,7 +39,7 @@ then
 elif [ "$1" = "--tag" ] && [ -n "$2" ]
 then
   binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-$ARCH.tar.gz"
-  lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-libs-$ARCH${STEAMOS_SUFFIX}.tar.gz"
+  lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-libs-$ARCH.tar.gz"
 else
   local_dir_arg="$1"
 fi
@@ -71,7 +62,7 @@ then
   fi
   
   # Check for lib archive in the local directory
-  lib_path_arg="$local_dir/xrDriver-libs-$ARCH${STEAMOS_SUFFIX}.tar.gz"
+  lib_path_arg="$local_dir/xrDriver-libs-$ARCH.tar.gz"
   if [ ! -f "$lib_path_arg" ]; then
     echo "Error: Lib archive not found at $lib_path_arg"
     exit 1
@@ -96,7 +87,7 @@ tar -xf $(basename $binary_path_arg)
 if [ -z "$lib_path_arg" ]
 then
   # download and unzip the latest lib archive
-  lib_path_arg="xrDriver-libs-$ARCH${STEAMOS_SUFFIX}.tar.gz"
+  lib_path_arg="xrDriver-libs-$ARCH.tar.gz"
   echo "Downloading to: ${tmp_dir}/$lib_path_arg"
 
   curl -L "$lib_download_url" > "$lib_path_arg"
