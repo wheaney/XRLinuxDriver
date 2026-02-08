@@ -43,22 +43,6 @@ copy_and_inject_ua "../bin/ua.sh" "$PACKAGE_USER_BIN_DIR" "../bin/user/install" 
 cp -r ../systemd $PACKAGE_DIR
 cp -r ../udev $PACKAGE_DIR
 
-# copy the shared library files
-if [ ! -d "$PACKAGE_DIR/lib" ]; then
-  mkdir $PACKAGE_DIR/lib
-fi
-cp ../lib/$ARCH/*.so* $PACKAGE_DIR/lib || true
-
-BUILD_ARTIFACT_NAME="xrDriver-$ARCH.tar.gz"
-if [ -z "$STEAMOS" ]; then
-  cp ../lib/$ARCH/viture/*.so* $PACKAGE_DIR/lib || true
-else
-  cp ../lib/$ARCH/viture/*.so.4.2 $PACKAGE_DIR/lib || true
-  cp ../lib/$ARCH/viture/libglasses.so $PACKAGE_DIR/lib || true
-  cp ../lib/$ARCH/viture/libcarina_vio.so $PACKAGE_DIR/lib || true
-  BUILD_ARTIFACT_NAME="xrDriver-$ARCH.steamos.tar.gz"
-fi
-
 # create manifest file for verifying installed file checksums against the originally packaged versions
 # include any file that doesn't get modified during setup (e.g. the systemd service file)
 pushd $PACKAGE_BIN_DIR
@@ -66,12 +50,34 @@ BIN_MANIFEST=$(sha256sum xrDriver xr_driver_cli xr_driver_uninstall)
 popd
 echo $BIN_MANIFEST > $PACKAGE_DIR/manifest
 
-# bundle up the driver directory
+# bundle up the driver directory (without lib files)
+BUILD_ARTIFACT_NAME="xrDriver-$ARCH.tar.gz"
+if [ -n "$STEAMOS" ]; then
+  BUILD_ARTIFACT_NAME="xrDriver-$ARCH.steamos.tar.gz"
+fi
 tar -zcvf $BUILD_ARTIFACT_NAME $PACKAGE_DIR
+
+# create separate lib package
+PACKAGE_LIB_DIR=xr_driver_lib
+mkdir -p $PACKAGE_LIB_DIR
+cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR || true
+
+LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.tar.gz"
+if [ -z "$STEAMOS" ]; then
+  cp ../lib/$ARCH/viture/*.so* $PACKAGE_LIB_DIR || true
+else
+  cp ../lib/$ARCH/viture/*.so.4.2 $PACKAGE_LIB_DIR || true
+  cp ../lib/$ARCH/viture/libglasses.so $PACKAGE_LIB_DIR || true
+  cp ../lib/$ARCH/viture/libcarina_vio.so $PACKAGE_LIB_DIR || true
+  LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.steamos.tar.gz"
+fi
+
+tar -zcvf $LIB_ARTIFACT_NAME $PACKAGE_LIB_DIR
 
 popd
 
 mkdir -p out
 cp $BUILD_PATH/$BUILD_ARTIFACT_NAME out/
+cp $BUILD_PATH/$LIB_ARTIFACT_NAME out/
 
 rm -rf $BUILD_PATH
