@@ -52,9 +52,6 @@ echo $BIN_MANIFEST > $PACKAGE_DIR/manifest
 
 # bundle up the driver directory (without lib files)
 BUILD_ARTIFACT_NAME="xrDriver-$ARCH.tar.gz"
-if [ -n "$STEAMOS" ]; then
-  BUILD_ARTIFACT_NAME="xrDriver-$ARCH.steamos.tar.gz"
-fi
 tar -zcvf $BUILD_ARTIFACT_NAME $PACKAGE_DIR
 
 popd
