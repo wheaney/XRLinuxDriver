@@ -44,15 +44,38 @@ lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/downl
 if [ "$1" = "-v" ]
 then
   metrics_version="$2"
-  binary_path_arg="$3"
-  lib_path_arg="$4"
+  local_dir_arg="$3"
 elif [ "$1" = "--tag" ] && [ -n "$2" ]
 then
   binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-$ARCH.tar.gz"
   lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-libs-$ARCH${STEAMOS_SUFFIX}.tar.gz"
 else
-  binary_path_arg="$1"
-  lib_path_arg="$2"
+  local_dir_arg="$1"
+fi
+
+# Handle local directory if provided
+if [ -n "$local_dir_arg" ]
+then
+  # Convert relative path to absolute path
+  if [[ "$local_dir_arg" = /* ]]; then
+    local_dir="$local_dir_arg"
+  else
+    local_dir=$(realpath "$start_dir/$local_dir_arg")
+  fi
+  
+  # Check for driver archive in the local directory
+  binary_path_arg="$local_dir/xrDriver-$ARCH.tar.gz"
+  if [ ! -f "$binary_path_arg" ]; then
+    echo "Error: Driver archive not found at $binary_path_arg"
+    exit 1
+  fi
+  
+  # Check for lib archive in the local directory
+  lib_path_arg="$local_dir/xrDriver-libs-$ARCH${STEAMOS_SUFFIX}.tar.gz"
+  if [ ! -f "$lib_path_arg" ]; then
+    echo "Error: Lib archive not found at $lib_path_arg"
+    exit 1
+  fi
 fi
 
 if [ -z "$binary_path_arg" ]
@@ -63,13 +86,7 @@ then
 
   curl -L "$binary_download_url" > "$binary_path_arg"
 else
-  if [[ "$binary_path_arg" = /* ]]; then
-    abs_path="$binary_path_arg"
-  else
-    # Convert relative path to absolute path
-    abs_path=$(realpath "$start_dir/$binary_path_arg")
-  fi
-  cp $abs_path $tmp_dir
+  cp $binary_path_arg $tmp_dir
 fi
 
 echo "Extracting to: ${tmp_dir}/xr_driver"
@@ -84,13 +101,7 @@ then
 
   curl -L "$lib_download_url" > "$lib_path_arg"
 else
-  if [[ "$lib_path_arg" = /* ]]; then
-    abs_lib_path="$lib_path_arg"
-  else
-    # Convert relative path to absolute path
-    abs_lib_path=$(realpath "$start_dir/$lib_path_arg")
-  fi
-  cp $abs_lib_path $tmp_dir
+  cp $lib_path_arg $tmp_dir
 fi
 
 echo "Extracting lib to: ${tmp_dir}/xr_driver/lib"
