@@ -3,8 +3,10 @@
 # exit when any command fails
 set -e
 
-ARCH=$(uname -m)
-echo "Building lib package for $ARCH"
+# Package libraries for both architectures
+ARCHITECTURES=("x86_64" "aarch64")
+
+echo "Building lib packages for all architectures"
 
 # build the lib package
 BUILD_PATH=build
@@ -14,18 +16,25 @@ fi
 
 pushd $BUILD_PATH
 
-# create separate lib package
-PACKAGE_LIB_DIR=xr_driver_lib
-mkdir -p $PACKAGE_LIB_DIR
-cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR || true
-cp ../lib/$ARCH/viture/*.so* $PACKAGE_LIB_DIR || true
+for ARCH in "${ARCHITECTURES[@]}"; do
+  echo "Packaging libraries for $ARCH"
+  
+  # create separate lib package
+  PACKAGE_LIB_DIR=xr_driver_lib
+  mkdir -p $PACKAGE_LIB_DIR
+  cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR || true
+  cp ../lib/$ARCH/viture/*.so* $PACKAGE_LIB_DIR || true
 
-LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.tar.gz"
-tar -zcvf $LIB_ARTIFACT_NAME $PACKAGE_LIB_DIR
+  LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.tar.gz"
+  tar -zcvf $LIB_ARTIFACT_NAME $PACKAGE_LIB_DIR
+
+  # Clean up for next iteration
+  rm -rf $PACKAGE_LIB_DIR
+done
 
 popd
 
 mkdir -p out
-cp $BUILD_PATH/$LIB_ARTIFACT_NAME out/
+cp $BUILD_PATH/*.tar.gz out/
 
 rm -rf $BUILD_PATH
