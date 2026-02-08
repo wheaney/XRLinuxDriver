@@ -11,3 +11,8 @@ xrDriver
 
 /include/custom_banner_config.h
 /custom_banner_config.yml
+
+# Packaging artifacts
+xr_driver/
+xr_driver_lib/
+*.tar.gz

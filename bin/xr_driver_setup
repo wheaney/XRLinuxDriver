@@ -31,15 +31,42 @@ pushd $tmp_dir > /dev/null
 echo "Created temp directory: ${tmp_dir}"
 
 binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-$ARCH.tar.gz"
+lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/latest/download/xrDriver-libs-$ARCH.tar.gz"
 if [ "$1" = "-v" ]
 then
   metrics_version="$2"
-  binary_path_arg="$3"
+  local_dir_arg="$3"
 elif [ "$1" = "--tag" ] && [ -n "$2" ]
 then
   binary_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-$ARCH.tar.gz"
+  lib_download_url="https://github.com/wheaney/XRLinuxDriver/releases/download/$2/xrDriver-libs-$ARCH.tar.gz"
 else
-  binary_path_arg="$1"
+  local_dir_arg="$1"
+fi
+
+# Handle local directory if provided
+if [ -n "$local_dir_arg" ]
+then
+  # Convert relative path to absolute path
+  if [[ "$local_dir_arg" = /* ]]; then
+    local_dir="$local_dir_arg"
+  else
+    local_dir=$(realpath "$start_dir/$local_dir_arg")
+  fi
+  
+  # Check for driver archive in the local directory
+  binary_path_arg="$local_dir/xrDriver-$ARCH.tar.gz"
+  if [ ! -f "$binary_path_arg" ]; then
+    echo "Error: Driver archive not found at $binary_path_arg"
+    exit 1
+  fi
+  
+  # Check for lib archive in the local directory
+  lib_path_arg="$local_dir/xrDriver-libs-$ARCH.tar.gz"
+  if [ ! -f "$lib_path_arg" ]; then
+    echo "Error: Lib archive not found at $lib_path_arg"
+    exit 1
+  fi
 fi
 
 if [ -z "$binary_path_arg" ]
@@ -50,17 +77,30 @@ then
 
   curl -L "$binary_download_url" > "$binary_path_arg"
 else
-  if [[ "$binary_path_arg" = /* ]]; then
-    abs_path="$binary_path_arg"
-  else
-    # Convert relative path to absolute path
-    abs_path=$(realpath "$start_dir/$binary_path_arg")
-  fi
-  cp $abs_path $tmp_dir
+  cp $binary_path_arg $tmp_dir
 fi
 
 echo "Extracting to: ${tmp_dir}/xr_driver"
 tar -xf $(basename $binary_path_arg)
+
+# Handle lib archive
+if [ -z "$lib_path_arg" ]
+then
+  # download and unzip the latest lib archive
+  lib_path_arg="xrDriver-libs-$ARCH.tar.gz"
+  echo "Downloading to: ${tmp_dir}/$lib_path_arg"
+
+  curl -L "$lib_download_url" > "$lib_path_arg"
+else
+  cp $lib_path_arg $tmp_dir
+fi
+
+echo "Extracting lib to: ${tmp_dir}/xr_driver/lib"
+tar -xf $(basename $lib_path_arg)
+# Move lib files to xr_driver/lib subdirectory
+mkdir -p xr_driver/lib
+mv xr_driver_lib/* xr_driver/lib/
+rmdir xr_driver_lib
 
 pushd xr_driver > /dev/null
 
