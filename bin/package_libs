@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# exit when any command fails
+set -e
+
+ARCH=$(uname -m)
+echo "Building lib package for $ARCH"
+
+# build the lib package
+BUILD_PATH=build
+if [ ! -d "$BUILD_PATH" ]; then
+  mkdir $BUILD_PATH
+fi
+
+pushd $BUILD_PATH
+
+# create separate lib package
+PACKAGE_LIB_DIR=xr_driver_lib
+mkdir -p $PACKAGE_LIB_DIR
+cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR || true
+
+LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.tar.gz"
+if [ -z "$STEAMOS" ]; then
+  cp ../lib/$ARCH/viture/*.so* $PACKAGE_LIB_DIR || true
+else
+  cp ../lib/$ARCH/viture/*.so.4.2 $PACKAGE_LIB_DIR || true
+  cp ../lib/$ARCH/viture/libglasses.so $PACKAGE_LIB_DIR || true
+  cp ../lib/$ARCH/viture/libcarina_vio.so $PACKAGE_LIB_DIR || true
+  LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.steamos.tar.gz"
+fi
+
+tar -zcvf $LIB_ARTIFACT_NAME $PACKAGE_LIB_DIR
+
+popd
+
+mkdir -p out
+cp $BUILD_PATH/$LIB_ARTIFACT_NAME out/
+
+rm -rf $BUILD_PATH
