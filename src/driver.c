@@ -660,11 +660,6 @@ int main(int argc, const char** argv) {
     set_state(calloc(1, sizeof(driver_state_type)));
     connection_pool_init(driver_handle_pose);
 
-    char** features = NULL;
-    int feature_count = plugins.register_features(&features);
-    state()->registered_features_count = feature_count;
-    state()->registered_features = features;
-
     config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
 
@@ -675,6 +670,7 @@ int main(int argc, const char** argv) {
     control_flags->recalibrate = false;
     control_flags->force_quit = false;
     control_flags->sbs_mode = SBS_CONTROL_UNSET;
+    control_flags->request_features = NULL;
 
     plugins.start();
     write_state(state());

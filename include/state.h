@@ -34,9 +34,6 @@ struct driver_state_t {
     bool firmware_update_recommended;
     bool is_gamescope_reshade_ipc_connected;
 
-    int registered_features_count;
-    char** registered_features;
-
     int granted_features_count;
     char** granted_features;
 
@@ -55,6 +52,7 @@ struct control_flags_t {
     bool recalibrate;
     bool force_quit;
     sbs_control_type sbs_mode;
+    char* request_features;
 };
 typedef struct control_flags_t control_flags_type;
 

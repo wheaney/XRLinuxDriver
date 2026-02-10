@@ -4,6 +4,7 @@
 #include "memory.h"
 #include "plugins/device_license.h"
 #include "runtime_context.h"
+#include "strings.h"
 #include "system.h"
 
 #include <curl/curl.h>
@@ -23,6 +24,54 @@
 
 const char* DEVICE_LICENSE_FILE_NAME = "%.8s_license.json";
 const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
+
+// Helper function to parse comma-separated features string
+int parse_features_string(const char* features_str, char*** features) {
+    if (!features_str || strlen(features_str) == 0) {
+        *features = NULL;
+        return 0;
+    }
+
+    char* str_copy = strdup(features_str);
+    int count = 0;
+    *features = NULL;
+
+    char* token = strtok(str_copy, ",");
+    while (token != NULL) {
+        // Trim whitespace
+        while (*token == ' ') token++;
+        char* end = token + strlen(token) - 1;
+        while (end > token && *end == ' ') end--;
+        *(end + 1) = '\0';
+
+        if (strlen(token) > 0) {
+            *features = realloc(*features, (count + 1) * sizeof(char*));
+            (*features)[count++] = strdup(token);
+        }
+        token = strtok(NULL, ",");
+    }
+
+    free(str_copy);
+    return count;
+}
+
+// Helper function to check if all requested features are already granted
+bool all_features_granted(char** requested_features, int requested_count) {
+    if (requested_count == 0) return true;
+    if (!state()->granted_features || state()->granted_features_count == 0) return false;
+
+    for (int i = 0; i < requested_count; i++) {
+        bool found = false;
+        for (int j = 0; j < state()->granted_features_count; j++) {
+            if (strcmp(requested_features[i], state()->granted_features[j]) == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+    }
+    return true;
+}
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
@@ -202,7 +251,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
 
 pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
-void refresh_license(bool force) {
+void refresh_license(bool force, char** requested_features, int requested_features_count) {
     int features_count = 0;
     char** features = NULL;
 
@@ -261,7 +310,7 @@ void refresh_license(bool force) {
                         }
 
                         curl_easy_setopt(curl, CURLOPT_URL, "https://eu.driver-backend.xronlinux.com/licenses/v1");
-                        char* postbody_string = postbody(get_hardware_id(), state()->registered_features, state()->registered_features_count);
+                        char* postbody_string = postbody(get_hardware_id(), requested_features, requested_features_count);
                         if (debug_license) log_debug("License curl with postbody %s\n", postbody_string);
                         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
 
@@ -342,17 +391,59 @@ void refresh_license(bool force) {
 }
 
 void device_license_start_func() {
-    refresh_license(false);
+    refresh_license(false, NULL, 0);
 }
+
+static char** last_requested_features = NULL;
+static int last_requested_features_count = 0;
 
 void device_license_handle_control_flag_line_func(char* key, char* value) {
     if (strcmp(key, "refresh_device_license") == 0) {
-        if (strcmp(value, "true") == 0) refresh_license(true);
+        if (strcmp(value, "true") == 0) refresh_license(true, NULL, 0);
+    } else if (strcmp(key, "request_features") == 0) {
+        // Parse the comma-separated features string
+        char** requested_features = NULL;
+        int requested_count = parse_features_string(value, &requested_features);
+
+        // Check if these features are different from the last request
+        bool features_changed = false;
+        if (requested_count != last_requested_features_count) {
+            features_changed = true;
+        } else {
+            for (int i = 0; i < requested_count; i++) {
+                bool found = false;
+                for (int j = 0; j < last_requested_features_count; j++) {
+                    if (strcmp(requested_features[i], last_requested_features[j]) == 0) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    features_changed = true;
+                    break;
+                }
+            }
+        }
+
+        // If features changed and not all requested features are already granted, refresh the license
+        if (features_changed && !all_features_granted(requested_features, requested_count)) {
+            refresh_license(false, requested_features, requested_count);
+        }
+
+        // Update last requested features
+        if (last_requested_features) {
+            for (int i = 0; i < last_requested_features_count; i++) {
+                free(last_requested_features[i]);
+            }
+            free(last_requested_features);
+        }
+        last_requested_features = requested_features;
+        last_requested_features_count = requested_count;
     }
 }
 
 void device_license_handle_device_connect_func() {
-    refresh_license(false);
+    refresh_license(false, NULL, 0);
 }
 
 const plugin_type device_license_plugin = {
