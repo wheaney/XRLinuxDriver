@@ -396,7 +396,7 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
 
         // Check if all requested features are present in the license
         if (requested_count > 0 && !all_features_in_license(requested_features, requested_count)) {
-            refresh_license(false, requested_features, requested_count);
+            refresh_license(true, requested_features, requested_count);
         }
         
         free_string_array(requested_features, requested_count);
