@@ -61,7 +61,18 @@ int parse_features_string(const char* features_str, char*** features) {
                 return 0;
             }
             *features = temp;
-            (*features)[count++] = strdup(token);
+            (*features)[count] = strdup(token);
+            if (!(*features)[count]) {
+                // Clean up on strdup failure
+                for (int i = 0; i < count; i++) {
+                    free((*features)[i]);
+                }
+                free(*features);
+                free(str_copy);
+                *features = NULL;
+                return 0;
+            }
+            count++;
         }
         token = strtok(NULL, ",");
     }
@@ -142,8 +153,12 @@ void free_features(char** features, int count) {
         json_object *root = json_object_new_object();
         json_object_object_add(root, "hardwareId", json_object_new_string(hardwareId));
         json_object *featuresArray = json_object_new_array();
-        for (int i = 0; i < features_count; i++) {
-            json_object_array_add(featuresArray, json_object_new_string(features[i]));
+        if (features && features_count > 0) {
+            for (int i = 0; i < features_count; i++) {
+                if (features[i]) {
+                    json_object_array_add(featuresArray, json_object_new_string(features[i]));
+                }
+            }
         }
         json_object_object_add(root, "features", featuresArray);
         const char* json_str = json_object_to_json_string(root);
