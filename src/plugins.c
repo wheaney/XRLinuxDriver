@@ -37,25 +37,6 @@ void all_plugins_start_func() {
         all_plugins[i]->start();
     }
 }
-int all_plugins_register_features_func(char*** features) {
-    int feature_count = 0;
-    for (int i = 0; i < PLUGIN_COUNT; i++) {
-        if (all_plugins[i]->register_features == NULL) continue;
-
-        char** plugin_features = NULL;
-        int plugin_features_count = all_plugins[i]->register_features(&plugin_features);
-
-        // append plugin_features
-        *features = realloc(*features, sizeof(char*) * (feature_count + plugin_features_count));
-        for (int j = 0; j < plugin_features_count; j++) {
-            (*features)[feature_count + j] = plugin_features[j];
-        }
-        free(plugin_features);
-        feature_count += plugin_features_count;
-    }
-
-    return feature_count;
-}
 void* all_plugins_default_config_func() {
     void** configs = calloc(PLUGIN_COUNT, sizeof(void*));
     for (int i = 0; i < PLUGIN_COUNT; i++) {
@@ -159,7 +140,6 @@ void all_plugins_handle_device_disconnect_func() {
 const plugin_type plugins = {
     .id = "all_plugins",
     .start = all_plugins_start_func,
-    .register_features = all_plugins_register_features_func,
     .default_config = all_plugins_default_config_func,
     .handle_config_line = all_plugins_handle_config_line_func,
     .handle_control_flag_line = all_plugins_handle_control_flag_line_func,

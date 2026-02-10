@@ -295,13 +295,6 @@ void breezy_desktop_handle_pose_data_func(imu_pose_type pose, imu_euler_type vel
     }
 }
 
-int breezy_desktop_register_features_func(char*** features) {
-    *features = calloc(breezy_desktop_feature_count, sizeof(char*));
-    (*features)[0] = strdup(productivity_basic_feature_name);
-
-    return breezy_desktop_feature_count;
-}
-
 void breezy_desktop_start_func() {
     pthread_mutex_init(&file_mutex, NULL);
 }
@@ -322,7 +315,6 @@ const plugin_type breezy_desktop_plugin = {
     .default_config = breezy_desktop_default_config_func,
     .handle_config_line = breezy_desktop_handle_config_line_func,
     .set_config = breezy_desktop_set_config_func,
-    .register_features = breezy_desktop_register_features_func,
     .handle_pose_data = breezy_desktop_handle_pose_data_func,
     .reset_pose_data = breezy_desktop_reset_pose_data_func,
     .handle_device_disconnect = write_config_data,

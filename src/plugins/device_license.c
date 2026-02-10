@@ -4,6 +4,7 @@
 #include "memory.h"
 #include "plugins/device_license.h"
 #include "runtime_context.h"
+#include "strings.h"
 #include "system.h"
 
 #include <curl/curl.h>
@@ -24,13 +25,42 @@
 const char* DEVICE_LICENSE_FILE_NAME = "%.8s_license.json";
 const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
+// Declare mutexes early so they can be used in helper functions
+pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Helper function to check if all requested features are present in the license
+bool all_features_in_license(char** requested_features, int requested_count) {
+    if (requested_count == 0) return true;
+    
+    pthread_mutex_lock(&refresh_license_lock);
+    bool result = true;
+    
+    if (!state()->license_features || state()->license_features_count == 0) {
+        result = false;
+    } else {
+        for (int i = 0; i < requested_count; i++) {
+            if (!in_array(requested_features[i], (const char**)state()->license_features, state()->license_features_count)) {
+                result = false;
+                break;
+            }
+        }
+    }
+    
+    pthread_mutex_unlock(&refresh_license_lock);
+    return result;
+}
+
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
         json_object *root = json_object_new_object();
         json_object_object_add(root, "hardwareId", json_object_new_string(hardwareId));
         json_object *featuresArray = json_object_new_array();
-        for (int i = 0; i < features_count; i++) {
-            json_object_array_add(featuresArray, json_object_new_string(features[i]));
+        if (features && features_count > 0) {
+            for (int i = 0; i < features_count; i++) {
+                if (features[i]) {
+                    json_object_array_add(featuresArray, json_object_new_string(features[i]));
+                }
+            }
         }
         json_object_object_add(root, "features", featuresArray);
         const char* json_str = json_object_to_json_string(root);
@@ -106,7 +136,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
     }
 
 
-    int get_license_features(FILE* file, char*** features) {
+    bool get_license_features(FILE* file, char*** granted_features, int* granted_features_count, char*** all_features, int* all_features_count) {
         fseek(file, 0, SEEK_END);
         long length = ftell(file);
         fseek(file, 0, SEEK_SET);
@@ -125,7 +155,7 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
         if (message) {
             log_error("Error from server: %s\n", json_object_get_string(message));
             json_object_put(root);
-            return 0;
+            return false;
         }
 
         json_object *license;
@@ -133,7 +163,8 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
         json_object *signature;
         json_object_object_get_ex(root, "signature", &signature);
 
-        int features_count = 0;
+        int transient_granted_count = 0;
+        int transient_all_features_count = 0;
         bool valid_license = false;
         if (is_valid_license_signature(json_object_get_string(license), json_object_get_string(signature))) {
             json_object *license_root = json_tokener_parse(json_object_get_string(license));
@@ -146,40 +177,53 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
                 json_object *features_root;
                 json_object_object_get_ex(license_root, "features", &features_root);
-                if (!features_root) {
-                    json_object_put(license_root);
-                    json_object_put(root);
-                    return 0;
-                }
+                if (features_root) {
+                    json_object_object_foreach(features_root, featureName, val) {
+                        json_object *featureObject;
+                        json_object_object_get_ex(features_root, featureName, &featureObject);
+                        json_object *featureStatusObject;
+                        json_object_object_get_ex(featureObject, "status", &featureStatusObject);
+                        const char* featureStatus = json_object_get_string(featureStatusObject);
+                        json_object *featureEndDate;
+                        json_object_object_get_ex(featureObject, "endDate", &featureEndDate);
 
-                int license_features = json_object_object_length(features_root);
-                if (license_features == 0) {
-                    json_object_put(license_root);
-                    json_object_put(root);
-                    return 0;
-                }
-
-                json_object_object_foreach(features_root, featureName, val) {
-                    json_object *featureObject;
-                    json_object_object_get_ex(features_root, featureName, &featureObject);
-                    json_object *featureStatusObject;
-                    json_object_object_get_ex(featureObject, "status", &featureStatusObject);
-                    const char* featureStatus = json_object_get_string(featureStatusObject);
-                    json_object *featureEndDate;
-                    json_object_object_get_ex(featureObject, "endDate", &featureEndDate);
-
-                    // if status is "on" or "trial" and the current system time is not past the endDate, add to the features array
-                    bool enabled = false;
-                    if (strcmp(featureStatus, "on") == 0 || strcmp(featureStatus, "trial") == 0) {
-                        struct timeval tv;
-                        gettimeofday(&tv, NULL);
-                        if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
-                            *features = realloc(*features, (features_count + 1) * sizeof(char*));
-                            (*features)[features_count++] = strdup(featureName);
-                            enabled = true;
+                        // Add all features to the license features list
+                        char** temp = realloc(*all_features, (transient_all_features_count + 1) * sizeof(char*));
+                        if (!temp) {
+                            log_error("Failed to allocate memory for license features\n");
+                            continue;
                         }
+                        *all_features = temp;
+                        char* feature_copy = strdup(featureName);
+                        if (!feature_copy) {
+                            log_error("Failed to allocate memory for feature name\n");
+                            continue;
+                        }
+                        (*all_features)[transient_all_features_count++] = feature_copy;
+
+                        // if status is "on" or "trial" and the current system time is not past the endDate, add to the granted features array
+                        bool enabled = false;
+                        if (strcmp(featureStatus, "on") == 0 || strcmp(featureStatus, "trial") == 0) {
+                            struct timeval tv;
+                            gettimeofday(&tv, NULL);
+                            if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
+                                char** granted_temp = realloc(*granted_features, (transient_granted_count + 1) * sizeof(char*));
+                                if (!granted_temp) {
+                                    log_error("Failed to allocate memory for granted features\n");
+                                } else {
+                                    *granted_features = granted_temp;
+                                    char* granted_copy = strdup(featureName);
+                                    if (!granted_copy) {
+                                        log_error("Failed to allocate memory for granted feature name\n");
+                                    } else {
+                                        (*granted_features)[transient_granted_count++] = granted_copy;
+                                        enabled = true;
+                                    }
+                                }
+                            }
+                        }
+                        log_message("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                     }
-                    log_message("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                 }
             } else {
                 if (config() && config()->debug_license) {
@@ -191,20 +235,19 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
         }
         json_object_put(root);
 
-        if (!valid_license) {
-            return -1;
-        }
-
-        return features_count;
+        *granted_features_count = transient_granted_count;
+        *all_features_count = transient_all_features_count;
+        return valid_license;
     }
 #endif
 
 
 
-pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
-void refresh_license(bool force) {
-    int features_count = 0;
-    char** features = NULL;
+void refresh_license(bool force, char** requested_features, int requested_features_count) {
+    int granted_count = 0;
+    char** granted_features = NULL;
+    int all_features_count = 0;
+    char** all_features = NULL;
 
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
         char* hw_id = get_hardware_id();
@@ -261,7 +304,7 @@ void refresh_license(bool force) {
                         }
 
                         curl_easy_setopt(curl, CURLOPT_URL, "https://eu.driver-backend.xronlinux.com/licenses/v1");
-                        char* postbody_string = postbody(get_hardware_id(), state()->registered_features, state()->registered_features_count);
+                        char* postbody_string = postbody(get_hardware_id(), requested_features, requested_features_count);
                         if (debug_license) log_debug("License curl with postbody %s\n", postbody_string);
                         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postbody_string);
 
@@ -307,16 +350,13 @@ void refresh_license(bool force) {
                     }
                 }
 
-                // TODO - pass the requested features list and verify all features are present in the license, otherwise refresh it
-                features_count = get_license_features(file, &features);
+                valid_license = get_license_features(file, &granted_features, &granted_count, &all_features, &all_features_count);
                 fclose(file);
-                if (features_count != -1) {
-                    valid_license = true;
+                if (valid_license) {
                     if (strcmp(file_path, device_license_path_tmp) == 0) {
                         rename(file_path, device_license_path);
                     }
                 } else {
-                    features_count = 0;
                     remove(file_path);
                 }
                 free(file_path);
@@ -331,28 +371,40 @@ void refresh_license(bool force) {
         }
     #endif
 
-    if (state()->granted_features && state()->granted_features_count > 0) {
-        for (int i = 0; i < state()->granted_features_count; i++) {
-            free(state()->granted_features[i]);
-        }
-        free(state()->granted_features);
-    }
-    state()->granted_features = features;
-    state()->granted_features_count = features_count;
+    pthread_mutex_lock(&refresh_license_lock);
+    free_string_array(state()->granted_features, state()->granted_features_count);
+    state()->granted_features = granted_features;
+    state()->granted_features_count = granted_count;
+    
+    free_string_array(state()->license_features, state()->license_features_count);
+    state()->license_features = all_features;
+    state()->license_features_count = all_features_count;
+    pthread_mutex_unlock(&refresh_license_lock);
 }
 
 void device_license_start_func() {
-    refresh_license(false);
+    refresh_license(false, NULL, 0);
 }
 
 void device_license_handle_control_flag_line_func(char* key, char* value) {
     if (strcmp(key, "refresh_device_license") == 0) {
-        if (strcmp(value, "true") == 0) refresh_license(true);
+        if (strcmp(value, "true") == 0) refresh_license(true, NULL, 0);
+    } else if (strcmp(key, "request_features") == 0) {
+        // Parse the comma-separated features string
+        char** requested_features = NULL;
+        int requested_count = parse_comma_separated_string(value, &requested_features);
+
+        // Check if all requested features are present in the license
+        if (requested_count > 0 && !all_features_in_license(requested_features, requested_count)) {
+            refresh_license(false, requested_features, requested_count);
+        }
+        
+        free_string_array(requested_features, requested_count);
     }
 }
 
 void device_license_handle_device_connect_func() {
-    refresh_license(false);
+    refresh_license(false, NULL, 0);
 }
 
 const plugin_type device_license_plugin = {

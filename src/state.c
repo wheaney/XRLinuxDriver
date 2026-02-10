@@ -91,6 +91,14 @@ void read_control_flags(FILE *fp, control_flags_type *flags) {
                 }
             } else if (strcmp(key, "force_quit") == 0) {
                 flags->force_quit = strcmp(value, "true") == 0;
+            } else if (strcmp(key, "request_features") == 0) {
+                free_and_clear(&flags->request_features);
+                if (value && strlen(value) > 0) {
+                    flags->request_features = strdup(value);
+                    if (!flags->request_features) {
+                        log_error("Failed to allocate memory for request_features\n");
+                    }
+                }
             }
             plugins.handle_control_flag_line(key, value);
         }
