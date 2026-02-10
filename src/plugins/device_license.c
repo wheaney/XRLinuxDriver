@@ -107,6 +107,14 @@ char** deep_copy_features(char** features, int count) {
     if (!copy) return NULL;
     
     for (int i = 0; i < count; i++) {
+        if (!features[i]) {
+            // Clean up on NULL feature
+            for (int j = 0; j < i; j++) {
+                free(copy[j]);
+            }
+            free(copy);
+            return NULL;
+        }
         copy[i] = strdup(features[i]);
         if (!copy[i]) {
             // Clean up on failure
@@ -489,7 +497,11 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
             if (features_copy) {
                 features_copy_count = requested_count;
             } else {
-                should_refresh = false;  // Can't refresh without features copy
+                // Failed to allocate memory for deep copy, don't update last_requested_features
+                // to avoid inconsistent state
+                pthread_mutex_unlock(&requested_features_lock);
+                free_features(requested_features, requested_count);
+                return;
             }
         }
         
