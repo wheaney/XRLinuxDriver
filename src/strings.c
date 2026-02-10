@@ -52,3 +52,60 @@ const char* concat(const char* path, const char* extension) {
 int compare_strings(const void* a, const void* b) {
     return strcmp(*(const char**)a, *(const char**)b);
 }
+
+// Parse comma-separated string into array of strings
+int parse_comma_separated_string(const char* str, char*** result) {
+    if (!str || strlen(str) == 0) {
+        *result = NULL;
+        return 0;
+    }
+
+    char* str_copy = strdup(str);
+    if (!str_copy) {
+        *result = NULL;
+        return 0;
+    }
+    
+    int count = 0;
+    *result = NULL;
+
+    char* token = strtok(str_copy, ",");
+    while (token != NULL) {
+        // Trim whitespace
+        while (*token == ' ') token++;
+        char* end = token + strlen(token) - 1;
+        while (end > token && *end == ' ') end--;
+        *(end + 1) = '\0';
+
+        if (strlen(token) > 0) {
+            char** temp = realloc(*result, (count + 1) * sizeof(char*));
+            if (!temp) {
+                // Clean up on allocation failure
+                for (int i = 0; i < count; i++) {
+                    free((*result)[i]);
+                }
+                free(*result);
+                free(str_copy);
+                *result = NULL;
+                return 0;
+            }
+            *result = temp;
+            (*result)[count] = strdup(token);
+            if (!(*result)[count]) {
+                // Clean up on strdup failure
+                for (int i = 0; i < count; i++) {
+                    free((*result)[i]);
+                }
+                free(*result);
+                free(str_copy);
+                *result = NULL;
+                return 0;
+            }
+            count++;
+        }
+        token = strtok(NULL, ",");
+    }
+
+    free(str_copy);
+    return count;
+}

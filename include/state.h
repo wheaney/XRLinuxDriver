@@ -37,6 +37,9 @@ struct driver_state_t {
     int granted_features_count;
     char** granted_features;
 
+    int license_features_count;
+    char** license_features;
+
     char* device_license;
 };
 typedef struct driver_state_t driver_state_type;

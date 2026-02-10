@@ -15,4 +15,4 @@ xrDriver
 # Packaging artifacts
 xr_driver/
 xr_driver_lib/
-*.tar.gz
+*.tar.gz_codeql_detected_source_root
