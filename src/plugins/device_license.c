@@ -422,9 +422,11 @@ void refresh_license(bool force, char** requested_features, int requested_featur
         }
     #endif
 
+    pthread_mutex_lock(&refresh_license_lock);
     free_features(state()->granted_features, state()->granted_features_count);
     state()->granted_features = features;
     state()->granted_features_count = features_count;
+    pthread_mutex_unlock(&refresh_license_lock);
 }
 
 void device_license_start_func() {
@@ -472,7 +474,11 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         int features_copy_count = 0;
         if (should_refresh) {
             features_copy = deep_copy_features(requested_features, requested_count);
-            features_copy_count = requested_count;
+            if (features_copy) {
+                features_copy_count = requested_count;
+            } else {
+                should_refresh = false;  // Can't refresh without features copy
+            }
         }
         
         // Update last requested features
@@ -482,7 +488,7 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         
         pthread_mutex_unlock(&requested_features_lock);
         
-        if (should_refresh && features_copy) {
+        if (should_refresh) {
             refresh_license(false, features_copy, features_copy_count);
             free_features(features_copy, features_copy_count);
         }
