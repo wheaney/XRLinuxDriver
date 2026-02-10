@@ -53,6 +53,35 @@ int compare_strings(const void* a, const void* b) {
     return strcmp(*(const char**)a, *(const char**)b);
 }
 
+// Deep copy an array of strings
+char** deep_copy_string_array(char** array, int count) {
+    if (count == 0 || !array) return NULL;
+    
+    char** copy = calloc(count, sizeof(char*));
+    if (!copy) return NULL;
+    
+    for (int i = 0; i < count; i++) {
+        if (!array[i]) {
+            // Clean up on NULL element
+            for (int j = 0; j < i; j++) {
+                free(copy[j]);
+            }
+            free(copy);
+            return NULL;
+        }
+        copy[i] = strdup(array[i]);
+        if (!copy[i]) {
+            // Clean up on failure
+            for (int j = 0; j < i; j++) {
+                free(copy[j]);
+            }
+            free(copy);
+            return NULL;
+        }
+    }
+    return copy;
+}
+
 // Parse comma-separated string into array of strings
 int parse_comma_separated_string(const char* str, char*** result) {
     if (!str || strlen(str) == 0) {

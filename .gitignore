@@ -16,4 +16,3 @@ xrDriver
 xr_driver/
 xr_driver_lib/
 *.tar.gz
-_codeql_detected_source_root

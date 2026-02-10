@@ -40,14 +40,7 @@ bool all_features_in_license(char** requested_features, int requested_count) {
         result = false;
     } else {
         for (int i = 0; i < requested_count; i++) {
-            bool found = false;
-            for (int j = 0; j < state()->license_features_count; j++) {
-                if (strcmp(requested_features[i], state()->license_features[j]) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
+            if (!in_array(requested_features[i], (const char**)state()->license_features, state()->license_features_count)) {
                 result = false;
                 break;
             }
@@ -56,44 +49,6 @@ bool all_features_in_license(char** requested_features, int requested_count) {
     
     pthread_mutex_unlock(&refresh_license_lock);
     return result;
-}
-
-// Helper function to deep copy feature array
-char** deep_copy_features(char** features, int count) {
-    if (count == 0 || !features) return NULL;
-    
-    char** copy = calloc(count, sizeof(char*));
-    if (!copy) return NULL;
-    
-    for (int i = 0; i < count; i++) {
-        if (!features[i]) {
-            // Clean up on NULL feature
-            for (int j = 0; j < i; j++) {
-                free(copy[j]);
-            }
-            free(copy);
-            return NULL;
-        }
-        copy[i] = strdup(features[i]);
-        if (!copy[i]) {
-            // Clean up on failure
-            for (int j = 0; j < i; j++) {
-                free(copy[j]);
-            }
-            free(copy);
-            return NULL;
-        }
-    }
-    return copy;
-}
-
-// Helper function to free feature array
-void free_features(char** features, int count) {
-    if (!features) return;
-    for (int i = 0; i < count; i++) {
-        free(features[i]);
-    }
-    free(features);
 }
 
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
@@ -182,7 +137,7 @@ void free_features(char** features, int count) {
     }
 
 
-    int get_license_features(FILE* file, char*** granted_features, char*** all_features, int* all_features_count) {
+    void get_license_features(FILE* file, char*** granted_features, int* granted_features_count, char*** all_features, int* all_features_count) {
         fseek(file, 0, SEEK_END);
         long length = ftell(file);
         fseek(file, 0, SEEK_SET);
@@ -201,7 +156,7 @@ void free_features(char** features, int count) {
         if (message) {
             log_error("Error from server: %s\n", json_object_get_string(message));
             json_object_put(root);
-            return 0;
+            return;
         }
 
         json_object *license;
@@ -209,8 +164,8 @@ void free_features(char** features, int count) {
         json_object *signature;
         json_object_object_get_ex(root, "signature", &signature);
 
-        int granted_count = 0;
-        int license_count = 0;
+        int transient_granted_count = 0;
+        int transient_all_features_count = 0;
         bool valid_license = false;
         if (is_valid_license_signature(json_object_get_string(license), json_object_get_string(signature))) {
             json_object *license_root = json_tokener_parse(json_object_get_string(license));
@@ -226,14 +181,14 @@ void free_features(char** features, int count) {
                 if (!features_root) {
                     json_object_put(license_root);
                     json_object_put(root);
-                    return 0;
+                    return;
                 }
 
                 int license_features = json_object_object_length(features_root);
                 if (license_features == 0) {
                     json_object_put(license_root);
                     json_object_put(root);
-                    return 0;
+                    return;
                 }
 
                 json_object_object_foreach(features_root, featureName, val) {
@@ -246,7 +201,7 @@ void free_features(char** features, int count) {
                     json_object_object_get_ex(featureObject, "endDate", &featureEndDate);
 
                     // Add all features to the license features list
-                    char** temp = realloc(*all_features, (license_count + 1) * sizeof(char*));
+                    char** temp = realloc(*all_features, (transient_all_features_count + 1) * sizeof(char*));
                     if (!temp) {
                         log_error("Failed to allocate memory for license features\n");
                         continue;
@@ -257,7 +212,7 @@ void free_features(char** features, int count) {
                         log_error("Failed to allocate memory for feature name\n");
                         continue;
                     }
-                    (*all_features)[license_count++] = feature_copy;
+                    (*all_features)[transient_all_features_count++] = feature_copy;
 
                     // if status is "on" or "trial" and the current system time is not past the endDate, add to the granted features array
                     bool enabled = false;
@@ -265,7 +220,7 @@ void free_features(char** features, int count) {
                         struct timeval tv;
                         gettimeofday(&tv, NULL);
                         if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
-                            char** granted_temp = realloc(*granted_features, (granted_count + 1) * sizeof(char*));
+                            char** granted_temp = realloc(*granted_features, (transient_granted_count + 1) * sizeof(char*));
                             if (!granted_temp) {
                                 log_error("Failed to allocate memory for granted features\n");
                             } else {
@@ -274,7 +229,7 @@ void free_features(char** features, int count) {
                                 if (!granted_copy) {
                                     log_error("Failed to allocate memory for granted feature name\n");
                                 } else {
-                                    (*granted_features)[granted_count++] = granted_copy;
+                                    (*granted_features)[transient_granted_count++] = granted_copy;
                                     enabled = true;
                                 }
                             }
@@ -292,12 +247,8 @@ void free_features(char** features, int count) {
         }
         json_object_put(root);
 
-        if (!valid_license) {
-            return -1;
-        }
-
-        *all_features_count = license_count;
-        return granted_count;
+        *granted_features_count = transient_granted_count;
+        *all_features_count = transient_all_features_count;
     }
 #endif
 
@@ -306,8 +257,8 @@ void free_features(char** features, int count) {
 void refresh_license(bool force, char** requested_features, int requested_features_count) {
     int granted_count = 0;
     char** granted_features = NULL;
-    int license_count = 0;
-    char** license_features = NULL;
+    int all_features_count = 0;
+    char** all_features = NULL;
 
     #ifdef DEVICE_LICENSE_PUBLIC_KEY
         char* hw_id = get_hardware_id();
@@ -410,16 +361,14 @@ void refresh_license(bool force, char** requested_features, int requested_featur
                     }
                 }
 
-                granted_count = get_license_features(file, &granted_features, &license_features, &license_count);
+                get_license_features(file, &granted_features, &granted_count, &all_features, &all_features_count);
                 fclose(file);
-                if (granted_count != -1) {
+                if (granted_count > 0 || all_features_count > 0) {
                     valid_license = true;
                     if (strcmp(file_path, device_license_path_tmp) == 0) {
                         rename(file_path, device_license_path);
                     }
                 } else {
-                    granted_count = 0;
-                    license_count = 0;
                     remove(file_path);
                 }
                 free(file_path);
@@ -435,13 +384,13 @@ void refresh_license(bool force, char** requested_features, int requested_featur
     #endif
 
     pthread_mutex_lock(&refresh_license_lock);
-    free_features(state()->granted_features, state()->granted_features_count);
+    free_string_array(state()->granted_features, state()->granted_features_count);
     state()->granted_features = granted_features;
     state()->granted_features_count = granted_count;
     
-    free_features(state()->license_features, state()->license_features_count);
-    state()->license_features = license_features;
-    state()->license_features_count = license_count;
+    free_string_array(state()->license_features, state()->license_features_count);
+    state()->license_features = all_features;
+    state()->license_features_count = all_features_count;
     pthread_mutex_unlock(&refresh_license_lock);
 }
 
@@ -468,14 +417,7 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
             features_changed = true;
         } else {
             for (int i = 0; i < requested_count; i++) {
-                bool found = false;
-                for (int j = 0; j < last_requested_features_count; j++) {
-                    if (strcmp(requested_features[i], last_requested_features[j]) == 0) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
+                if (!in_array(requested_features[i], (const char**)last_requested_features, last_requested_features_count)) {
                     features_changed = true;
                     break;
                 }
@@ -483,7 +425,7 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         }
 
         // Update last requested features while holding the lock
-        free_features(last_requested_features, last_requested_features_count);
+        free_string_array(last_requested_features, last_requested_features_count);
         last_requested_features = requested_features;
         last_requested_features_count = requested_count;
         
@@ -492,7 +434,7 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         char** features_copy = NULL;
         int features_copy_count = 0;
         if (features_changed && requested_count > 0) {
-            features_copy = deep_copy_features(requested_features, requested_count);
+            features_copy = deep_copy_string_array(requested_features, requested_count);
             if (features_copy) {
                 features_copy_count = requested_count;
             } else {
@@ -508,7 +450,7 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         }
         
         if (features_copy) {
-            free_features(features_copy, features_copy_count);
+            free_string_array(features_copy, features_copy_count);
         }
     }
 }

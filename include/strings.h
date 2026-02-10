@@ -16,5 +16,10 @@ const char* concat(const char* path, const char* extension);
 // Caller must free the returned array and its elements
 int parse_comma_separated_string(const char* str, char*** result);
 
+// Deep copy an array of strings
+// Returns NULL on error or if input is NULL/empty
+// Caller must free the returned array and its elements
+char** deep_copy_string_array(char** array, int count);
+
 // Comparison function intended for qsort
 int compare_strings(const void* a, const void* b);
