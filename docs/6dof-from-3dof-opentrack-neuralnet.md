@@ -4,7 +4,7 @@ This guide describes how to get **6DoF positional tracking** from any supported 
 
 - **XR Linux Driver** (for the glasses’ 3DoF IMU + runtime)
 - **OpenTrack** (for filtering/mapping and UDP output)
-- **NeuralNet Tracker** (optional OpenTrack input, for camera-based position tracking)
+- **NeuralNet Tracker** (OpenTrack input, for camera-based position tracking)
 
 The high-level idea:
 
@@ -15,14 +15,25 @@ The high-level idea:
 
 ## Prereqs
 
-- A working XR Linux Driver install
+- A working XR Linux Driver install (if you're installed Breezy Desktop or XR Gaming, you already have this)
 - A webcam (for NeuralNet position tracking)
 
 ## Install OpenTrack (+ NeuralNet input)
 
-OpenTrack won't typically come with NeuralNet out of the box. You'll need to make sure the appropriate `onnxruntime` is installed.
+### Use the experimental AppImage
 
-### Arch Linux installation example
+I have an experimental AppImage CI build that may prevent the need for a more complicated installation on your system. 
+
+1. Visit [the latest wheaney/opentrack-appimage-ci Release](https://github.com/wheaney/opentrack-appimage-ci/releases/latest) and download the ONNX-GPU build.
+2. If you plan on kicking it off from the command line (better to see log output, if debugging), first set the execute flag on the file: `chmod +x ~/Downloads/OpenTrack-*.AppImage`
+3. Run it.
+4. If it doesn't work (or the `Start` button causes an error later on in the instructions), you might want to try the ONNX-CPU build. Otherwise, you'll need to try to install via your package manager.
+
+### Setup via package manager
+
+OpenTrack won't typically come with NeuralNet out of the box. You'll need to make sure the appropriate `onnxruntime` is installed. Look up the necessary OpenTrack and ONNX runtime package names for your package manager and install them. For ONNX you may be able to choose between CPU and GPU variants; it's up to you which to choose but CPU is the easiest choice and it won't typically be very demanding from a resource perspective.
+
+#### Arch Linux installation example
 
 ```bash
 sudo pacman -S onnxruntime
