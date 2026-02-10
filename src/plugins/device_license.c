@@ -45,7 +45,18 @@ int parse_features_string(const char* features_str, char*** features) {
         *(end + 1) = '\0';
 
         if (strlen(token) > 0) {
-            *features = realloc(*features, (count + 1) * sizeof(char*));
+            char** temp = realloc(*features, (count + 1) * sizeof(char*));
+            if (!temp) {
+                // Clean up on allocation failure
+                for (int i = 0; i < count; i++) {
+                    free((*features)[i]);
+                }
+                free(*features);
+                free(str_copy);
+                *features = NULL;
+                return 0;
+            }
+            *features = temp;
             (*features)[count++] = strdup(token);
         }
         token = strtok(NULL, ",");
@@ -251,6 +262,8 @@ bool all_features_granted(char** requested_features, int requested_count) {
 
 
 pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t requested_features_lock = PTHREAD_MUTEX_INITIALIZER;
+
 void refresh_license(bool force, char** requested_features, int requested_features_count) {
     int features_count = 0;
     char** features = NULL;
@@ -400,6 +413,8 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
     if (strcmp(key, "refresh_device_license") == 0) {
         if (strcmp(value, "true") == 0) refresh_license(true, NULL, 0);
     } else if (strcmp(key, "request_features") == 0) {
+        pthread_mutex_lock(&requested_features_lock);
+        
         // Parse the comma-separated features string
         char** requested_features = NULL;
         int requested_count = parse_features_string(value, &requested_features);
@@ -425,10 +440,8 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         }
 
         // If features changed and not all requested features are already granted, refresh the license
-        if (features_changed && !all_features_granted(requested_features, requested_count)) {
-            refresh_license(false, requested_features, requested_count);
-        }
-
+        bool should_refresh = features_changed && !all_features_granted(requested_features, requested_count);
+        
         // Update last requested features
         if (last_requested_features) {
             for (int i = 0; i < last_requested_features_count; i++) {
@@ -438,6 +451,12 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         }
         last_requested_features = requested_features;
         last_requested_features_count = requested_count;
+        
+        pthread_mutex_unlock(&requested_features_lock);
+        
+        if (should_refresh) {
+            refresh_license(false, requested_features, requested_count);
+        }
     }
 }
 
