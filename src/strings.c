@@ -60,26 +60,24 @@ char** deep_copy_string_array(char** array, int count) {
     char** copy = calloc(count, sizeof(char*));
     if (!copy) return NULL;
     
-    for (int i = 0; i < count; i++) {
+    int i;
+    for (i = 0; i < count; i++) {
         if (!array[i]) {
-            // Clean up on NULL element
-            for (int j = 0; j < i; j++) {
-                free(copy[j]);
-            }
-            free(copy);
-            return NULL;
+            goto cleanup_and_fail;
         }
         copy[i] = strdup(array[i]);
         if (!copy[i]) {
-            // Clean up on failure
-            for (int j = 0; j < i; j++) {
-                free(copy[j]);
-            }
-            free(copy);
-            return NULL;
+            goto cleanup_and_fail;
         }
     }
     return copy;
+
+cleanup_and_fail:
+    for (int j = 0; j < i; j++) {
+        free(copy[j]);
+    }
+    free(copy);
+    return NULL;
 }
 
 // Parse comma-separated string into array of strings

@@ -137,7 +137,7 @@ bool all_features_in_license(char** requested_features, int requested_count) {
     }
 
 
-    void get_license_features(FILE* file, char*** granted_features, int* granted_features_count, char*** all_features, int* all_features_count) {
+    bool get_license_features(FILE* file, char*** granted_features, int* granted_features_count, char*** all_features, int* all_features_count) {
         fseek(file, 0, SEEK_END);
         long length = ftell(file);
         fseek(file, 0, SEEK_SET);
@@ -156,7 +156,7 @@ bool all_features_in_license(char** requested_features, int requested_count) {
         if (message) {
             log_error("Error from server: %s\n", json_object_get_string(message));
             json_object_put(root);
-            return;
+            return false;
         }
 
         json_object *license;
@@ -178,64 +178,53 @@ bool all_features_in_license(char** requested_features, int requested_count) {
 
                 json_object *features_root;
                 json_object_object_get_ex(license_root, "features", &features_root);
-                if (!features_root) {
-                    json_object_put(license_root);
-                    json_object_put(root);
-                    return;
-                }
+                if (features_root) {
+                    json_object_object_foreach(features_root, featureName, val) {
+                        json_object *featureObject;
+                        json_object_object_get_ex(features_root, featureName, &featureObject);
+                        json_object *featureStatusObject;
+                        json_object_object_get_ex(featureObject, "status", &featureStatusObject);
+                        const char* featureStatus = json_object_get_string(featureStatusObject);
+                        json_object *featureEndDate;
+                        json_object_object_get_ex(featureObject, "endDate", &featureEndDate);
 
-                int license_features = json_object_object_length(features_root);
-                if (license_features == 0) {
-                    json_object_put(license_root);
-                    json_object_put(root);
-                    return;
-                }
+                        // Add all features to the license features list
+                        char** temp = realloc(*all_features, (transient_all_features_count + 1) * sizeof(char*));
+                        if (!temp) {
+                            log_error("Failed to allocate memory for license features\n");
+                            continue;
+                        }
+                        *all_features = temp;
+                        char* feature_copy = strdup(featureName);
+                        if (!feature_copy) {
+                            log_error("Failed to allocate memory for feature name\n");
+                            continue;
+                        }
+                        (*all_features)[transient_all_features_count++] = feature_copy;
 
-                json_object_object_foreach(features_root, featureName, val) {
-                    json_object *featureObject;
-                    json_object_object_get_ex(features_root, featureName, &featureObject);
-                    json_object *featureStatusObject;
-                    json_object_object_get_ex(featureObject, "status", &featureStatusObject);
-                    const char* featureStatus = json_object_get_string(featureStatusObject);
-                    json_object *featureEndDate;
-                    json_object_object_get_ex(featureObject, "endDate", &featureEndDate);
-
-                    // Add all features to the license features list
-                    char** temp = realloc(*all_features, (transient_all_features_count + 1) * sizeof(char*));
-                    if (!temp) {
-                        log_error("Failed to allocate memory for license features\n");
-                        continue;
-                    }
-                    *all_features = temp;
-                    char* feature_copy = strdup(featureName);
-                    if (!feature_copy) {
-                        log_error("Failed to allocate memory for feature name\n");
-                        continue;
-                    }
-                    (*all_features)[transient_all_features_count++] = feature_copy;
-
-                    // if status is "on" or "trial" and the current system time is not past the endDate, add to the granted features array
-                    bool enabled = false;
-                    if (strcmp(featureStatus, "on") == 0 || strcmp(featureStatus, "trial") == 0) {
-                        struct timeval tv;
-                        gettimeofday(&tv, NULL);
-                        if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
-                            char** granted_temp = realloc(*granted_features, (transient_granted_count + 1) * sizeof(char*));
-                            if (!granted_temp) {
-                                log_error("Failed to allocate memory for granted features\n");
-                            } else {
-                                *granted_features = granted_temp;
-                                char* granted_copy = strdup(featureName);
-                                if (!granted_copy) {
-                                    log_error("Failed to allocate memory for granted feature name\n");
+                        // if status is "on" or "trial" and the current system time is not past the endDate, add to the granted features array
+                        bool enabled = false;
+                        if (strcmp(featureStatus, "on") == 0 || strcmp(featureStatus, "trial") == 0) {
+                            struct timeval tv;
+                            gettimeofday(&tv, NULL);
+                            if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
+                                char** granted_temp = realloc(*granted_features, (transient_granted_count + 1) * sizeof(char*));
+                                if (!granted_temp) {
+                                    log_error("Failed to allocate memory for granted features\n");
                                 } else {
-                                    (*granted_features)[transient_granted_count++] = granted_copy;
-                                    enabled = true;
+                                    *granted_features = granted_temp;
+                                    char* granted_copy = strdup(featureName);
+                                    if (!granted_copy) {
+                                        log_error("Failed to allocate memory for granted feature name\n");
+                                    } else {
+                                        (*granted_features)[transient_granted_count++] = granted_copy;
+                                        enabled = true;
+                                    }
                                 }
                             }
                         }
+                        log_message("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                     }
-                    log_message("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
                 }
             } else {
                 if (config() && config()->debug_license) {
@@ -249,6 +238,7 @@ bool all_features_in_license(char** requested_features, int requested_count) {
 
         *granted_features_count = transient_granted_count;
         *all_features_count = transient_all_features_count;
+        return valid_license;
     }
 #endif
 
@@ -363,8 +353,8 @@ void refresh_license(bool force, char** requested_features, int requested_featur
 
                 get_license_features(file, &granted_features, &granted_count, &all_features, &all_features_count);
                 fclose(file);
-                if (granted_count > 0 || all_features_count > 0) {
-                    valid_license = true;
+                valid_license = (granted_count > 0 || all_features_count > 0);
+                if (valid_license) {
                     if (strcmp(file_path, device_license_path_tmp) == 0) {
                         rename(file_path, device_license_path);
                     }
