@@ -84,6 +84,36 @@ bool all_features_granted(char** requested_features, int requested_count) {
     return true;
 }
 
+// Helper function to deep copy feature array
+char** deep_copy_features(char** features, int count) {
+    if (count == 0 || !features) return NULL;
+    
+    char** copy = calloc(count, sizeof(char*));
+    if (!copy) return NULL;
+    
+    for (int i = 0; i < count; i++) {
+        copy[i] = strdup(features[i]);
+        if (!copy[i]) {
+            // Clean up on failure
+            for (int j = 0; j < i; j++) {
+                free(copy[j]);
+            }
+            free(copy);
+            return NULL;
+        }
+    }
+    return copy;
+}
+
+// Helper function to free feature array
+void free_features(char** features, int count) {
+    if (!features) return;
+    for (int i = 0; i < count; i++) {
+        free(features[i]);
+    }
+    free(features);
+}
+
 #ifdef DEVICE_LICENSE_PUBLIC_KEY
     char* postbody(char* hardwareId, char** features, int features_count) {
         json_object *root = json_object_new_object();
@@ -392,12 +422,7 @@ void refresh_license(bool force, char** requested_features, int requested_featur
         }
     #endif
 
-    if (state()->granted_features && state()->granted_features_count > 0) {
-        for (int i = 0; i < state()->granted_features_count; i++) {
-            free(state()->granted_features[i]);
-        }
-        free(state()->granted_features);
-    }
+    free_features(state()->granted_features, state()->granted_features_count);
     state()->granted_features = features;
     state()->granted_features_count = features_count;
 }
@@ -442,20 +467,24 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
         // If features changed and not all requested features are already granted, refresh the license
         bool should_refresh = features_changed && !all_features_granted(requested_features, requested_count);
         
-        // Update last requested features
-        if (last_requested_features) {
-            for (int i = 0; i < last_requested_features_count; i++) {
-                free(last_requested_features[i]);
-            }
-            free(last_requested_features);
+        // Make a deep copy for refresh_license if needed
+        char** features_copy = NULL;
+        int features_copy_count = 0;
+        if (should_refresh) {
+            features_copy = deep_copy_features(requested_features, requested_count);
+            features_copy_count = requested_count;
         }
+        
+        // Update last requested features
+        free_features(last_requested_features, last_requested_features_count);
         last_requested_features = requested_features;
         last_requested_features_count = requested_count;
         
         pthread_mutex_unlock(&requested_features_lock);
         
-        if (should_refresh) {
-            refresh_license(false, requested_features, requested_count);
+        if (should_refresh && features_copy) {
+            refresh_license(false, features_copy, features_copy_count);
+            free_features(features_copy, features_copy_count);
         }
     }
 }
