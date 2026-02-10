@@ -37,6 +37,11 @@ int parse_features_string(const char* features_str, char*** features) {
     }
 
     char* str_copy = strdup(features_str);
+    if (!str_copy) {
+        *features = NULL;
+        return 0;
+    }
+    
     int count = 0;
     *features = NULL;
 
@@ -501,35 +506,26 @@ void device_license_handle_control_flag_line_func(char* key, char* value) {
             }
         }
 
-        // If features changed and not all requested features are already granted, refresh the license
-        bool should_refresh = features_changed && !all_features_granted(requested_features, requested_count);
-        
-        // Make a deep copy for refresh_license if needed
-        char** features_copy = NULL;
-        int features_copy_count = 0;
-        if (should_refresh) {
-            features_copy = deep_copy_features(requested_features, requested_count);
-            if (features_copy) {
-                features_copy_count = requested_count;
-            } else {
-                // Failed to allocate memory for deep copy, don't update last_requested_features
-                // to avoid inconsistent state
-                pthread_mutex_unlock(&requested_features_lock);
-                free_features(requested_features, requested_count);
-                return;
-            }
-        }
-        
-        // Update last requested features
+        // Update last requested features while holding the lock
         free_features(last_requested_features, last_requested_features_count);
         last_requested_features = requested_features;
         last_requested_features_count = requested_count;
         
         pthread_mutex_unlock(&requested_features_lock);
+
+        // Check if refresh needed - done after releasing requested_features_lock to avoid deadlock
+        // since all_features_granted acquires refresh_license_lock
+        bool should_refresh = features_changed && !all_features_granted(requested_features, requested_count);
         
         if (should_refresh) {
-            refresh_license(false, features_copy, features_copy_count);
-            free_features(features_copy, features_copy_count);
+            // Make a deep copy for refresh_license
+            char** features_copy = deep_copy_features(requested_features, requested_count);
+            if (features_copy) {
+                refresh_license(false, features_copy, requested_count);
+                free_features(features_copy, requested_count);
+            } else {
+                log_error("Failed to allocate memory for feature refresh, will retry on next request\n");
+            }
         }
     }
 }
