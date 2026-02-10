@@ -27,7 +27,6 @@ const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
 // Declare mutexes early so they can be used in helper functions
 pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t requested_features_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Helper function to check if all requested features are present in the license
 bool all_features_in_license(char** requested_features, int requested_count) {
@@ -351,9 +350,8 @@ void refresh_license(bool force, char** requested_features, int requested_featur
                     }
                 }
 
-                get_license_features(file, &granted_features, &granted_count, &all_features, &all_features_count);
+                valid_license = get_license_features(file, &granted_features, &granted_count, &all_features, &all_features_count);
                 fclose(file);
-                valid_license = (granted_count > 0 || all_features_count > 0);
                 if (valid_license) {
                     if (strcmp(file_path, device_license_path_tmp) == 0) {
                         rename(file_path, device_license_path);
@@ -388,60 +386,20 @@ void device_license_start_func() {
     refresh_license(false, NULL, 0);
 }
 
-static char** last_requested_features = NULL;
-static int last_requested_features_count = 0;
-
 void device_license_handle_control_flag_line_func(char* key, char* value) {
     if (strcmp(key, "refresh_device_license") == 0) {
         if (strcmp(value, "true") == 0) refresh_license(true, NULL, 0);
     } else if (strcmp(key, "request_features") == 0) {
-        pthread_mutex_lock(&requested_features_lock);
-        
         // Parse the comma-separated features string
         char** requested_features = NULL;
         int requested_count = parse_comma_separated_string(value, &requested_features);
 
-        // Check if these features are different from the last request
-        bool features_changed = false;
-        if (requested_count != last_requested_features_count) {
-            features_changed = true;
-        } else {
-            for (int i = 0; i < requested_count; i++) {
-                if (!in_array(requested_features[i], (const char**)last_requested_features, last_requested_features_count)) {
-                    features_changed = true;
-                    break;
-                }
-            }
-        }
-
-        // Update last requested features while holding the lock
-        free_string_array(last_requested_features, last_requested_features_count);
-        last_requested_features = requested_features;
-        last_requested_features_count = requested_count;
-        
-        // Check if refresh needed while holding lock to avoid race condition
-        // Make a deep copy first if we need to refresh, to avoid holding lock during all_features_in_license
-        char** features_copy = NULL;
-        int features_copy_count = 0;
-        if (features_changed && requested_count > 0) {
-            features_copy = deep_copy_string_array(requested_features, requested_count);
-            if (features_copy) {
-                features_copy_count = requested_count;
-            } else {
-                log_error("Failed to allocate memory for feature refresh, will retry on next request\n");
-            }
+        // Check if all requested features are present in the license
+        if (requested_count > 0 && !all_features_in_license(requested_features, requested_count)) {
+            refresh_license(false, requested_features, requested_count);
         }
         
-        pthread_mutex_unlock(&requested_features_lock);
-
-        // Check if all features are present in the license (done after releasing lock to avoid deadlock)
-        if (features_copy && !all_features_in_license(features_copy, features_copy_count)) {
-            refresh_license(false, features_copy, features_copy_count);
-        }
-        
-        if (features_copy) {
-            free_string_array(features_copy, features_copy_count);
-        }
+        free_string_array(requested_features, requested_count);
     }
 }
 
