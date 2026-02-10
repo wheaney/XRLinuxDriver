@@ -246,8 +246,18 @@ void free_features(char** features, int count) {
                     json_object_object_get_ex(featureObject, "endDate", &featureEndDate);
 
                     // Add all features to the license features list
-                    *all_features = realloc(*all_features, (license_count + 1) * sizeof(char*));
-                    (*all_features)[license_count++] = strdup(featureName);
+                    char** temp = realloc(*all_features, (license_count + 1) * sizeof(char*));
+                    if (!temp) {
+                        log_error("Failed to allocate memory for license features\n");
+                        continue;
+                    }
+                    *all_features = temp;
+                    char* feature_copy = strdup(featureName);
+                    if (!feature_copy) {
+                        log_error("Failed to allocate memory for feature name\n");
+                        continue;
+                    }
+                    (*all_features)[license_count++] = feature_copy;
 
                     // if status is "on" or "trial" and the current system time is not past the endDate, add to the granted features array
                     bool enabled = false;
@@ -255,9 +265,19 @@ void free_features(char** features, int count) {
                         struct timeval tv;
                         gettimeofday(&tv, NULL);
                         if (!featureEndDate || json_object_get_int(featureEndDate) > tv.tv_sec) {
-                            *granted_features = realloc(*granted_features, (granted_count + 1) * sizeof(char*));
-                            (*granted_features)[granted_count++] = strdup(featureName);
-                            enabled = true;
+                            char** granted_temp = realloc(*granted_features, (granted_count + 1) * sizeof(char*));
+                            if (!granted_temp) {
+                                log_error("Failed to allocate memory for granted features\n");
+                            } else {
+                                *granted_features = granted_temp;
+                                char* granted_copy = strdup(featureName);
+                                if (!granted_copy) {
+                                    log_error("Failed to allocate memory for granted feature name\n");
+                                } else {
+                                    (*granted_features)[granted_count++] = granted_copy;
+                                    enabled = true;
+                                }
+                            }
                         }
                     }
                     log_message("Feature %s %s.\n", featureName, enabled ? "granted" : "denied");
