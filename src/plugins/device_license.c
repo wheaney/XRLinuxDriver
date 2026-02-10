@@ -25,6 +25,10 @@
 const char* DEVICE_LICENSE_FILE_NAME = "%.8s_license.json";
 const char* DEVICE_LICENSE_TEMP_FILE_NAME = "license.tmp.json";
 
+// Declare mutexes early so they can be used in helper functions
+pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t requested_features_lock = PTHREAD_MUTEX_INITIALIZER;
+
 // Helper function to parse comma-separated features string
 int parse_features_string(const char* features_str, char*** features) {
     if (!features_str || strlen(features_str) == 0) {
@@ -69,19 +73,30 @@ int parse_features_string(const char* features_str, char*** features) {
 // Helper function to check if all requested features are already granted
 bool all_features_granted(char** requested_features, int requested_count) {
     if (requested_count == 0) return true;
-    if (!state()->granted_features || state()->granted_features_count == 0) return false;
-
-    for (int i = 0; i < requested_count; i++) {
-        bool found = false;
-        for (int j = 0; j < state()->granted_features_count; j++) {
-            if (strcmp(requested_features[i], state()->granted_features[j]) == 0) {
-                found = true;
+    
+    pthread_mutex_lock(&refresh_license_lock);
+    bool result = true;
+    
+    if (!state()->granted_features || state()->granted_features_count == 0) {
+        result = false;
+    } else {
+        for (int i = 0; i < requested_count; i++) {
+            bool found = false;
+            for (int j = 0; j < state()->granted_features_count; j++) {
+                if (strcmp(requested_features[i], state()->granted_features[j]) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                result = false;
                 break;
             }
         }
-        if (!found) return false;
     }
-    return true;
+    
+    pthread_mutex_unlock(&refresh_license_lock);
+    return result;
 }
 
 // Helper function to deep copy feature array
@@ -290,9 +305,6 @@ void free_features(char** features, int count) {
 #endif
 
 
-
-pthread_mutex_t refresh_license_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t requested_features_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void refresh_license(bool force, char** requested_features, int requested_features_count) {
     int features_count = 0;
