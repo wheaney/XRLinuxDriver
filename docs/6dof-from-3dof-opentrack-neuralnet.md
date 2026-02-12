@@ -25,9 +25,10 @@ The high-level idea:
 I have an experimental AppImage CI build that may prevent the need for a more complicated installation on your system. 
 
 1. Visit [the latest wheaney/opentrack-appimage-ci Release](https://github.com/wheaney/opentrack-appimage-ci/releases/latest) and download the ONNX-GPU build.
-2. If you plan on kicking it off from the command line (better to see log output, if debugging), first set the execute flag on the file: `chmod +x ~/Downloads/OpenTrack-*.AppImage`
-3. Run it.
-4. If it doesn't work (or the `Start` button causes an error later on in the instructions), you might want to try the ONNX-CPU build. Otherwise, you'll need to try to install via your package manager.
+2. If you've ever launched another version of OpenTrack on this machine before, you may want to delete (backup first, if you want) the config files found with `find ~/.config/opentrack-*`.
+3. If you plan on kicking it off from the command line (better to see log output, if debugging), first set the execute flag on the file: `chmod +x ~/Downloads/OpenTrack-*.AppImage`
+4. Run it.
+5. If it doesn't work (or the `Start` button causes an error later on in the instructions), you might want to try the ONNX-CPU build. Otherwise, you'll need to try to install via your package manager.
 
 ### Setup via package manager
 
