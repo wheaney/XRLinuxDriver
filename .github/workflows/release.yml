@@ -29,12 +29,15 @@ jobs:
           echo "Current version: ${CURRENT_VERSION}"
           
           # Get the previous version (from previous commit)
-          git checkout HEAD~1 -- CMakeLists.txt 2>/dev/null || echo "First commit"
-          PREVIOUS_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt 2>/dev/null || echo "none")
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            git show HEAD~1:CMakeLists.txt > /tmp/prev_cmakelists.txt
+            PREVIOUS_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' /tmp/prev_cmakelists.txt 2>/dev/null || echo "none")
+            rm /tmp/prev_cmakelists.txt
+          else
+            # This is the first commit
+            PREVIOUS_VERSION="none"
+          fi
           echo "Previous version: ${PREVIOUS_VERSION}"
-          
-          # Reset to current version
-          git checkout HEAD -- CMakeLists.txt
           
           if [ "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]; then
             echo "Version changed from ${PREVIOUS_VERSION} to ${CURRENT_VERSION}"
