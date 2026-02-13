@@ -26,18 +26,18 @@ jobs:
         run: |
           # Get the current version
           CURRENT_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          echo "Current version: $CURRENT_VERSION"
+          echo "Current version: ${CURRENT_VERSION}"
           
           # Get the previous version (from previous commit)
           git checkout HEAD~1 -- CMakeLists.txt 2>/dev/null || echo "First commit"
           PREVIOUS_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt 2>/dev/null || echo "none")
-          echo "Previous version: $PREVIOUS_VERSION"
+          echo "Previous version: ${PREVIOUS_VERSION}"
           
           # Reset to current version
           git checkout HEAD -- CMakeLists.txt
           
-          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
-            echo "Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
+          if [ "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]; then
+            echo "Version changed from ${PREVIOUS_VERSION} to ${CURRENT_VERSION}"
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "Version unchanged"
@@ -48,8 +48,8 @@ jobs:
         id: get-version
         run: |
           VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
 
   build-x86_64:
     needs: check-version-change
@@ -70,7 +70,7 @@ jobs:
       - name: Build x86_64 binary package
         run: |
           docker run --rm -t -v ./:/source --platform linux/amd64 -e UA_API_SECRET_INTENTIONALLY_EMPTY=1 "xr-driver:amd64"
-          sudo chown -R $USER:$USER out/
+          sudo chown -R "${USER}":"${USER}" out/
       
       - name: Build x86_64 lib package
         run: |
@@ -106,7 +106,7 @@ jobs:
       - name: Build aarch64 binary package
         run: |
           docker run --rm -t -v ./:/source --platform linux/arm64 -e UA_API_SECRET_INTENTIONALLY_EMPTY=1 "xr-driver:arm64"
-          sudo chown -R $USER:$USER out/
+          sudo chown -R "${USER}":"${USER}" out/
       
       - name: Build aarch64 lib package
         run: |
@@ -140,7 +140,7 @@ jobs:
           path: ./artifacts
       
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-version-change.outputs.version }}
           name: Release v${{ needs.check-version-change.outputs.version }}
