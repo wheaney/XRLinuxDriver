@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CMakeLists.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  check-version-change:
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.check.outputs.changed }}
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Check if version changed
+        id: check
+        run: |
+          # Get the current version
+          CURRENT_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          echo "Current version: ${CURRENT_VERSION}"
+          
+          # Get the previous version (from previous commit)
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            git show HEAD~1:CMakeLists.txt > /tmp/prev_cmakelists.txt
+            PREVIOUS_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' /tmp/prev_cmakelists.txt 2>/dev/null || echo "none")
+            rm /tmp/prev_cmakelists.txt
+          else
+            # This is the first commit
+            PREVIOUS_VERSION="none"
+          fi
+          echo "Previous version: ${PREVIOUS_VERSION}"
+          
+          if [ "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]; then
+            echo "Version changed from ${PREVIOUS_VERSION} to ${CURRENT_VERSION}"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version unchanged"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Get version
+        id: get-version
+        run: |
+          VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+  build-x86_64:
+    needs: check-version-change
+    if: needs.check-version-change.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image for x86_64
+        run: |
+          docker buildx build --platform linux/amd64 --load -f ./docker-build/Dockerfile -t "xr-driver:amd64" .
+      
+      - name: Build x86_64 binary package
+        run: |
+          docker run --rm -t -v ./:/source --platform linux/amd64 -e UA_API_SECRET_INTENTIONALLY_EMPTY=1 "xr-driver:amd64"
+          sudo chown -R "${USER}":"${USER}" out/
+      
+      - name: Build x86_64 lib package
+        run: |
+          ./bin/package_libs
+      
+      - name: Upload x86_64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrDriver-x86_64
+          path: |
+            out/xrDriver-x86_64.tar.gz
+            out/xrDriver-libs-x86_64.tar.gz
+
+  build-aarch64:
+    needs: check-version-change
+    if: needs.check-version-change.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image for aarch64
+        run: |
+          docker buildx build --platform linux/arm64 --load -f ./docker-build/Dockerfile.aarch64 -t "xr-driver:arm64" .
+      
+      - name: Build aarch64 binary package
+        run: |
+          docker run --rm -t -v ./:/source --platform linux/arm64 -e UA_API_SECRET_INTENTIONALLY_EMPTY=1 "xr-driver:arm64"
+          sudo chown -R "${USER}":"${USER}" out/
+      
+      - name: Build aarch64 lib package
+        run: |
+          ./bin/package_libs
+      
+      - name: Upload aarch64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrDriver-aarch64
+          path: |
+            out/xrDriver-aarch64.tar.gz
+            out/xrDriver-libs-aarch64.tar.gz
+
+  create-release:
+    needs: [check-version-change, build-x86_64, build-aarch64]
+    if: needs.check-version-change.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download x86_64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: xrDriver-x86_64
+          path: ./artifacts
+      
+      - name: Download aarch64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: xrDriver-aarch64
+          path: ./artifacts
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version-change.outputs.version }}
+          name: Release v${{ needs.check-version-change.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/xrDriver-x86_64.tar.gz
+            artifacts/xrDriver-libs-x86_64.tar.gz
+            artifacts/xrDriver-aarch64.tar.gz
+            artifacts/xrDriver-libs-aarch64.tar.gz
+            bin/xr_driver_setup
+            bin/xr_driver_ot_profile_setup
