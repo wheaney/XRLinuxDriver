@@ -14,7 +14,7 @@ if [ ! -d "$BUILD_PATH" ]; then
   mkdir $BUILD_PATH
 fi
 
-pushd $BUILD_PATH
+pushd $BUILD_PATH > /dev/null
 
 for ARCH in "${ARCHITECTURES[@]}"; do
   echo "Packaging libraries for $ARCH"
@@ -22,7 +22,7 @@ for ARCH in "${ARCHITECTURES[@]}"; do
   # create separate lib package
   PACKAGE_LIB_DIR=xr_driver_lib
   mkdir -p $PACKAGE_LIB_DIR
-  cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR || true
+  cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR
   cp ../lib/$ARCH/viture/*.so* $PACKAGE_LIB_DIR || true
 
   LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.tar.gz"
@@ -32,7 +32,7 @@ for ARCH in "${ARCHITECTURES[@]}"; do
   rm -rf $PACKAGE_LIB_DIR
 done
 
-popd
+popd > /dev/null
 
 mkdir -p out
 cp $BUILD_PATH/*.tar.gz out/
