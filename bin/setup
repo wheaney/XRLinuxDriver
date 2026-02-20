@@ -151,7 +151,7 @@ echo "Copying the udev rules to ${UDEV_RULES_DIR}"
 cp udev/* $UDEV_RULES_DIR
 
 udevadm control --reload-rules >/dev/null 2>&1
-for subsystem in usb hidraw input misc tty sound; do
+for subsystem in usb hidraw input; do
   udevadm trigger --action=add --subsystem-match="$subsystem" >/dev/null 2>&1 || true
 done
 udevadm settle >/dev/null 2>&1 || true

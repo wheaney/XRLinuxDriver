@@ -19,12 +19,14 @@ static void ensure_capacity() {
 }
 
 static pose_handler_t pose_handler = NULL;
-void connection_pool_init(pose_handler_t pose_handler_callback) {
+static reference_pose_getter_t reference_pose_getter = NULL;
+void connection_pool_init(pose_handler_t pose_handler_callback, reference_pose_getter_t reference_pose_getter_callback) {
     pool = (connection_pool_type*)calloc(1, sizeof(*pool));
     pthread_mutex_init(&pool->mutex, NULL);
     pool->primary_index = -1;
     pool->supplemental_index = -1;
     pose_handler = pose_handler_callback;
+    reference_pose_getter = reference_pose_getter_callback;
 }
 
 static int pick_primary_index() {
@@ -192,7 +194,6 @@ const device_driver_type* connection_pool_primary_driver() {
 
 static bool supplemental_position_ready = false;
 static imu_pose_type last_supplemental_pose = {0};
-static imu_quat_type supplemental_reference_orientation_conj = {0};
 void connection_pool_handle_device_added(const device_driver_type* driver, device_properties_type* device) {
     if (config()->debug_connections) log_debug("connection_pool_handle_device_added for driver %s, has_orientation %s, has_position %s\n", driver->id, device->provides_orientation ? "true" : "false", device->provides_position ? "true" : "false");
 
@@ -310,17 +311,27 @@ void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
         if (pose_from_supplemental) {
             // don't forward supplemental poses directly,
             // store the latest one to be forwarded with the next primary pose
-            if (supplemental_position_ready && pose.has_position) {
+            if (pose.has_position) {
+                static imu_quat_type reference_supplemental_orientation_conj = {0, 0, 0, 1};
                 // reorient supplemental position into primary reference frame
-                pose.position = vector_rotate(pose.position, supplemental_reference_orientation_conj);
+                imu_pose_type reference_pose = {0};
+                bool reference_pose_updated = false;
+                supplemental_position_ready = reference_pose_getter(&reference_pose, &reference_pose_updated);
+
+                // when we receive a new reference pose, also capture the supplemental orientation
+                // so we can properly adjust the reference frame
+                if (pose.has_orientation && reference_pose_updated) 
+                    reference_supplemental_orientation_conj = conjugate(pose.orientation);
+                    
+                if (supplemental_position_ready) {
+                    if (pose.has_orientation) {
+                        reference_pose.orientation = multiply_quaternions(reference_supplemental_orientation_conj, reference_pose.orientation);
+                    }
+                    pose.position = vector_rotate(pose.position, reference_pose.orientation);
+                }
             }
             last_supplemental_pose = pose;
             return;
-        } else if (!supplemental_position_ready && pose.has_orientation) {
-            // capture the first primary orientation after a supplemental device is connected
-            // so we can reorient supplemental position data into the primary frame
-            supplemental_position_ready = true;
-            supplemental_reference_orientation_conj = pose.orientation;
         }
     }
 

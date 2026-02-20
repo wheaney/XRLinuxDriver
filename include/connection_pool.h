@@ -29,7 +29,8 @@ typedef struct connection_pool_t connection_pool_type;
 
 // Create/destroy a connection pool instance
 typedef void (*pose_handler_t)(imu_pose_type pose);
-void connection_pool_init(pose_handler_t pose_handler_callback);
+typedef bool (*reference_pose_getter_t)(imu_pose_type* out_pose, bool* pose_updated);
+void connection_pool_init(pose_handler_t pose_handler_callback, reference_pose_getter_t reference_pose_getter);
 
 // Append a new connection (driver + device). The pool retains the driver pointer and
 // takes ownership of the device pointer. It will decide whether to make it the primary

@@ -78,6 +78,18 @@ void reset_calibration(bool reset_device) {
     } else log_message("Waiting on device calibration\n");
 }
 
+static bool reference_pose_updated = false;
+bool driver_reference_pose(imu_pose_type* out_pose, bool* pose_updated) {
+    if (captured_reference_pose) {
+        *out_pose = reference_pose;
+        *pose_updated = reference_pose_updated;
+        reference_pose_updated = false;
+        return true;
+    }
+
+    return false;
+}
+
 void driver_handle_pose(imu_pose_type pose) {
     // counter that resets every second, for triggering things that we don't want to do every cycle
     static int imu_counter = 0;
@@ -115,14 +127,15 @@ void driver_handle_pose(imu_pose_type pose) {
                 }
                 
                 captured_reference_pose = true;
+                reference_pose_updated = true;
                 control_flags->recenter_screen = false;
 
                 plugins.handle_reference_pose_updated(old_reference_pose, reference_pose);
             } else {
                 imu_pose_type current_pose = pose;
                 if (current_pose.has_orientation) current_pose.euler = quaternion_to_euler_zyx(current_pose.orientation);
-                bool pose_updated = plugins.modify_reference_pose(current_pose, &reference_pose);
-                if (pose_updated) reference_orientation_conj = conjugate(reference_pose.orientation);
+                reference_pose_updated |= plugins.modify_reference_pose(current_pose, &reference_pose);
+                if (reference_pose_updated) reference_orientation_conj = conjugate(reference_pose.orientation);
             }
         } else {
             struct timeval tv;
@@ -658,7 +671,7 @@ int main(int argc, const char** argv) {
 
     set_config(default_config());
     set_state(calloc(1, sizeof(driver_state_type)));
-    connection_pool_init(driver_handle_pose);
+    connection_pool_init(driver_handle_pose, driver_reference_pose);
 
     config_fp = get_or_create_config_file("config.ini", "r", &config_filename, NULL);
     update_config_from_file(config_fp);
