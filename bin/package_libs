@@ -22,7 +22,7 @@ for ARCH in "${ARCHITECTURES[@]}"; do
   # create separate lib package
   PACKAGE_LIB_DIR=xr_driver_lib
   mkdir -p $PACKAGE_LIB_DIR
-  cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR
+  cp ../lib/$ARCH/*.so* $PACKAGE_LIB_DIR || true
   cp ../lib/$ARCH/viture/*.so* $PACKAGE_LIB_DIR || true
 
   LIB_ARTIFACT_NAME="xrDriver-libs-$ARCH.tar.gz"
