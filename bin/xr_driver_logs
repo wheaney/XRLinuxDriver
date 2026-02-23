@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+# exit when any command fails
+set -e
+
+if [ "$(id -u)" == "0" ]; then
+   echo "This script must not be run as root" 1>&2
+   exit 1
+fi
+
+XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
+
+# Create a temp directory to gather logs
+tmp_dir=$(mktemp -d -t xr-driver-logs-XXXXXXXXXX)
+echo "Gathering logs into temp directory: ${tmp_dir}"
+
+mkdir -p "$tmp_dir/xr_driver_logs"
+
+# Copy XR driver log
+if [ -f "$XDG_STATE_HOME/xr_driver/driver.log" ]; then
+  cp "$XDG_STATE_HOME/xr_driver/driver.log" "$tmp_dir/xr_driver_logs/driver.log"
+else
+  echo "Warning: XR driver log not found at $XDG_STATE_HOME/xr_driver/driver.log"
+fi
+
+# Copy XR driver config
+if [ -f "$HOME/.config/xr_driver/config.ini" ]; then
+  cp "$HOME/.config/xr_driver/config.ini" "$tmp_dir/xr_driver_logs/config.ini"
+else
+  echo "Warning: XR driver config not found at $HOME/.config/xr_driver/config.ini"
+fi
+
+copy_breezy_logs() {
+  if [ ! -d "$XDG_BIN_HOME" ]; then
+    return 0
+  fi
+
+  local breezy_scripts
+  breezy_scripts=$(find "$XDG_BIN_HOME" -maxdepth 1 -type f -name 'breezy_*_logs' -perm -u+x -print 2>/dev/null || true)
+  if [ -z "$breezy_scripts" ]; then
+    return 0
+  fi
+
+  while IFS= read -r script_path; do
+    [ -z "$script_path" ] && continue
+
+    local script_name
+    script_name=$(basename "$script_path")
+    echo "Running $script_name to collect Breezy logs"
+
+    local run_dir
+    run_dir=$(mktemp -d -p "$tmp_dir" breezy-run-XXXXXXXXXX)
+
+    set +e
+    (cd "$run_dir" && "$script_path")
+    local rc=$?
+    set -e
+
+    if [ "$rc" -ne 0 ]; then
+      echo "Warning: $script_name exited with code $rc"
+      rm -rf "$run_dir"
+      continue
+    fi
+
+    local archive
+    archive=$(find "$run_dir" -maxdepth 1 -type f -name '*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2-)
+    if [ -z "$archive" ]; then
+      echo "Warning: $script_name did not produce a .tar.gz archive"
+      rm -rf "$run_dir"
+      continue
+    fi
+
+    cp "$archive" "$tmp_dir/xr_driver_logs/"
+    rm -rf "$run_dir"
+  done <<< "$breezy_scripts"
+}
+
+copy_breezy_logs
+
+# Create archive
+archive_name="xr_driver_logs_$(date +%Y%m%d_%H%M%S).tar.gz"
+tar -czf "$archive_name" -C "$tmp_dir" xr_driver_logs
+echo "Created log archive: $(pwd)/$archive_name"
+
+rm -rf "$tmp_dir"

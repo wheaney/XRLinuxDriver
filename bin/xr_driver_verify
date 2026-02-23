@@ -23,6 +23,7 @@ file_paths=(
   ["xrDriver"]="{bin_dir}/xrDriver"
   ["xr_driver_cli"]="{bin_dir}/xr_driver_cli"
   ["xr_driver_uninstall"]="{bin_dir}/xr_driver_uninstall"
+  ["xr_driver_logs"]="{bin_dir}/xr_driver_logs"
 )
 
 # verify the file hashes in ./manifest

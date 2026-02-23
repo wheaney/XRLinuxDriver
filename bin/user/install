@@ -95,6 +95,7 @@ sed -i -e "s/{bin_dir}/$ESCAPED_BIN_DIR/g" xr_driver_verify
 cp xrDriver $BIN_DIR
 cp xr_driver_cli $BIN_DIR
 cp xr_driver_uninstall $BIN_DIR
+cp xr_driver_logs $BIN_DIR
 cp xr_driver_verify $BIN_DIR
 
 # keep putting this in the old location in case an older version of the script tries to find it
