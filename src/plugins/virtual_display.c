@@ -92,7 +92,8 @@ void set_virtual_display_ipc_values() {
         float look_ahead_cfg[4] = {look_ahead_constant, look_ahead_ftm, device->look_ahead_scanline_adjust, device->look_ahead_ms_cap};
 
         // computed values based on display config/state
-        float display_north_offset = (device->provides_position || state()->sbs_mode_enabled)
+        bool pose_has_position = state()->connected_device_pose_has_position;
+        float display_north_offset = (pose_has_position || state()->sbs_mode_enabled)
                                          ? vd_config->display_distance
                                          : 1.0;
         float display_aspect_ratio = (float)device->resolution_w / (float)device->resolution_h;
@@ -107,7 +108,7 @@ void set_virtual_display_ipc_values() {
         // for 3DoF-only devices, the north offset creates a realistic shift in viewport position based 
         // on orientation, but 6DoF devices give us the actual position, so we don't use the lens north
         // offset to avoid double shifting
-        float lens_north_offset = device->provides_position ? 0.0 : device->lens_distance_ratio;
+        float lens_north_offset = pose_has_position ? 0.0 : device->lens_distance_ratio;
         float lens_vector[3] = {lens_north_offset, 0.0, 0.0};
         float lens_vector_r[3] = {lens_north_offset, 0.0, 0.0};
 
