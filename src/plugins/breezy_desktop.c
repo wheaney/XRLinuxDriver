@@ -288,7 +288,8 @@ void breezy_desktop_set_config_func(void* new_config) {
 void breezy_desktop_handle_pose_data_func(imu_pose_type pose, imu_euler_type velocities, bool imu_calibrated, ipc_values_type *ipc_values) {
     if (is_productivity_granted() && bd_config && bd_config->enabled) {
         if (imu_calibrated && ipc_values) {
-            breezy_desktop_write_pose_data(ipc_values->pose_orientation, ipc_values->pose_position);
+            breezy_desktop_write_pose_data(ipc_values->pose_orientation, 
+                is_productivity_pro_granted() ? ipc_values->pose_position : &POSITION_RESET[0]);
         } else {
             breezy_desktop_reset_pose_data_func();
         }
