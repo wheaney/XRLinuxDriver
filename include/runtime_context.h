@@ -20,17 +20,34 @@ struct runtime_context_t {
 
 typedef struct runtime_context_t runtime_context;
 
-void set_state(driver_state_type *state);
+// Global runtime context instance.
+// This is intentionally exposed so the most frequently-called accessors below can be
+// `static inline` and compile down to a single load/store even without LTO.
+extern runtime_context g_runtime_context;
 
-driver_state_type* state();
+static inline void set_state(driver_state_type *state) {
+    g_runtime_context.state = state;
+}
 
-void set_config(driver_config_type *config);
+static inline driver_state_type* state(void) {
+    return g_runtime_context.state;
+}
 
-driver_config_type* config();
+static inline void set_config(driver_config_type *config) {
+    g_runtime_context.config = config;
+}
 
-void set_connection_pool(connection_pool_type *pool);
+static inline driver_config_type* config(void) {
+    return g_runtime_context.config;
+}
 
-connection_pool_type* connection_pool();
+static inline void set_connection_pool(connection_pool_type *pool) {
+    g_runtime_context.conn_pool = pool;
+}
+
+static inline connection_pool_type* connection_pool(void) {
+    return g_runtime_context.conn_pool;
+}
 
 // device is so heavily used across threads that it becomes difficult to find a good time to free() it,
 // so the below functions keep a reference count and free it when the count reaches 0
