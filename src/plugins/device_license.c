@@ -1,4 +1,7 @@
 #include "curl.h"
+#include "features/breezy_desktop.h"
+#include "features/sbs.h"
+#include "features/smooth_follow.h"
 #include "files.h"
 #include "logging.h"
 #include "memory.h"
@@ -375,6 +378,11 @@ void refresh_license(bool force, char** requested_features, int requested_featur
     free_string_array(state()->granted_features, state()->granted_features_count);
     state()->granted_features = granted_features;
     state()->granted_features_count = granted_count;
+
+    // granted_features has changed; clear cached feature checks
+    reset_productivity_features();
+    reset_sbs_features();
+    reset_smooth_follow_features();
     
     free_string_array(state()->license_features, state()->license_features_count);
     state()->license_features = all_features;

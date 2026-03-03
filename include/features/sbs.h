@@ -3,3 +3,4 @@
 extern const char* sbs_feature_name;
 
 bool is_sbs_granted();
+void reset_sbs_features();
