@@ -4,31 +4,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-static runtime_context context;
-
-void set_state(driver_state_type* state) {
-    context.state = state;
-}
-
-driver_state_type* state() {
-    return context.state;
-}
-
-void set_config(driver_config_type* config) {
-    context.config = config;
-}
-
-driver_config_type* config() {
-    return context.config;
-}
-
-void set_connection_pool(connection_pool_type* pool) {
-    context.conn_pool = pool;
-}
-
-connection_pool_type* connection_pool() {
-    return context.conn_pool;
-}
+runtime_context g_runtime_context;
 
 static int device_ref_count = 0;
 pthread_mutex_t device_ref_count_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -37,8 +13,8 @@ static on_device_change_callback on_device_change_callback_func = NULL;
 
 // the mutex must already be locked when calling this function
 static bool _check_and_set_queued_device() {
-    if (context.device == NULL && queued_device != NULL) {
-        context.device = queued_device;
+    if (g_runtime_context.device == NULL && queued_device != NULL) {
+        g_runtime_context.device = queued_device;
         queued_device = NULL;
         device_ref_count = 1;
         return true;
@@ -50,7 +26,7 @@ static bool _check_and_set_queued_device() {
 void set_device_and_checkout(device_properties_type* device) {
     bool device_changed = false;
     pthread_mutex_lock(&device_ref_count_mutex);
-    if (!device_equal(device, context.device)) {
+    if (!device_equal(device, g_runtime_context.device)) {
         queued_device = device;
         device_changed = _check_and_set_queued_device();
     } else {
@@ -67,7 +43,7 @@ device_properties_type* device_checkout() {
     pthread_mutex_lock(&device_ref_count_mutex);
     if (device_present()) {
         device_ref_count++;
-        device = context.device;
+        device = g_runtime_context.device;
     }
     pthread_mutex_unlock(&device_ref_count_mutex);
 
@@ -78,11 +54,11 @@ void device_checkin(device_properties_type* device) {
     bool device_changed = false;
     
     pthread_mutex_lock(&device_ref_count_mutex);
-    if (device_ref_count > 0 && device_equal(device, context.device)) {
+    if (device_ref_count > 0 && device_equal(device, g_runtime_context.device)) {
         device_ref_count--;
         if (device_ref_count == 0) {
-            free(context.device);
-            context.device = NULL;
+            free(g_runtime_context.device);
+            g_runtime_context.device = NULL;
             _check_and_set_queued_device();
             device_changed = true;
         }
@@ -97,7 +73,7 @@ void device_checkin(device_properties_type* device) {
 
 // if a device is queued, the current device is already disconnected, return false until queued device takes over
 bool device_present() {
-    return context.device != NULL && queued_device == NULL;
+    return g_runtime_context.device != NULL && queued_device == NULL;
 }
 
 void set_on_device_change_callback(on_device_change_callback callback) {
