@@ -65,6 +65,10 @@ then
   lib_path_arg="$local_dir/xrDriver-libs-$ARCH.tar.gz"
   if [ ! -f "$lib_path_arg" ]; then
     echo "Error: Lib archive not found at $lib_path_arg"
+
+    YELLOW='\e[1;33m'
+    RESET='\e[0m'
+    echo -e "\n${YELLOW}IMPORTANT${RESET}: Be sure you're using the latest version of the setup script\n"
     exit 1
   fi
 fi
