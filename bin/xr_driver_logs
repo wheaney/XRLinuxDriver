@@ -9,7 +9,15 @@ if [ "$(id -u)" == "0" ]; then
 fi
 
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
-XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
+
+# Determine the directory containing this script as invoked.
+# This makes the script packaging-friendly (e.g. distro/AUR installs), since
+# companion scripts are expected to be installed alongside it.
+script_ref="$0"
+if [[ "$script_ref" != */* ]]; then
+  script_ref="$(command -v -- "$script_ref" 2>/dev/null || echo "$script_ref")"
+fi
+script_dir="$(cd -P -- "$(dirname -- "$script_ref")" && pwd -P)"
 
 # Create a temp directory to gather logs
 tmp_dir=$(mktemp -d -t xr-driver-logs-XXXXXXXXXX)
@@ -32,12 +40,12 @@ else
 fi
 
 copy_breezy_logs() {
-  if [ ! -d "$XDG_BIN_HOME" ]; then
+  if [ ! -d "$script_dir" ]; then
     return 0
   fi
 
   local breezy_scripts
-  breezy_scripts=$(find "$XDG_BIN_HOME" -maxdepth 1 -type f -name 'breezy_*_logs' -perm -u+x -print 2>/dev/null || true)
+  breezy_scripts=$(find "$script_dir" -maxdepth 1 -type f -name 'breezy_*_logs' -perm -u+x -print 2>/dev/null || true)
   if [ -z "$breezy_scripts" ]; then
     return 0
   fi
