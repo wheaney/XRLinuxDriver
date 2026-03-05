@@ -1,6 +1,13 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Run release even if version did not change'
+        type: boolean
+        required: false
+        default: false
   push:
     branches:
       - main
@@ -23,6 +30,8 @@ jobs:
       
       - name: Check if version changed
         id: check
+        env:
+          FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_release == 'true' }}
         run: |
           # Get the current version
           CURRENT_VERSION=$(grep -oP 'project\(xrDriver VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
@@ -38,6 +47,12 @@ jobs:
             PREVIOUS_VERSION="none"
           fi
           echo "Previous version: ${PREVIOUS_VERSION}"
+
+          if [ "${FORCE_RELEASE}" = "true" ]; then
+            echo "Force release enabled; proceeding regardless of version change"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           
           if [ "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]; then
             echo "Version changed from ${PREVIOUS_VERSION} to ${CURRENT_VERSION}"
