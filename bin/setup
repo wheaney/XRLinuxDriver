@@ -11,10 +11,16 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
-# some distros don't have systemd enabled by default, check this first
-if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
-  echo "systemd is required for this installation. Please enable it, then rerun the setup."
-  exit 1
+# some distros don't have systemd enabled by default.
+if [[ -z "${SKIP_SYSTEMD:-}" ]]; then
+  if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
+    echo "systemd is required for this installation. Please enable it, then rerun the setup."
+    exit 1
+  fi
+else
+  if [[ $(ps -p 1 -o comm=) != "systemd" ]]; then
+    echo "SKIP_SYSTEMD is set and systemd is not detected as PID 1; continuing without systemd integration."
+  fi
 fi
 
 if ! find /usr/lib* -name 'libcurl.so*' -print -quit | grep -q .; then
@@ -115,7 +121,15 @@ if [[ "$current_path" == /tmp/* ]]; then
 fi
 
 # this part of the setup should be run as the user, not root
-export XDG_RUNTIME_DIR=/run/user/$(id -u $USER)
+XDG_RUNTIME_DIR="/run/user/$(id -u $USER)"
+if [ ! -d "$XDG_RUNTIME_DIR" ]; then
+  # On non-systemd systems /run/user/<uid> may not exist. Fall back to a private runtime dir in /tmp.
+  XDG_RUNTIME_DIR="/tmp/xr_driver_runtime_$(id -u $USER)"
+  mkdir -p "$XDG_RUNTIME_DIR"
+  chown "$USER:$GROUP" "$XDG_RUNTIME_DIR"
+  chmod 700 "$XDG_RUNTIME_DIR"
+fi
+export XDG_RUNTIME_DIR
 su -c "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR $(realpath bin/user/install)" $USER
 
 ###############################
