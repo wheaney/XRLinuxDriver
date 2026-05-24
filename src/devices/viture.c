@@ -12,6 +12,7 @@
 #include "sdks/viture_device_carina.h"
 #include "sdks/viture_glasses_provider.h"
 #include "sdks/viture_protocol_public.h"
+#include "sdks/viture_result.h"
 #include "strings.h"
 
 #include <math.h>
@@ -26,31 +27,7 @@
 #define VITURE_ID_PRODUCT_COUNT 14
 #define VITURE_ID_VENDOR 0x35ca
 #define VITURE_DRIVER_ID "viture"
-#define VITURE_ONE_MODEL_NAME "One"
-#define VITURE_ONE_LITE_MODEL_NAME "One Lite"
-#define VITURE_PRO_MODEL_NAME "Pro"
-#define VITURE_LUMA_MODEL_NAME "Luma"
-#define VITURE_LUMA_PRO_MODEL_NAME "Luma Pro"
-#define VITURE_LUMA_ULTRA_MODEL_NAME "Luma Ultra"
-#define VITURE_LUMA_CYBER_MODEL_NAME "Luma Cyber"
-#define VITURE_BEAST_MODEL_NAME "Beast"
-
-#define VITURE_DISPLAY_MODE_1920_1080_60HZ 0x31
-#define VITURE_DISPLAY_MODE_3840_1080_60HZ 0x32
-#define VITURE_DISPLAY_MODE_3840_1080_90HZ 0x35
-#define VITURE_DISPLAY_MODE_1920_1200_60HZ 0x41
-#define VITURE_DISPLAY_MODE_3840_1200_60HZ 0x42
-#define VITURE_DISPLAY_MODE_3840_1200_90HZ 0x45
-
-#define VITURE_IMU_MODE_RAW 0
-#define VITURE_IMU_MODE_POSE 1
-
-#define VITURE_IMU_FREQ_LOW 0
-#define VITURE_IMU_FREQ_MEDIUM_LOW 1
-#define VITURE_IMU_FREQ_MEDIUM 2
-#define VITURE_IMU_FREQ_MEDIUM_HIGH 3
-#define VITURE_IMU_FREQ_HIGH 4
-#define VITURE_IMU_FREQ_COUNT 5
+#define VITURE_IMU_FREQUENCY_COUNT 5
 #define VITURE_CARINA_CYCLES_PER_S 1000
 #define VITURE_CARINA_POLL_INTERVAL_US (1000000 / VITURE_CARINA_CYCLES_PER_S)
 #define VITURE_FLOAT_EXACT_MS_LIMIT 16777216.0 // 2^24, largest consecutive int in float
@@ -60,11 +37,6 @@
 #define VITURE_LOG_LEVEL_ERROR 1
 #define VITURE_LOG_LEVEL_INFO 2
 #define VITURE_LOG_LEVEL_DEBUG 3
-
-#define VITURE_STATE_ID_BRIGHTNESS 0
-#define VITURE_STATE_ID_VOLUME 1
-#define VITURE_STATE_ID_DISPLAY_MODE 2
-#define VITURE_STATE_ID_ELECTROCHROMIC_FILM 3
 
 static const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
 static const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
@@ -95,20 +67,20 @@ static const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x1201  // Viture Beast
 };
 static const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
-    VITURE_ONE_MODEL_NAME, 
-    VITURE_ONE_MODEL_NAME,
-    VITURE_ONE_MODEL_NAME,
-    VITURE_ONE_LITE_MODEL_NAME,
-    VITURE_ONE_LITE_MODEL_NAME,
-    VITURE_PRO_MODEL_NAME,
-    VITURE_PRO_MODEL_NAME,
-    VITURE_LUMA_MODEL_NAME,
-    VITURE_LUMA_PRO_MODEL_NAME,
-    VITURE_LUMA_PRO_MODEL_NAME,
-    VITURE_LUMA_ULTRA_MODEL_NAME,
-    VITURE_LUMA_ULTRA_MODEL_NAME,
-    VITURE_LUMA_CYBER_MODEL_NAME,
-    VITURE_BEAST_MODEL_NAME
+    VITURE_MARKET_NAME_ONE,
+    VITURE_MARKET_NAME_ONE,
+    VITURE_MARKET_NAME_ONE,
+    VITURE_MARKET_NAME_LITE,
+    VITURE_MARKET_NAME_LITE,
+    VITURE_MARKET_NAME_PRO,
+    VITURE_MARKET_NAME_PRO,
+    VITURE_MARKET_NAME_LUMA,
+    VITURE_MARKET_NAME_LUMA_PRO,
+    VITURE_MARKET_NAME_LUMA_PRO,
+    VITURE_MARKET_NAME_LUMA_ULTRA,
+    VITURE_MARKET_NAME_LUMA_ULTRA,
+    VITURE_MARKET_NAME_LUMA_CYBER,
+    VITURE_MARKET_NAME_BEAST
 };
 static const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
     &VITURE_ONE_PITCH_ADJUSTMENT,  // One
@@ -202,20 +174,22 @@ static bool connected = false;
 static bool initialized = false;
 static bool viture_state_callback_registered = false;
 static bool viture_imu_open = false;
-static uint8_t viture_requested_frequency = VITURE_IMU_FREQ_MEDIUM_HIGH;
+static uint8_t viture_requested_frequency = VITURE_IMU_FREQUENCY_MEDIUM_HIGH;
 static bool sbs_mode_enabled = false;
 static int viture_saved_display_mode = -1;
+static int viture_saved_native_mode = -1;
 static int viture_saved_dof = -1;
 static int viture_callback_logs_remaining = 10;
 
-static const int viture_frequency_hz[VITURE_IMU_FREQ_COUNT] = {60, 90, 120, 240, 500};
+static const int viture_frequency_hz[VITURE_IMU_FREQUENCY_COUNT] = {60, 90, 120, 240, 500};
 
 static const char* viture_open_imu_error_reason(int code) {
     switch (code) {
-    case -1: return "param error";
-    case -2: return "USB execution error";
-    case -3: return "device type not supported";
-    case -4: return "other error";
+    case VITURE_GLASSES_ERROR_INVALID_PARAM: return "param error";
+    case VITURE_GLASSES_ERROR_USB_UNAVAILABLE: return "USB unavailable";
+    case VITURE_GLASSES_ERROR_USB_EXEC: return "USB execution error";
+    case VITURE_GLASSES_ERROR_NOT_SUPPORTED: return "device type not supported";
+    case VITURE_GLASSES_ERROR_UNKNOWN: return "other error";
     default: return "unknown";
     }
 }
@@ -243,32 +217,156 @@ static const device_properties_type viture_properties = {
     .provides_position                  = false
 };
 
-static bool viture_display_mode_is_sbs(int mode) {
+static bool viture_supports_native_dof(void) {
+    return viture_device_type == XR_DEVICE_TYPE_VITURE_GEN2 &&
+           viture_last_product_id != 0 &&
+           xr_device_provider_is_product_support_native_dof(viture_last_product_id) == 1;
+}
+
+static int viture_get_native_mode_locked(void) {
+    if (viture_provider == NULL) return VITURE_GLASSES_ERROR_INVALID_PARAM;
+    if (!viture_supports_native_dof()) return 0;
+    return xr_device_provider_native_get_mode(viture_provider);
+}
+
+static bool viture_bypass_display_mode_is_sbs(int mode) {
     switch (mode) {
-        case VITURE_DISPLAY_MODE_3840_1080_60HZ:
-        case VITURE_DISPLAY_MODE_3840_1080_90HZ:
-        case VITURE_DISPLAY_MODE_3840_1200_60HZ:
-        case VITURE_DISPLAY_MODE_3840_1200_90HZ:
-            return true;
-        default:
-            return false;
+    case VITURE_DISPLAY_MODE_3840_1080_60HZ:
+    case VITURE_DISPLAY_MODE_3840_1080_90HZ:
+    case VITURE_DISPLAY_MODE_3840_1200_60HZ:
+    case VITURE_DISPLAY_MODE_3840_1200_90HZ:
+        return true;
+    default:
+        return false;
     }
+}
+
+static bool viture_native_display_mode_is_sbs(int mode) {
+    switch (mode) {
+    case VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_60HZ:
+    case VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_90HZ:
+    case VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_120HZ:
+    case VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1200_60HZ:
+    case VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1200_90HZ:
+    case VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1200_120HZ:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool viture_display_mode_is_sbs(int mode, bool native_mode) {
+    return native_mode ? viture_native_display_mode_is_sbs(mode)
+                       : viture_bypass_display_mode_is_sbs(mode);
+}
+
+static bool viture_get_active_display_state_locked(int* mode, bool* native_mode) {
+    if (viture_provider == NULL || mode == NULL) return false;
+
+    int current_native_mode = viture_get_native_mode_locked();
+    if (current_native_mode == 1) {
+        int current_mode = xr_device_provider_native_get_display_mode(viture_provider);
+        if (current_mode < 0) return false;
+        *mode = current_mode;
+        if (native_mode != NULL) *native_mode = true;
+        return true;
+    }
+
+    if (current_native_mode < 0 && config()->debug_device) {
+        log_debug("VITURE: Failed to query native mode (%d), falling back to bypass display mode\n",
+                  current_native_mode);
+    }
+
+    int current_mode = xr_device_provider_get_display_mode(viture_provider);
+    if (current_mode < 0) return false;
+    *mode = current_mode;
+    if (native_mode != NULL) *native_mode = false;
+    return true;
+}
+
+static bool viture_get_display_state_locked(int* native_mode, int* display_mode, int* dof) {
+    if (viture_provider == NULL || native_mode == NULL || display_mode == NULL || dof == NULL) {
+        return false;
+    }
+
+    int current_native_mode = viture_get_native_mode_locked();
+    if (current_native_mode < 0) return false;
+
+    *native_mode = current_native_mode;
+    if (current_native_mode == 1) {
+        *display_mode = xr_device_provider_native_get_display_mode(viture_provider);
+        if (*display_mode < 0) return false;
+        *dof = xr_device_provider_native_get_dof(viture_provider);
+        return *dof >= 0;
+    }
+
+    *display_mode = xr_device_provider_get_display_mode(viture_provider);
+    *dof = VITURE_NATIVE_DOF_0;
+    return *display_mode >= 0;
+}
+
+static bool viture_restore_display_state_locked(int native_mode, int display_mode, int dof) {
+    if (viture_provider == NULL) return false;
+
+    if (!viture_supports_native_dof()) {
+        return xr_device_provider_set_display_mode(viture_provider, display_mode) == 0;
+    }
+
+    if (native_mode == 1) {
+        int current_native_mode = xr_device_provider_native_get_mode(viture_provider);
+        if (current_native_mode != 1 &&
+            xr_device_provider_native_set_mode(viture_provider, 1) != 0) {
+            return false;
+        }
+        if (xr_device_provider_native_set_display_mode(viture_provider, display_mode) != 0) {
+            return false;
+        }
+        return xr_device_provider_native_set_dof(viture_provider, dof) == 0;
+    }
+
+    int current_native_mode = xr_device_provider_native_get_mode(viture_provider);
+    if (current_native_mode == 1 &&
+        xr_device_provider_native_set_mode(viture_provider, 0) != 0) {
+        return false;
+    }
+
+    return xr_device_provider_set_display_mode(viture_provider, display_mode) == 0;
+}
+
+static bool viture_switch_dimension_locked(bool enabled) {
+    int current_native_mode = viture_get_native_mode_locked();
+    if (current_native_mode == 1) {
+        return xr_device_provider_native_switch_dimension(viture_provider, enabled) == 0;
+    }
+
+    if (current_native_mode < 0 && config()->debug_device) {
+        log_debug("VITURE: Failed to query native mode before switching SBS (%d), falling back to bypass path\n",
+                  current_native_mode);
+    }
+
+    return xr_device_provider_switch_dimension(viture_provider, enabled) == 0;
 }
 
 static void viture_refresh_sbs_state_locked() {
     if (viture_provider == NULL) return;
-    int mode = xr_device_provider_get_display_mode(viture_provider);
-    if (mode >= 0) {
-        sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+    int mode = 0;
+    bool native_mode = false;
+    if (viture_get_active_display_state_locked(&mode, &native_mode)) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(mode, native_mode);
         if (config()->debug_device) {
-            log_debug("VITURE: Refreshed SBS state, mode=%d enabled=%d\n", mode, sbs_mode_enabled);
+            log_debug("VITURE: Refreshed SBS state, mode=%d native_mode=%d enabled=%d\n",
+                      mode,
+                      native_mode,
+                      sbs_mode_enabled);
         }
+    } else if (config()->debug_device) {
+        log_debug("VITURE: Failed to refresh SBS state\n");
     }
 }
 
-// TODO - for eventual Beast integration
 static void viture_capture_and_override_display_mode_locked() {
     viture_saved_display_mode = -1;
+    viture_saved_native_mode = -1;
     viture_saved_dof = -1;
 
     if (viture_provider == NULL) {
@@ -278,32 +376,46 @@ static void viture_capture_and_override_display_mode_locked() {
         return;
     }
 
+    int native_mode = 0;
     int mode = 0;
-    int dof = 0;
-    if (xr_device_provider_get_display_mode_and_native_dof(viture_provider, &mode, &dof) != 0) {
+    int dof = VITURE_NATIVE_DOF_0;
+    if (!viture_get_display_state_locked(&native_mode, &mode, &dof)) {
         if (config()->debug_device) {
-            log_debug("VITURE: Unable to read display mode/dof during override\n");
+            log_debug("VITURE: Unable to read display state during override\n");
         }
         return;
     }
 
+    viture_saved_native_mode = native_mode;
     viture_saved_display_mode = mode;
     viture_saved_dof = dof;
 
-    if (xr_device_provider_set_display_mode_and_native_dof(viture_provider, mode, 0) == 0) {
-        sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+    if (native_mode != 1) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(mode, false);
         if (config()->debug_device) {
-            log_debug("VITURE: Forced display mode=%d to 0DoF\n", mode);
+            log_debug("VITURE: Display state already bypass/0DoF, no override needed (mode=%d)\n",
+                      mode);
+        }
+        return;
+    }
+
+    if (xr_device_provider_native_set_dof(viture_provider, VITURE_NATIVE_DOF_0) == 0) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(mode, true);
+        if (config()->debug_device) {
+            log_debug("VITURE: Forced native display mode=%d to 0DoF\n", mode);
         }
     } else if (config()->debug_device) {
-        log_debug("VITURE: Failed to force 0DoF (mode=%d, dof=%d)\n", mode, dof);
+        log_debug("VITURE: Failed to force 0DoF (mode=%d, native_mode=%d, dof=%d)\n",
+                  mode,
+                  native_mode,
+                  dof);
     }
 }
 
-// TODO - for eventual Beast integration
 static void viture_restore_display_mode_locked() {
     if (viture_provider == NULL) {
         viture_saved_display_mode = -1;
+        viture_saved_native_mode = -1;
         viture_saved_dof = -1;
         if (config()->debug_device) {
             log_debug("VITURE: Cannot restore display mode, provider NULL\n");
@@ -311,31 +423,35 @@ static void viture_restore_display_mode_locked() {
         return;
     }
 
-    if (viture_saved_display_mode < 0 || viture_saved_dof < 0) {
+    if (viture_saved_display_mode < 0 || viture_saved_native_mode < 0 || viture_saved_dof < 0) {
         if (config()->debug_device) {
             log_debug("VITURE: No saved display state to restore\n");
         }
         return;
     }
 
+    int restore_native_mode = viture_saved_native_mode;
     int restore_mode = viture_saved_display_mode;
     int restore_dof = viture_saved_dof;
-    int result = xr_device_provider_set_display_mode_and_native_dof(
-        viture_provider, restore_mode, restore_dof);
+    bool result = viture_restore_display_state_locked(restore_native_mode, restore_mode, restore_dof);
 
-    if (result == 0) {
-        sbs_mode_enabled = viture_display_mode_is_sbs(restore_mode);
+    if (result) {
+        sbs_mode_enabled = viture_display_mode_is_sbs(restore_mode, restore_native_mode == 1);
         if (config()->debug_device) {
-            log_debug("VITURE: Restored display mode=%d dof=%d\n", restore_mode, restore_dof);
+            log_debug("VITURE: Restored display mode=%d native_mode=%d dof=%d\n",
+                      restore_mode,
+                      restore_native_mode,
+                      restore_dof);
         }
     } else if (config()->debug_device) {
-        log_debug("VITURE: Failed to restore display mode=%d dof=%d (err=%d)\n",
+        log_debug("VITURE: Failed to restore display mode=%d native_mode=%d dof=%d\n",
                   restore_mode,
-                  restore_dof,
-                  result);
+                  restore_native_mode,
+                  restore_dof);
     }
 
     viture_saved_display_mode = -1;
+    viture_saved_native_mode = -1;
     viture_saved_dof = -1;
 }
 
@@ -416,11 +532,13 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
 
 // TODO - the SDK doesn't actually reliably call this yet
 static void viture_state_callback(int glass_state_id, int glass_value) {
-    if (glass_state_id == VITURE_STATE_ID_DISPLAY_MODE) {
-        sbs_mode_enabled = viture_display_mode_is_sbs(glass_value);
+    if (glass_state_id == VITURE_CALLBACK_ID_DISPLAY_MODE) {
+        bool native_mode = viture_get_native_mode_locked() == 1;
+        sbs_mode_enabled = viture_display_mode_is_sbs(glass_value, native_mode);
         if (config()->debug_device) {
-            log_debug("VITURE: Display mode changed via callback, mode=%d sbs_enabled=%d\n",
+            log_debug("VITURE: Display mode changed via callback, mode=%d native_mode=%d sbs_enabled=%d\n",
                       glass_value,
+                      native_mode,
                       sbs_mode_enabled);
         }
     } else if (config()->debug_device) {
@@ -631,6 +749,7 @@ static void viture_shutdown_provider_locked() {
     viture_device_type = XR_DEVICE_TYPE_VITURE_GEN1;
     viture_state_callback_registered = false;
     viture_saved_display_mode = -1;
+    viture_saved_native_mode = -1;
     viture_saved_dof = -1;
     if (config()->debug_device) {
         log_debug("VITURE: Provider shutdown complete\n");
@@ -724,8 +843,7 @@ static bool viture_device_is_sbs_mode() {
     if (viture_provider == NULL || !connected) return false;
 
     pthread_mutex_lock(&viture_connection_mutex);
-    int mode = xr_device_provider_get_display_mode(viture_provider);
-    if (mode >= 0) sbs_mode_enabled = viture_display_mode_is_sbs(mode);
+    viture_refresh_sbs_state_locked();
     pthread_mutex_unlock(&viture_connection_mutex);
 
     return sbs_mode_enabled;
@@ -735,11 +853,11 @@ static bool viture_device_set_sbs_mode(bool enabled) {
     pthread_mutex_lock(&viture_connection_mutex);
     bool success = false;
     if (viture_provider != NULL && connected) {
-        success = xr_device_provider_switch_dimension(viture_provider, enabled) == 0;
+        success = viture_switch_dimension_locked(enabled);
         if (success) {
-            sbs_mode_enabled = enabled;
+            viture_refresh_sbs_state_locked();
             if (config()->debug_device) {
-                log_debug("VITURE: SBS mode set to %d\n", enabled);
+                log_debug("VITURE: SBS mode set to %d\n", sbs_mode_enabled);
             }
         } else if (config()->debug_device) {
             log_debug("VITURE: Failed to set SBS mode to %d\n", enabled);

@@ -57,7 +57,7 @@ extern "C" {
  *
  * @param handle           Handle to the `XRDeviceProvider` instance.
  * @param imu_raw_callback Callback function pointer.
- * @return 0 on success, -1 on failure.
+ * @return VITURE_GLASSES_SUCCESS on success, VITURE_GLASSES_ERROR_INVALID_PARAM on failure.
  */
 VITURE_API int xr_device_provider_register_imu_raw_callback(XRDeviceProviderHandle handle,
                                                             VitureImuRawCallback imu_raw_callback);
@@ -71,7 +71,7 @@ VITURE_API int xr_device_provider_register_imu_raw_callback(XRDeviceProviderHand
  *
  * @param handle            Handle to the `XRDeviceProvider` instance.
  * @param imu_pose_callback Callback function pointer.
- * @return 0 on success, -1 on failure.
+ * @return VITURE_GLASSES_SUCCESS on success, VITURE_GLASSES_ERROR_INVALID_PARAM on failure.
  */
 VITURE_API int xr_device_provider_register_imu_pose_callback(XRDeviceProviderHandle handle,
                                                              VitureImuPoseCallback imu_pose_callback);
@@ -81,8 +81,11 @@ VITURE_API int xr_device_provider_register_imu_pose_callback(XRDeviceProviderHan
  * @param handle Handle to the XRDeviceProvider instance
  * @param imu_mode viture::protocol::imu::Mode
  * @param imu_report_frequency viture::protocol::imu::Frequency
- * @return 0: Success, -1: Param error, -2: USB execution error
- * @return -3: Device type not supported, -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle
+ *         - VITURE_GLASSES_ERROR_USB_EXEC      USB execution error
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED device type not supported
+ *         - VITURE_GLASSES_ERROR_UNKNOWN       other error
  */
 VITURE_API int xr_device_provider_open_imu(XRDeviceProviderHandle handle, uint8_t imu_mode, uint8_t imu_report_frequency);
 
@@ -90,8 +93,11 @@ VITURE_API int xr_device_provider_open_imu(XRDeviceProviderHandle handle, uint8_
  * @brief Close IMU (no effect for Carina device)
  * @param handle Handle to the XRDeviceProvider instance
  * @param imu_mode viture::protocol::imu::Mode
- * @return 0: Success, -1: Param error, -2: USB execution error
- * @return -3: Device type not supported, -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle
+ *         - VITURE_GLASSES_ERROR_USB_EXEC      USB execution error
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED device type not supported
+ *         - VITURE_GLASSES_ERROR_UNKNOWN       other error
  */
 VITURE_API int xr_device_provider_close_imu(XRDeviceProviderHandle handle, uint8_t imu_mode);
 

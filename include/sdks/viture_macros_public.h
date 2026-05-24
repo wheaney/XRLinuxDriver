@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "viture_result.h"
+
 // Unified platform-specific export macro
 // Always exports (dllexport), never imports (no dllimport)
 #if defined(_WIN32) || defined(__CYGWIN__)

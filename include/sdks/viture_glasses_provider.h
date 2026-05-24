@@ -92,7 +92,11 @@ VITURE_API XRDeviceProviderHandle xr_device_provider_create(int product_id);
  * @param handle Handle to the XRDeviceProvider instance
  * @param custom_config Optional custom configuration string (can be NULL)
  * @param cache_file_dir Optional directory path for caching data (can be NULL).
- * @return 0: Success, -1: Param error, -2: Calibration init error, -3: Serial number fetch error, -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle or invalid config
+ *         - VITURE_GLASSES_ERROR_CALIB_INIT   calibration initialization failed
+ *         - VITURE_GLASSES_ERROR_SERIAL_FETCH serial number retrieval failed
+ *         - VITURE_GLASSES_ERROR_UNKNOWN      other error
  */
 VITURE_API int xr_device_provider_initialize(XRDeviceProviderHandle handle,
                                              const char* custom_config,
@@ -101,21 +105,27 @@ VITURE_API int xr_device_provider_initialize(XRDeviceProviderHandle handle,
 /**
  * @brief Start the XRDeviceProvider
  * @param handle Handle to the XRDeviceProvider instance
- * @return 0: Success, -1: Param error, -2: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle
+ *         - VITURE_GLASSES_ERROR_UNKNOWN       other error
  */
 VITURE_API int xr_device_provider_start(XRDeviceProviderHandle handle);
 
 /**
  * @brief Stop the XRDeviceProvider
  * @param handle Handle to the XRDeviceProvider instance
- * @return 0: Success, -1: Param error, -2: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle
+ *         - VITURE_GLASSES_ERROR_UNKNOWN       other error
  */
 VITURE_API int xr_device_provider_stop(XRDeviceProviderHandle handle);
 
 /**
  * @brief Shutdown the XRDeviceProvider
  * @param handle Handle to the XRDeviceProvider instance
- * @return 0: Success, -1: Param error, -2: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle
+ *         - VITURE_GLASSES_ERROR_UNKNOWN       other error
  */
 VITURE_API int xr_device_provider_shutdown(XRDeviceProviderHandle handle);
 
@@ -129,7 +139,7 @@ VITURE_API void xr_device_provider_destroy(XRDeviceProviderHandle handle);
  * Get core thread IDs, need to be called after start
  * @param handle Handle to the XRDeviceProvider instance
  * @param thread_ids Array to store 2 thread IDs for USB data processing
- * @return 0 on success, -1 on failure
+ * @return VITURE_GLASSES_SUCCESS on success, VITURE_GLASSES_ERROR_INVALID_PARAM on failure
  */
 VITURE_API int xr_device_provider_get_thread_id(XRDeviceProviderHandle handle, int thread_ids[2]);
 
@@ -137,29 +147,39 @@ VITURE_API int xr_device_provider_get_thread_id(XRDeviceProviderHandle handle, i
  * @brief Register glass state callback
  * @param handle Handle to the XRDeviceProvider instance
  * @param callback Called when glass state changes
- * @return 0: Success, -1: Param error, -2: USB not available, -3: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or null callback
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_register_state_callback(XRDeviceProviderHandle handle, GlassStateCallback callback);
 
 /**
  * @brief Get the device type
  * @param handle Handle to the XRDeviceProvider instance
- * @return XRDeviceType enum value, or -1 on failure
+ * @return XRDeviceType enum value on success, VITURE_GLASSES_ERROR_INVALID_PARAM on failure
  */
 VITURE_API int xr_device_provider_get_device_type(XRDeviceProviderHandle handle);
 
 /**
  * Check if product id is valid
  * @param product_id Product id to check
- * @return Product id is valid or not
+ * @return 1 if valid, 0 if not
  */
-VITURE_API bool xr_device_provider_is_product_id_valid(int product_id);
+VITURE_API int xr_device_provider_is_product_id_valid(int product_id);
+
+/**
+ * Check if product support native dof
+ * @param product_id Product id to check
+ * @return 1 if support, 0 if not
+ */
+VITURE_API int xr_device_provider_is_product_support_native_dof(int product_id);
 
 /**
  * Get glasses market name
  * @param product_id Viture product id
- * @param response_data Buffer to store market name
- * @param response_length Pointer to store the length of market name
+ * @param market_name Buffer to store market name
+ * @param length Pointer to store the length of market name
  */
 VITURE_API int xr_device_provider_get_market_name(int product_id, char* market_name, int* length);
 
@@ -173,7 +193,7 @@ VITURE_API void xr_device_provider_set_log_level(int level);
  * Get log level
  * @return 0: No log, 1: Error, 2: Info, 3: Debug
  */
-VITURE_API int xr_device_provider_get_log_level();
+VITURE_API int xr_device_provider_get_log_level(void);
 
 /**
  * Set a log hook to capture library log messages

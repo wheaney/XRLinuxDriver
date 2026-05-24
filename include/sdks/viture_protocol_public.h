@@ -49,16 +49,6 @@ typedef void* XRDeviceProviderHandle;
 #define VITURE_MARKET_NAME_BEAST      "Beast"
 
 // ============================================================================
-// Result Codes
-// ============================================================================
-
-/**
- * @brief Standard result codes used throughout the API.
- */
-#define VITURE_RESULT_SUCCESS 0 /**< Operation completed successfully */
-#define VITURE_RESULT_FAILURE 1 /**< Operation failed */
-
-// ============================================================================
 // Display Configuration Constants
 // ============================================================================
 
@@ -66,7 +56,7 @@ typedef void* XRDeviceProviderHandle;
  * @brief Display mode identifiers for configuring device display output and refresh rates.
  *
  * Display modes specify both resolution and refresh rate. Standard modes are available
- * on all devices, while frame interpolation modes require native 3DOF support.
+ * on Gen 1 / Carina devices and Gen 2 device in bypass mode.
  */
 #define VITURE_DISPLAY_MODE_1920_1080_60HZ  0x31 /**< 1920x1080 @ 60Hz */
 #define VITURE_DISPLAY_MODE_3840_1080_60HZ  0x32 /**< 3840x1080 @ 60Hz (3D mode) */
@@ -90,18 +80,18 @@ typedef void* XRDeviceProviderHandle;
 #define VITURE_DUTY_CYCLE_L 30 /**< Low duty cycle (dimmed) */
 
 // ============================================================================
-// Native 3DOF Configuration Constants
+// Native DOF Configuration Constants
 // ============================================================================
 
 /**
- * @brief Native 3DOF (Degrees of Freedom) configuration constants.
+ * @brief Native DOF (Degrees of Freedom) configuration constants.
  *
- * These constants are only available on devices with native 3DOF support (e.g., Viture Beast).
- * Native 3DOF enables head tracking and advanced display features.
+ * These constants are only available on devices with native DOF support (e.g., Viture Beast).
+ * Native DOF enables head tracking and advanced display features.
  */
 
 /**
- * @brief Display size identifiers for native 3DOF devices.
+ * @brief Display size identifiers for native DOF devices.
  *
  * Display size controls the apparent size of the virtual display.
  */
@@ -114,26 +104,36 @@ typedef void* XRDeviceProviderHandle;
 /**
  * @brief Native DOF mode identifiers.
  *
- * These modes control the native 3DOF tracking behavior.
+ * These modes control the native DOF tracking behavior.
  */
 #define VITURE_NATIVE_DOF_0             0x00 /**< No native DOF tracking */
 #define VITURE_NATIVE_DOF_3             0x01 /**< Native 3DOF tracking enabled */
 #define VITURE_NATIVE_DOF_SMOOTH_FOLLOW 0x02 /**< Smooth follow mode */
 
 /**
- * @brief Frame interpolation display modes for native 3DOF devices.
+ * @brief Display modes for devices with native DOF support (e.g., Viture Beast).
  *
- * These modes use frame interpolation to upscale 60Hz input to 120Hz output,
- * providing smoother motion for head-tracked content.
+ * These modes are used when native DOF tracking is active. They define a separate
+ * opcode space from the standard VITURE_DISPLAY_MODE_* constants.
  */
-/**< 3840x1080, 60Hz input upscaled to 120Hz output */
-#define VITURE_NATIVE_3DOF_DISPLAY_MODE_3840_1080_60HZ_120HZ 0x32
-/**< 1920x1080, 60Hz input upscaled to 120Hz output */
-#define VITURE_NATIVE_3DOF_DISPLAY_MODE_1920_1080_60HZ_120HZ 0x36
-/**< Ultrawide mode, 60Hz input upscaled to 120Hz output */
-#define VITURE_NATIVE_3DOF_DISPLAY_MODE_ULTRAWIDE_60HZ_120HZ 0x51
-/**< Side mode, 60Hz input upscaled to 120Hz output */
-#define VITURE_NATIVE_3DOF_DISPLAY_MODE_SIDEMODE_60HZ_120HZ 0x61
+#define VITURE_NATIVE_DISPLAY_MODE_1920_1080_60HZ            0x31 /**< 1920x1080 @ 60Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_1920_1080_90HZ            0x32 /**< 1920x1080 @ 90Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_1920_1080_120HZ           0x33 /**< 1920x1080 @ 120Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_1920_1200_60HZ            0x34 /**< 1920x1200 @ 60Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_1920_1200_90HZ            0x35 /**< 1920x1200 @ 90Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_1920_1200_120HZ           0x36 /**< 1920x1200 @ 120Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_60HZ     0x37 /**< 3D SBS 3840x1080 @ 60Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_90HZ     0x38 /**< 3D SBS 3840x1080 @ 90Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_120HZ    0x39 /**< 3D SBS 3840x1080 @ 120Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1200_60HZ     0x3A /**< 3D SBS 3840x1200 @ 60Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1200_90HZ     0x3B /**< 3D SBS 3840x1200 @ 90Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1200_120HZ    0x3C /**< 3D SBS 3840x1200 @ 120Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_ULTRAWIDE_3840_1080_60HZ  0x3D /**< Ultrawide 3840x1080 @ 60Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_ULTRAWIDE_3840_1080_90HZ  0x3E /**< Ultrawide 3840x1080 @ 90Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_ULTRAWIDE_3840_1080_120HZ 0x3F /**< Ultrawide 3840x1080 @ 120Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_ULTRAWIDE_3840_1200_60HZ  0x40 /**< Ultrawide 3840x1200 @ 60Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_ULTRAWIDE_3840_1200_90HZ  0x41 /**< Ultrawide 3840x1200 @ 90Hz */
+#define VITURE_NATIVE_DISPLAY_MODE_ULTRAWIDE_3840_1200_120HZ 0x42 /**< Ultrawide 3840x1200 @ 120Hz */
 
 // ============================================================================
 // IMU Configuration Constants
@@ -234,11 +234,12 @@ typedef void* XRDeviceProviderHandle;
  *
  * @param handle Valid XRDeviceProvider handle.
  * @param voltage Output parameter to store the current voltage value (0.0 to 1.0).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or null voltage pointer)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or null voltage pointer
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_get_film_mode(XRDeviceProviderHandle handle, float* voltage);
 
@@ -254,11 +255,11 @@ VITURE_API int xr_device_provider_get_film_mode(XRDeviceProviderHandle handle, f
  *
  * @param handle Valid XRDeviceProvider handle.
  * @param voltage Voltage value in range [0.0, 1.0].
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or invalid voltage range)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or voltage out of range
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_set_film_mode(XRDeviceProviderHandle handle, float voltage);
 
@@ -269,12 +270,12 @@ VITURE_API int xr_device_provider_set_film_mode(XRDeviceProviderHandle handle, f
  * that pixels are active. Higher values result in brighter displays.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @return Duty cycle value in range [0, 100] on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: No valid data received
- *         - -5: Other error
+ * @return Duty cycle value in range [0, 100] on success, or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_get_duty_cycle(XRDeviceProviderHandle handle);
 
@@ -286,12 +287,11 @@ VITURE_API int xr_device_provider_get_duty_cycle(XRDeviceProviderHandle handle);
  *
  * @param handle Valid XRDeviceProvider handle.
  * @param duty_cycle Duty cycle value in range [0, 100].
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or value out of range)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Duty cycle value rejected by device
- *         - -5: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or value out of range
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_set_duty_cycle(XRDeviceProviderHandle handle, int duty_cycle);
 
@@ -299,16 +299,18 @@ VITURE_API int xr_device_provider_set_duty_cycle(XRDeviceProviderHandle handle, 
  * @brief Retrieve the current display mode.
  *
  * Display mode determines both the resolution and refresh rate of the device output.
+ * For Gen2 devices (Beast), use this interface when in bypass mode.
  * See VITURE_DISPLAY_MODE_* constants for valid mode values.
  *
  * @param handle Valid XRDeviceProvider handle.
  * @return Display mode value (see VITURE_DISPLAY_MODE_* constants) on success,
- *         negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: No valid data received
- *         - -5: Other error
+ *         or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   Gen2 device is in native mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_get_display_mode(XRDeviceProviderHandle handle);
 
@@ -316,42 +318,43 @@ VITURE_API int xr_device_provider_get_display_mode(XRDeviceProviderHandle handle
  * @brief Set the display mode.
  *
  * Display mode determines both the resolution and refresh rate of the device output.
+ * For Gen2 devices (Beast), use this interface when in bypass mode.
  * See VITURE_DISPLAY_MODE_* constants for valid mode values.
  *
  * @param handle Valid XRDeviceProvider handle.
  * @param display_mode Display mode value (see VITURE_DISPLAY_MODE_* constants).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or invalid mode value)
- *         - -2: USB communication not available
- *         - -3: Display mode not supported by device
- *         - -4: USB execution error
- *         - -5: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or invalid mode value
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   Gen2 device is in native mode, or mode value unsupported
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_set_display_mode(XRDeviceProviderHandle handle, int display_mode);
 
 /**
- * @brief Switch between 2D and 3D display modes.
+ * @brief Switch between 2D and 3D display modes (Gen1 and Gen2 bypass mode only).
  *
  * This is a convenience function that switches between:
  * - 2D mode: 1920x1080 @ 60Hz
  * - 3D mode: 3840x1080 @ 60Hz
  *
- * For more advanced display mode options (higher resolutions or refresh rates),
- * use xr_device_provider_set_display_mode() instead.
+ * For Gen2 devices (Beast) in native mode, use xr_device_provider_native_switch_dimension()
+ * instead. Calling this function in such state returns VITURE_GLASSES_ERROR_NOT_SUPPORTED.
  *
  * @note If the device is already in the requested mode, the function returns
  *       successfully (0) without performing any action.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @param is_3d true to switch to 3D mode, false to switch to 2D mode.
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: Display mode not supported by device
- *         - -4: USB execution error
- *         - -5: Other error
+ * @param is_3d 1 to switch to 3D mode, 0 to switch to 2D mode.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device is Gen2 (use native_switch_dimension instead)
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
-VITURE_API int xr_device_provider_switch_dimension(XRDeviceProviderHandle handle, bool is_3d);
+VITURE_API int xr_device_provider_switch_dimension(XRDeviceProviderHandle handle, int is_3d);
 
 /**
  * @brief Retrieve the current screen brightness level.
@@ -360,13 +363,13 @@ VITURE_API int xr_device_provider_switch_dimension(XRDeviceProviderHandle handle
  * see @ref ValueRanges.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @return Brightness level on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Response length incorrect
- *         - -5: Response data parsing error
- *         - -6: Other error
+ * @return Brightness level on success, or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DATA_PARSE      response length or format mismatch
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_get_brightness_level(XRDeviceProviderHandle handle);
 
@@ -378,11 +381,11 @@ VITURE_API int xr_device_provider_get_brightness_level(XRDeviceProviderHandle ha
  *
  * @param handle Valid XRDeviceProvider handle.
  * @param level Brightness level to set (device-specific range).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or value out of range)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or value out of range
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_set_brightness_level(XRDeviceProviderHandle handle, int level);
 
@@ -393,13 +396,13 @@ VITURE_API int xr_device_provider_set_brightness_level(XRDeviceProviderHandle ha
  * see @ref ValueRanges.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @return Volume level on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Response length incorrect
- *         - -5: Response data parsing error
- *         - -6: Other error
+ * @return Volume level on success, or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DATA_PARSE      response length or format mismatch
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_get_volume_level(XRDeviceProviderHandle handle);
 
@@ -411,11 +414,11 @@ VITURE_API int xr_device_provider_get_volume_level(XRDeviceProviderHandle handle
  *
  * @param handle Valid XRDeviceProvider handle.
  * @param level Volume level to set (device-specific range).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or value out of range)
- *         - -2: USB communication not available
- *         - -3: USB execution error
- *         - -4: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or value out of range
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_set_volume_level(XRDeviceProviderHandle handle, int level);
 
@@ -426,147 +429,307 @@ VITURE_API int xr_device_provider_set_volume_level(XRDeviceProviderHandle handle
  * @param response Output buffer to store the version string. Must be pre-allocated.
  * @param length Input/output parameter: on input, specifies the buffer size;
  *              on output, contains the actual length of the version string.
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle, null response, or null length)
- *         - -2: USB protocol not available
- *         - -3: USB response error
- *         - -4: No valid data received
- *         - -5: Exception occurred during execution
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle, null response, or null length
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
 VITURE_API int xr_device_provider_get_glasses_version(XRDeviceProviderHandle handle, char* response, int* length);
 
+/**
+ * @brief Retrieve the SHA-256 hash of the board serial number.
+ *
+ * The raw serial number is never exposed. The caller receives a 32-byte
+ * SHA-256 digest that uniquely identifies the device and can be used for
+ * device binding or license validation without leaking the actual SN.
+ *
+ * @param handle    Valid XRDeviceProvider handle.
+ * @param hash_out  Caller-allocated buffer of at least 32 bytes to receive the digest.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or null hash_out
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_get_sn_hash(XRDeviceProviderHandle handle, uint8_t* hash_out);
+
 // ============================================================================
-// Native 3DOF Functions
+// Native DOF Functions
 // ============================================================================
 
 /**
- * @brief Retrieve the current display mode and native DOF type.
+ * @brief Retrieve the current mode for Gen2 devices (bypass / native).
  *
- * This function is only available on devices with native 3DOF support (e.g., Viture Beast).
- * It retrieves both the display mode and the current DOF (Degrees of Freedom) configuration.
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Returns whether the device is operating in bypass mode or native mode:
+ * - 0 (bypass mode): native DOF tracking is disabled; use xr_device_provider_get/set_display_mode
+ *   for display mode control.
+ * - 1 (native mode): native DOF tracking is active; use xr_device_provider_native_get/set_display_mode
+ *   for display mode control.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @param display_mode Output parameter to store the display mode value.
- * @param dof_type Output parameter to store the DOF type value (see VITURE_NATIVE_DOF_* constants).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or null output pointers)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: USB execution error
- *         - -5: No valid data received
- *         - -6: Other error
+ * @return 0 (bypass) or 1 (native) on success, or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   feature not supported by device
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
-VITURE_API int xr_device_provider_get_display_mode_and_native_dof(XRDeviceProviderHandle handle,
-                                                                  int* display_mode,
-                                                                  int* dof_type);
+VITURE_API int xr_device_provider_native_get_mode(XRDeviceProviderHandle handle);
 
 /**
- * @brief Set the display mode and native DOF type.
+ * @brief Set the native mode for Gen2 devices (bypass / native).
  *
- * This function is only available on devices with native 3DOF support (e.g., Viture Beast).
- * It configures both the display mode and the DOF (Degrees of Freedom) setting.
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * After calling this function, call xr_device_provider_native_set_display_mode() to complete
+ * the mode switch by setting an appropriate display mode for the new mode.
+ * Controls whether the device operates in bypass mode or native mode:
+ * - 0 (bypass mode): disables native DOF tracking; display mode is controlled via
+ *   xr_device_provider_get/set_display_mode using standard VITURE_DISPLAY_MODE_* values.
+ * - 1 (native mode): enables native DOF tracking; display mode is controlled via
+ *   xr_device_provider_native_get/set_display_mode using VITURE_NATIVE_DISPLAY_MODE_* values.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @param display_mode Display mode value (see VITURE_NATIVE_3DOF_DISPLAY_MODE_* constants).
- * @param dof_type DOF type value (see VITURE_NATIVE_DOF_* constants).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or invalid values)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: Display mode not supported by device
- *         - -5: USB execution error
- *         - -6: Other error
+ * @param mode 0 for bypass mode, 1 for native mode.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   feature not supported by device
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device rejected the command
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
-VITURE_API int xr_device_provider_set_display_mode_and_native_dof(XRDeviceProviderHandle handle,
-                                                                  int display_mode,
-                                                                  int dof_type);
+VITURE_API int xr_device_provider_native_set_mode(XRDeviceProviderHandle handle, int mode);
 
 /**
- * @brief Retrieve the current display distance setting.
+ * @brief Retrieve the current native DOF tracking type on Gen2 devices.
  *
- * This function is only available on Viture Beast devices.
- * Display distance controls the virtual distance of the display content.
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Returns the active DOF tracking type when the device is in native mode.
+ * See VITURE_NATIVE_DOF_* constants for valid values (e.g., VITURE_NATIVE_DOF_3,
+ * VITURE_NATIVE_DOF_SMOOTH_FOLLOW).
  *
  * @param handle Valid XRDeviceProvider handle.
- * @return Display distance value in range [1, 10] on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: USB execution error
- *         - -5: No valid data received
- *         - -6: Other error
+ * @return DOF tracking type (see VITURE_NATIVE_DOF_* constants) on success,
+ *         or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
-VITURE_API int xr_device_provider_get_display_distance(XRDeviceProviderHandle handle);
+VITURE_API int xr_device_provider_native_get_dof(XRDeviceProviderHandle handle);
 
 /**
- * @brief Set the display distance.
+ * @brief Set the native DOF tracking type on Gen2 devices.
  *
- * This function is only available on Viture Beast devices.
- * Display distance controls the virtual distance of the display content.
- *
- * @param handle Valid XRDeviceProvider handle.
- * @param distance Display distance value in range [1, 10].
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or value out of range)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: Distance value rejected by device
- *         - -5: USB execution error
- *         - -6: Other error
- */
-VITURE_API int xr_device_provider_set_display_distance(XRDeviceProviderHandle handle, int distance);
-
-/**
- * @brief Retrieve the current display size setting.
- *
- * This function is only available on devices with native 3DOF support (e.g., Viture Beast).
- * Display size controls the apparent size of the virtual display.
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Sets the active DOF tracking type when the device is in native mode.
+ * See VITURE_NATIVE_DOF_* constants for valid values (e.g., VITURE_NATIVE_DOF_3,
+ * VITURE_NATIVE_DOF_SMOOTH_FOLLOW).
  *
  * @param handle Valid XRDeviceProvider handle.
- * @return Display size value (see VITURE_DISPLAY_SIZE_* constants) in range [0, 4] on success,
- *         negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: USB execution error
- *         - -5: No valid data received
- *         - -6: Other error
+ * @param dof DOF tracking type to set (see VITURE_NATIVE_DOF_* constants).
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device rejected the command
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
-VITURE_API int xr_device_provider_get_display_size(XRDeviceProviderHandle handle);
-
-/**
- * @brief Set the display size.
- *
- * This function is only available on Viture Beast devices.
- * Display size controls the apparent size of the virtual display.
- *
- * @param handle Valid XRDeviceProvider handle.
- * @param size Display size value (see VITURE_DISPLAY_SIZE_* constants).
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle or invalid size value)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: Size value rejected by device
- *         - -5: USB execution error
- *         - -6: Other error
- */
-VITURE_API int xr_device_provider_set_display_size(XRDeviceProviderHandle handle, int size);
+VITURE_API int xr_device_provider_native_set_dof(XRDeviceProviderHandle handle, int dof);
 
 /**
  * @brief Recenter the display for native DOF tracking.
  *
- * This function is only available on devices with native 3DOF support (e.g., Viture Beast).
- * It resets the current head pose to the center position for DOF tracking.
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * It resets the current head pose to the center position for DOF tracking when the device is in native mode.
  *
  * @param handle Valid XRDeviceProvider handle.
- * @return 0 on success, negative error code on failure:
- *         - -1: Invalid parameter (null handle)
- *         - -2: USB communication not available
- *         - -3: Feature not supported by device
- *         - -4: USB execution error
- *         - -5: Other error
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
  */
-VITURE_API int xr_device_provider_native_dof_recenter(XRDeviceProviderHandle handle);
+VITURE_API int xr_device_provider_native_recenter_dof(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Retrieve the current display mode for Gen2 devices.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Use this when the device is operating in native DOF mode (not bypass).
+ * See VITURE_NATIVE_DISPLAY_MODE_* constants for valid mode values.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @return Display mode value (see VITURE_NATIVE_DISPLAY_MODE_* constants) on success,
+ *         or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_get_display_mode(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set the display mode for native DOF operation on Gen2 devices.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Use this when the device is operating in native DOF mode (not bypass).
+ * See VITURE_NATIVE_DISPLAY_MODE_* constants for valid mode values.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @param display_mode Display mode value (see VITURE_NATIVE_DISPLAY_MODE_* constants).
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or invalid mode value
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_set_display_mode(XRDeviceProviderHandle handle, int display_mode);
+
+/**
+ * @brief Retrieve the current side mode for Gen2 devices in native mode.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast)
+ * and requires the device to be in native mode (mode == 1).
+ * Side mode shifts the displayed image to one side of the glasses.
+ * - 0: side mode disabled
+ * - 1: side mode enabled
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @return 0 (disabled) or 1 (enabled) on success, or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   feature not supported, or device is not in native mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_get_side_mode(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set the side mode for Gen2 devices in native mode.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast)
+ * and requires the device to be in native mode (mode == 1).
+ * Side mode shifts the displayed image to one side of the glasses.
+ * - 0: disable side mode
+ * - 1: enable side mode
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @param side_mode 0 to disable side mode, 1 to enable side mode.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   feature not supported, or device is not in native mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device rejected the command
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_set_side_mode(XRDeviceProviderHandle handle, int side_mode);
+
+/**
+ * @brief Switch between 2D and 3D display modes in native DOF mode on Gen2 devices.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Switches between:
+ * - 2D mode: VITURE_NATIVE_DISPLAY_MODE_1920_1080_60HZ
+ * - 3D mode: VITURE_NATIVE_DISPLAY_MODE_3D_SBS_3840_1080_60HZ
+ * when the device is operating in native mode.
+ *
+ * @note If the device is already in the requested mode, the function returns
+ *       successfully (0) without performing any action.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @param is_3d 1 to switch to 3D mode, 0 to switch to 2D mode.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_switch_dimension(XRDeviceProviderHandle handle, int is_3d);
+
+/**
+ * @brief Retrieve the current display distance setting.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Display distance controls the virtual distance of the display content when the device is operating in native mode.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @return Display distance value in range [1, 10] on success, or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_get_display_distance(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set the display distance.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Display distance controls the virtual distance of the display content when the device is operating in native mode.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @param distance Display distance value in range [1, 10].
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or value out of range
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_set_display_distance(XRDeviceProviderHandle handle, int distance);
+
+/**
+ * @brief Retrieve the current display size setting.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Display size controls the apparent size of the virtual display when the device is operating in native mode.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @return Display size value (see VITURE_DISPLAY_SIZE_* constants) in range [0, 4] on success,
+ *         or a negative error code:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_get_display_size(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set the display size.
+ *
+ * This function is only available on devices with native DOF support (e.g., Viture Beast).
+ * Display size controls the apparent size of the virtual display when the device is operating in native mode.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @param size Display size value (see VITURE_DISPLAY_SIZE_* constants).
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or invalid size value
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device does not support native DOF, or device is in bypass mode
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_native_set_display_size(XRDeviceProviderHandle handle, int size);
 
 #ifdef __cplusplus
 }

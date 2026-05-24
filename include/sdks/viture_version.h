@@ -8,7 +8,7 @@
 
 // Version defined as macros so they can be used in preprocessor checks
 #define VITURE_VERSION_MAJOR 2
-#define VITURE_VERSION_MINOR 1
+#define VITURE_VERSION_MINOR 3
 #define VITURE_VERSION_PATCH 1
 
 // Helper macros to stringify numeric macros after expansion.
