@@ -16,11 +16,11 @@ const char *sideview_position_names[SIDEVIEW_POSITION_COUNT] = {
     "top_right",
     "bottom_left",
     "bottom_right",
-    "center",
-	"center_left",
-    "center_top",
-    "center_right",
-    "center_bottom"
+    "middle_center",
+	"middle_left",
+    "top_center",
+    "middle_right",
+    "bottom_center"
 };
 
 sideview_config *sv_config;
