@@ -48,8 +48,14 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE_MCU_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
-#define XREAL_ID_PRODUCT_COUNT 10
+#define XREAL_ID_PRODUCT_COUNT 12
 #define XREAL_ID_VENDOR 0x3318
+
+// XBX (A01 / A01 Plus) glasses gate their IMU stream behind an MCU SDK handshake + heartbeat,
+// so they need the MCU opened and bootstrapped before the IMU is opened (see xreal_device_connect).
+#define XREAL_XBX_A01_ID_PRODUCT 0x0440
+#define XREAL_XBX_A01_PLUS_ID_PRODUCT 0x0442
+
 const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0424, // XREAL Air
     0x0428, // XREAL Air 2
@@ -60,7 +66,9 @@ const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0437, // XREAL One
     0x0438, // XREAL One
     0x043e, // XREAL One S
-    0x043d  // XREAL One S
+    0x043d, // XREAL One S
+    XREAL_XBX_A01_ID_PRODUCT,      // XREAL XBX A01
+    XREAL_XBX_A01_PLUS_ID_PRODUCT  // XREAL XBX A01 Plus
 };
 const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     45.0, // XREAL Air
@@ -72,7 +80,9 @@ const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     50.0, // XREAL One
     50.0, // XREAL One
     52.0, // XREAL One S
-    52.0  // XREAL One S
+    52.0, // XREAL One S
+    45.0, // XREAL XBX A01
+    45.0  // XREAL XBX A01 Plus
 };
 const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     10.0, // XREAL Air
@@ -84,7 +94,9 @@ const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     25.0, // XREAL One
     25.0, // XREAL One
     25.0, // XREAL One S
-    25.0  // XREAL One S
+    25.0, // XREAL One S
+    10.0, // XREAL XBX A01
+    10.0  // XREAL XBX A01 Plus
 };
 const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     15, // XREAL Air
@@ -96,7 +108,9 @@ const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     5,  // XREAL One
     5,  // XREAL One
     5,  // XREAL One S
-    5   // XREAL One S
+    5,  // XREAL One S
+    15, // XREAL XBX A01
+    15  // XREAL XBX A01 Plus
 };
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "Air",
@@ -108,7 +122,9 @@ const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "One",
     "One",
     "1S",
-    "1S"
+    "1S",
+    "XBX A01",
+    "XBX A01+"
 };
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
@@ -123,7 +139,9 @@ const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
     0.0,  // XREAL One
     0.0,  // XREAL One
     0.0,  // XREAL One S
-    0.0   // XREAL One S
+    0.0,  // XREAL One S
+    0.0,  // XREAL XBX A01
+    0.0   // XREAL XBX A01 Plus
 };
 
 const device_properties_type xreal_air_properties = {
@@ -157,6 +175,11 @@ static imu_quat_type device_conversion_quat = nwu_conversion_quat;
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
 static bool mcu_enabled = false;
+static bool device_is_xbx = false;
+
+static bool is_xreal_xbx(uint16_t product_id) {
+    return product_id == XREAL_XBX_A01_ID_PRODUCT || product_id == XREAL_XBX_A01_PLUS_ID_PRODUCT;
+}
 void handle_xreal_event(uint64_t timestamp,
                         device_imu_event_type event,
                         const device_imu_ahrs_type* ahrs) {
@@ -191,22 +214,46 @@ device_imu_type* glasses_imu;
 device_mcu_type* glasses_controller;
 bool xreal_device_connect() {
     sleep(1);
-    
-    glasses_imu = calloc(1, sizeof(device_imu_type));
-    connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
-    if (connected) {
-        device_imu_clear(glasses_imu);
-        device_imu_calibrate(glasses_imu, 1000, true, true, false);
 
+    if (device_is_xbx) {
+        // XBX gates its IMU stream behind the MCU SDK handshake + continuous heartbeat, so the
+        // MCU must be opened and bootstrapped (heartbeat running) before the IMU is opened.
         glasses_controller = calloc(1, sizeof(device_mcu_type));
         mcu_enabled = device_mcu_open(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
-        device_mcu_clear(glasses_controller);
+        if (mcu_enabled) {
+            glasses_imu = calloc(1, sizeof(device_imu_type));
+            connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
+            if (connected) {
+                device_imu_clear(glasses_imu);
+                device_imu_calibrate(glasses_imu, 1000, true, true, false);
+            }
+        }
+    } else {
+        glasses_imu = calloc(1, sizeof(device_imu_type));
+        connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
+        if (connected) {
+            device_imu_clear(glasses_imu);
+            device_imu_calibrate(glasses_imu, 1000, true, true, false);
+
+            glasses_controller = calloc(1, sizeof(device_mcu_type));
+            mcu_enabled = device_mcu_open(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
+            device_mcu_clear(glasses_controller);
+        }
     }
 
     if (!connected && glasses_imu) {
         device_imu_close(glasses_imu);
         free(glasses_imu);
         glasses_imu = NULL;
+    }
+
+    // For XBX the MCU heartbeat is only useful alongside a live IMU stream; if the IMU failed to
+    // open, tear the MCU down too so we don't leave a dangling heartbeat thread.
+    if (device_is_xbx && !connected && glasses_controller) {
+        device_mcu_close(glasses_controller);
+        free(glasses_controller);
+        glasses_controller = NULL;
+        mcu_enabled = false;
     }
 
     if (!mcu_enabled) {
@@ -237,6 +284,13 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->look_ahead_constant = xreal_look_ahead_constants[i];
                 device->calibration_wait_s = xreal_calibration_wait_s[i];
                 device_conversion_quat = multiply_quaternions(nwu_conversion_quat, device_pitch_adjustment(xreal_pitch_adjustments[i]));
+
+                device_is_xbx = is_xreal_xbx(product_id);
+                if (device_is_xbx) {
+                    // XBX uses a Helen-specific display-mode encoding that isn't implemented yet,
+                    // so SBS/display-mode control is disabled; only IMU head tracking is supported.
+                    device->sbs_mode_supported = false;
+                }
 
                 return device;
             }
@@ -269,14 +323,19 @@ void *poll_controller_func(void *arg) {
     if (config()->debug_threads) log_debug("poll_controller_func, starting\n");
     device_driver_mcu_exited = false;
 
-    while (connected && glasses_imu && mcu_enabled && device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR) {
-        if (sbs_mode_change_requested) {
-            device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
-            if (error == DEVICE_MCU_ERROR_NO_ERROR) {
-                sbs_mode_change_requested = false;
+    // On XBX the background heartbeat thread is the sole owner of the MCU handle, so this thread
+    // must not read/poll the MCU; it just stays alive until disconnect (detected via the IMU).
+    while (connected && glasses_imu && mcu_enabled &&
+           (device_is_xbx || device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR)) {
+        if (!device_is_xbx) {
+            if (sbs_mode_change_requested) {
+                device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
+                if (error == DEVICE_MCU_ERROR_NO_ERROR) {
+                    sbs_mode_change_requested = false;
+                }
+            } else {
+                device_mcu_poll_display_mode(glasses_controller);
             }
-        } else {
-            device_mcu_poll_display_mode(glasses_controller);
         }
 
         sleep(1);
