@@ -169,7 +169,7 @@ Options:
     -bd, --breezy-desktop
     --opentrack-app
     -sv, --sideview
-    -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right]
+    -svp, --sideview-position [top_left|top_right|bottom_left|bottom_right|middle_center|middle_left|top_center|middle_right|bottom_center]
     --smooth-follow, --no-smooth-follow
     -sft, --smooth-follow-threshold [threshold_value]
     --curved-display, --no-curved-display
