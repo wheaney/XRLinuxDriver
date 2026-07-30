@@ -160,6 +160,7 @@ Options:
     --look-ahead-ms [milliseconds]
     -dz, --deadzone-threshold-degrees [threshold_degrees]
     --multi-tap, --no-multi-tap
+    --recenter
     -ds, --display-size [display_size]
     -dd, --display-distance [display_distance]
     -em, --external-mode
@@ -224,7 +225,7 @@ if [ -n "$1" ]; then
         esac
     done
 
-    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,vr-lite-invert-x,no-vr-lite-invert-x,vr-lite-invert-y,no-vr-lite-invert-y,gamescope-reshade-wayland,no-gamescope-reshade-wayland,mouse-sensitivity:,look-ahead-ms:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,opentrack-app,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,curved-display,no-curved-display,smooth-follow-track-roll,no-smooth-follow-track-roll,smooth-follow-track-pitch,no-smooth-follow-track-pitch,smooth-follow-track-yaw,no-smooth-follow-track-yaw,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,neck-saver-horizontal:,neck-saver-vertical:,opentrack-app-ip:,opentrack-app-port:,opentrack-listener,no-opentrack-listener,opentrack-listen-ip:,opentrack-listen-port:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
+    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,vr-lite-invert-x,no-vr-lite-invert-x,vr-lite-invert-y,no-vr-lite-invert-y,gamescope-reshade-wayland,no-gamescope-reshade-wayland,mouse-sensitivity:,look-ahead-ms:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,opentrack-app,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,curved-display,no-curved-display,smooth-follow-track-roll,no-smooth-follow-track-roll,smooth-follow-track-pitch,no-smooth-follow-track-pitch,smooth-follow-track-yaw,no-smooth-follow-track-yaw,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,recenter,neck-saver-horizontal:,neck-saver-vertical:,opentrack-app-ip:,opentrack-app-port:,opentrack-listener,no-opentrack-listener,opentrack-listen-ip:,opentrack-listen-port:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
     if [ $? -ne 0 ]; then
         exit 1
     fi
@@ -452,6 +453,10 @@ if [ -n "$1" ]; then
                 ;;
             --no-multi-tap)
                 process_config "$default_config_file" "multi_tap_enabled" "false"
+                shift
+                ;;
+            --recenter)
+                echo "recenter_screen=true" > /dev/shm/xr_driver_control
                 shift
                 ;;
             --metrics)
