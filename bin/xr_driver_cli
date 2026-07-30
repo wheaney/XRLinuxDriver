@@ -160,7 +160,7 @@ Options:
     --look-ahead-ms [milliseconds]
     -dz, --deadzone-threshold-degrees [threshold_degrees]
     --multi-tap, --no-multi-tap
-    --recenter
+    -rc, --recenter
     -ds, --display-size [display_size]
     -dd, --display-distance [display_distance]
     -em, --external-mode
@@ -221,6 +221,7 @@ if [ -n "$1" ]; then
             -sbs3d) normalized_args+=("--sbs-content-3d") ;;
             -nsh) normalized_args+=("--neck-saver-horizontal") ;;
             -nsv) normalized_args+=("--neck-saver-vertical") ;;
+            -rc) normalized_args+=("--recenter") ;;
             *) normalized_args+=("$arg") ;;
         esac
     done
@@ -455,7 +456,7 @@ if [ -n "$1" ]; then
                 process_config "$default_config_file" "multi_tap_enabled" "false"
                 shift
                 ;;
-            --recenter)
+            -rc|--recenter)
                 echo "recenter_screen=true" > /dev/shm/xr_driver_control
                 shift
                 ;;
