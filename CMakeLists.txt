@@ -47,9 +47,24 @@ pkg_check_modules(JSONC REQUIRED json-c)
 pkg_check_modules(CURL REQUIRED libcurl)
 pkg_check_modules(LIBWAYLAND_CLIENT REQUIRED wayland-client)
 
-execute_process(COMMAND git submodule update --init --recursive
+execute_process(COMMAND git submodule update --init
+                    modules/xrealInterfaceLibrary
+                    modules/xrDeviceKit
+                    modules/xrealAirDeviceKit
+                    modules/xrealOneDeviceKit
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)
+execute_process(COMMAND git submodule update --init interface_lib/modules/hidapi
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary)
+execute_process(COMMAND git submodule update --init modules/Fusion
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/modules/xrDeviceKit)
+execute_process(COMMAND git submodule update --init modules/xreal_one_driver
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealOneDeviceKit)
+
+set(XRDEVICEKIT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/modules/xrDeviceKit")
+set(XREAL_AIR_DRIVER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary")
+
+add_subdirectory(modules/xrealAirDeviceKit)
+add_subdirectory(modules/xrealOneDeviceKit)
 
 # Set the library directory based on architecture
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR})
@@ -214,7 +229,8 @@ target_include_directories(xrDriver
 		${JSONC_INCLUDE_DIRS}
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 		${CMAKE_CURRENT_SOURCE_DIR}/modules/rayneoSDKHeaders
-		${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary/interface_lib/include
+		${XREALAIRDEVICEKIT_INCLUDE_DIR}
+		${XREALONEDEVICEKIT_INCLUDE_DIR}
 		${LIBUSB_INCLUDE_DIRS}
 		${LIBCURL_INCLUDE_DIRS}
 		${OPENSSL_INCLUDE_DIRS}
@@ -234,7 +250,8 @@ target_link_libraries(xrDriver
     PRIVATE
         ${LIBEVDEV_LIBRARIES}
         ${JSONC_LIBRARIES}
-        xrealAirLibrary
+        xrealAirDeviceKit
+        xrealOneDeviceKit
         Threads::Threads
         m
         ${CURL_LIBRARIES}

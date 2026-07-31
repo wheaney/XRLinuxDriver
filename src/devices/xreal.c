@@ -2,6 +2,9 @@
 #include "connection_pool.h"
 #include "device_imu.h"
 #include "device_mcu.h"
+#include "mcu_hid.h"
+#include "xreal_air_devices.h"
+#include "xreal_one_devices.h"
 #include "driver.h"
 #include "imu.h"
 #include "logging.h"
@@ -111,6 +114,20 @@ const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "1S"
 };
 
+
+static const bool xreal_uses_hid_transport[XREAL_ID_PRODUCT_COUNT] = {
+    true,  // XREAL Air
+    true,  // XREAL Air 2
+    true,  // XREAL Air 2 Pro
+    true,  // XREAL Air 2 Ultra
+    false, // XREAL One Pro
+    false, // XREAL One Pro
+    false, // XREAL One
+    false, // XREAL One
+    false, // XREAL One S
+    false  // XREAL One S
+};
+
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
 const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
@@ -157,6 +174,7 @@ static imu_quat_type device_conversion_quat = nwu_conversion_quat;
 static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
 static bool mcu_enabled = false;
+static bool use_hid_transport = true;
 void handle_xreal_event(uint64_t timestamp,
                         device_imu_event_type event,
                         const device_imu_ahrs_type* ahrs) {
@@ -193,14 +211,19 @@ bool xreal_device_connect() {
     sleep(1);
     
     glasses_imu = calloc(1, sizeof(device_imu_type));
-    connected = device_imu_open(glasses_imu, handle_xreal_event) == DEVICE_IMU_ERROR_NO_ERROR;
+    device_imu_error_type imu_error = use_hid_transport ?
+        device_imu_open_hid(glasses_imu, handle_xreal_event) :
+        device_imu_open_xreal_one(glasses_imu, handle_xreal_event);
+    connected = imu_error == DEVICE_IMU_ERROR_NO_ERROR;
     if (connected) {
         device_imu_clear(glasses_imu);
         device_imu_calibrate(glasses_imu, 1000, true, true, false);
 
-        glasses_controller = calloc(1, sizeof(device_mcu_type));
-        mcu_enabled = device_mcu_open(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
-        device_mcu_clear(glasses_controller);
+        if (use_hid_transport) {
+            glasses_controller = calloc(1, sizeof(device_mcu_type));
+            mcu_enabled = device_mcu_open_hid(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
+            device_mcu_clear(glasses_controller);
+        }
     }
 
     if (!connected && glasses_imu) {
@@ -237,6 +260,7 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->look_ahead_constant = xreal_look_ahead_constants[i];
                 device->calibration_wait_s = xreal_calibration_wait_s[i];
                 device_conversion_quat = multiply_quaternions(nwu_conversion_quat, device_pitch_adjustment(xreal_pitch_adjustments[i]));
+                use_hid_transport = xreal_uses_hid_transport[i];
 
                 return device;
             }

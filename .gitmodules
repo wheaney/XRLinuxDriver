@@ -1,3 +1,12 @@
 [submodule "modules/xrealInterfaceLibrary"]
 	path = modules/xrealInterfaceLibrary
 	url = https://gitlab.com/wheaney/nrealAirLinuxDriver.git
+[submodule "modules/xrDeviceKit"]
+	path = modules/xrDeviceKit
+	url = git@github.com:wheaney/xrDeviceKit.git
+[submodule "modules/xrealAirDeviceKit"]
+	path = modules/xrealAirDeviceKit
+	url = git@github.com:wheaney/xrealAirDeviceKit.git
+[submodule "modules/xrealOneDeviceKit"]
+	path = modules/xrealOneDeviceKit
+	url = git@github.com:wheaney/xrealOneDeviceKit.git
