@@ -1,9 +1,11 @@
 #include "connection_pool.h"
+#include "device_imu.h"
 #include "devices.h"
 #include "devices/viture.h"
 #include "driver.h"
 #include "epoch.h"
 #include "imu.h"
+#include "imu_protocol.h"
 #include "logging.h"
 #include "memory.h"
 #include "outputs.h"
@@ -38,17 +40,21 @@
 #define VITURE_LOG_LEVEL_INFO 2
 #define VITURE_LOG_LEVEL_DEBUG 3
 
+// gyro raw is rad/s, convert to deg/s for the xrDeviceKit
+#define VITURE_RAW_GYRO_TO_DPS 57.29577951308232f // 180/pi
+#define VITURE_RAW_ACCEL_TO_G 1.0f
+
 static const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
 static const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
 static const float VITURE_LUMA_PITCH_ADJUSTMENT = -8.5;
-static const float VITURE_BEAST_PITCH_ADJUSTMENT = -8.5; // Placeholder until specs finalized
+static const float VITURE_BEAST_PITCH_ADJUSTMENT = 7.0;
 static const float VITURE_ONE_FOV = 40.0;
 static const float VITURE_PRO_FOV = 43.0;
-static const float VITURE_LUMA_FOV = 50.0;
-static const float VITURE_LUMA_PRO_FOV = 52.0;
+static const float VITURE_LUMA_FOV = 48.5;
+static const float VITURE_LUMA_PRO_FOV = 50.0;
 static const float VITURE_LUMA_ULTRA_FOV = 52.0;
 static const float VITURE_LUMA_CYBER_FOV = 52.0;
-static const float VITURE_BEAST_FOV = 58.0;
+static const float VITURE_BEAST_FOV = 54.0;
 
 static const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x1011, // One
@@ -144,8 +150,8 @@ static const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
     5, // Luma Pro
     10, // Luma Ultra
     10, // Luma Ultra
-    5, // Luma Cyber (TBD)
-    1  // Beast (TBD)
+    5,  // Luma Cyber (TBD)
+    15  // Beast
 };
 
 static const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
@@ -162,7 +168,7 @@ static const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
     10, // Luma Ultra
     10, // Luma Ultra
     10, // Luma Cyber (TBD)
-    10  // Beast (TBD)
+    30  // Beast
 };
 
 static imu_quat_type adjustment_quat;
@@ -174,11 +180,20 @@ static bool connected = false;
 static bool initialized = false;
 static bool viture_state_callback_registered = false;
 static bool viture_imu_open = false;
+static bool viture_use_raw_fusion = false;
 static uint8_t viture_requested_frequency = VITURE_IMU_FREQUENCY_MEDIUM_HIGH;
+
+static const imu_quat_type viture_nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
+
+static device_imu_type viture_fusion_imu;
+static bool viture_fusion_open = false;
+static imu_sample viture_raw_sample;
+static bool viture_raw_pending = false;
 static bool sbs_mode_enabled = false;
 static int viture_saved_display_mode = -1;
 static int viture_saved_native_mode = -1;
 static int viture_saved_dof = -1;
+static int viture_saved_display_size = -1;
 static int viture_callback_logs_remaining = 10;
 
 static const int viture_frequency_hz[VITURE_IMU_FREQUENCY_COUNT] = {60, 90, 120, 240, 500};
@@ -284,8 +299,9 @@ static bool viture_get_active_display_state_locked(int* mode, bool* native_mode)
     return true;
 }
 
-static bool viture_get_display_state_locked(int* native_mode, int* display_mode, int* dof) {
-    if (viture_provider == NULL || native_mode == NULL || display_mode == NULL || dof == NULL) {
+static bool viture_get_display_state_locked(int* native_mode, int* display_mode, int* dof, int* display_size) {
+    if (viture_provider == NULL || native_mode == NULL || display_mode == NULL || dof == NULL ||
+        display_size == NULL) {
         return false;
     }
 
@@ -297,40 +313,29 @@ static bool viture_get_display_state_locked(int* native_mode, int* display_mode,
         *display_mode = xr_device_provider_native_get_display_mode(viture_provider);
         if (*display_mode < 0) return false;
         *dof = xr_device_provider_native_get_dof(viture_provider);
-        return *dof >= 0;
+        if (*dof < 0) return false;
+        *display_size = xr_device_provider_native_get_display_size(viture_provider);
+        return *display_size >= 0;
     }
 
     *display_mode = xr_device_provider_get_display_mode(viture_provider);
     *dof = VITURE_NATIVE_DOF_0;
+    *display_size = -1;
     return *display_mode >= 0;
 }
 
-static bool viture_restore_display_state_locked(int native_mode, int display_mode, int dof) {
+static bool viture_restore_display_state_locked(int native_mode, int display_mode, int dof, int display_size) {
     if (viture_provider == NULL) return false;
 
-    if (!viture_supports_native_dof()) {
-        return xr_device_provider_set_display_mode(viture_provider, display_mode) == 0;
-    }
-
-    if (native_mode == 1) {
-        int current_native_mode = xr_device_provider_native_get_mode(viture_provider);
-        if (current_native_mode != 1 &&
-            xr_device_provider_native_set_mode(viture_provider, 1) != 0) {
-            return false;
-        }
-        if (xr_device_provider_native_set_display_mode(viture_provider, display_mode) != 0) {
-            return false;
-        }
-        return xr_device_provider_native_set_dof(viture_provider, dof) == 0;
-    }
-
-    int current_native_mode = xr_device_provider_native_get_mode(viture_provider);
-    if (current_native_mode == 1 &&
-        xr_device_provider_native_set_mode(viture_provider, 0) != 0) {
+    if (!viture_supports_native_dof())
         return false;
-    }
 
-    return xr_device_provider_set_display_mode(viture_provider, display_mode) == 0;
+    bool success = true;
+    if (native_mode >= 0) success &= xr_device_provider_native_set_mode(viture_provider, native_mode) == 0;
+    if (display_mode >= 0) success &= xr_device_provider_native_set_display_mode(viture_provider, display_mode) == 0;
+    if (display_size >= 0) success &= xr_device_provider_native_set_display_size(viture_provider, display_size) == 0;
+    if (dof >= 0) success &= xr_device_provider_native_set_dof(viture_provider, dof) == 0;
+    return success;
 }
 
 static bool viture_switch_dimension_locked(bool enabled) {
@@ -353,12 +358,6 @@ static void viture_refresh_sbs_state_locked() {
     bool native_mode = false;
     if (viture_get_active_display_state_locked(&mode, &native_mode)) {
         sbs_mode_enabled = viture_display_mode_is_sbs(mode, native_mode);
-        if (config()->debug_device) {
-            log_debug("VITURE: Refreshed SBS state, mode=%d native_mode=%d enabled=%d\n",
-                      mode,
-                      native_mode,
-                      sbs_mode_enabled);
-        }
     } else if (config()->debug_device) {
         log_debug("VITURE: Failed to refresh SBS state\n");
     }
@@ -368,6 +367,7 @@ static void viture_capture_and_override_display_mode_locked() {
     viture_saved_display_mode = -1;
     viture_saved_native_mode = -1;
     viture_saved_dof = -1;
+    viture_saved_display_size = -1;
 
     if (viture_provider == NULL) {
         if (config()->debug_device) {
@@ -376,10 +376,19 @@ static void viture_capture_and_override_display_mode_locked() {
         return;
     }
 
+    if (!viture_supports_native_dof()) {
+        if (config()->debug_device) {
+            log_debug("VITURE: Device has no native DoF support, no display override needed\n");
+        }
+        viture_refresh_sbs_state_locked();
+        return;
+    }
+
     int native_mode = 0;
     int mode = 0;
     int dof = VITURE_NATIVE_DOF_0;
-    if (!viture_get_display_state_locked(&native_mode, &mode, &dof)) {
+    int display_size = -1;
+    if (!viture_get_display_state_locked(&native_mode, &mode, &dof, &display_size)) {
         if (config()->debug_device) {
             log_debug("VITURE: Unable to read display state during override\n");
         }
@@ -389,26 +398,53 @@ static void viture_capture_and_override_display_mode_locked() {
     viture_saved_native_mode = native_mode;
     viture_saved_display_mode = mode;
     viture_saved_dof = dof;
+    viture_saved_display_size = display_size;
 
-    if (native_mode != 1) {
-        sbs_mode_enabled = viture_display_mode_is_sbs(mode, false);
-        if (config()->debug_device) {
-            log_debug("VITURE: Display state already bypass/0DoF, no override needed (mode=%d)\n",
-                      mode);
-        }
-        return;
+    bool success = true;
+    int status = xr_device_provider_native_set_dof(viture_provider, VITURE_NATIVE_DOF_0);
+    if (status != 0 && config()->debug_device) {
+        log_debug("VITURE: Failed to set native DoF to 0 (error %d)\n", status);
+    }
+    success &= status == 0;
+
+    status = xr_device_provider_native_set_display_size(viture_provider, VITURE_DISPLAY_SIZE_EXTRA);
+    if (status != 0 && config()->debug_device) {
+        log_debug("VITURE: Failed to set display size to EXTRA (error %d)\n", status);
+    }
+    success &= status == 0;
+
+    status = xr_device_provider_native_set_display_mode(viture_provider, VITURE_NATIVE_DISPLAY_MODE_1920_1200_120HZ);
+    if (status != 0 && config()->debug_device) {
+        log_debug("VITURE: Failed to set display mode to 1920x1200@120Hz (error %d)\n", status);
+    }
+    success &= status == 0;
+
+    status = xr_device_provider_native_set_mode(viture_provider, 0);
+    success &= status == 0;
+    if (status != 0 && config()->debug_device) {
+        log_debug("VITURE: Failed to set native mode to 0 (error %d)\n", status);
     }
 
-    if (xr_device_provider_native_set_dof(viture_provider, VITURE_NATIVE_DOF_0) == 0) {
-        sbs_mode_enabled = viture_display_mode_is_sbs(mode, true);
+    if (success) {
+        sbs_mode_enabled = viture_native_display_mode_is_sbs(mode);
         if (config()->debug_device) {
-            log_debug("VITURE: Forced native display mode=%d to 0DoF\n", mode);
+            log_debug("VITURE: Overrode display state to mode=%d size=%d 0DoF (saved native_mode=%d mode=%d dof=%d size=%d)\n",
+                      VITURE_NATIVE_DISPLAY_MODE_1920_1200_120HZ,
+                      VITURE_DISPLAY_SIZE_EXTRA,
+                      native_mode,
+                      mode,
+                      dof,
+                      display_size);
         }
-    } else if (config()->debug_device) {
-        log_debug("VITURE: Failed to force 0DoF (mode=%d, native_mode=%d, dof=%d)\n",
-                  mode,
-                  native_mode,
-                  dof);
+    } else {
+        viture_refresh_sbs_state_locked();
+        if (config()->debug_device) {
+            log_debug("VITURE: Failed to override display state (native_mode=%d mode=%d dof=%d size=%d)\n",
+                      native_mode,
+                      mode,
+                      dof,
+                      display_size);
+        }
     }
 }
 
@@ -417,11 +453,14 @@ static void viture_restore_display_mode_locked() {
         viture_saved_display_mode = -1;
         viture_saved_native_mode = -1;
         viture_saved_dof = -1;
+        viture_saved_display_size = -1;
         if (config()->debug_device) {
             log_debug("VITURE: Cannot restore display mode, provider NULL\n");
         }
         return;
     }
+
+    if (!viture_supports_native_dof()) return;
 
     if (viture_saved_display_mode < 0 || viture_saved_native_mode < 0 || viture_saved_dof < 0) {
         if (config()->debug_device) {
@@ -433,26 +472,31 @@ static void viture_restore_display_mode_locked() {
     int restore_native_mode = viture_saved_native_mode;
     int restore_mode = viture_saved_display_mode;
     int restore_dof = viture_saved_dof;
-    bool result = viture_restore_display_state_locked(restore_native_mode, restore_mode, restore_dof);
+    int restore_display_size = viture_saved_display_size;
+    bool result = viture_restore_display_state_locked(restore_native_mode, restore_mode, restore_dof,
+                                                      restore_display_size);
 
     if (result) {
         sbs_mode_enabled = viture_display_mode_is_sbs(restore_mode, restore_native_mode == 1);
         if (config()->debug_device) {
-            log_debug("VITURE: Restored display mode=%d native_mode=%d dof=%d\n",
+            log_debug("VITURE: Restored display mode=%d native_mode=%d dof=%d size=%d\n",
                       restore_mode,
                       restore_native_mode,
-                      restore_dof);
+                      restore_dof,
+                      restore_display_size);
         }
     } else if (config()->debug_device) {
-        log_debug("VITURE: Failed to restore display mode=%d native_mode=%d dof=%d\n",
+        log_debug("VITURE: Failed to restore display mode=%d native_mode=%d dof=%d size=%d\n",
                   restore_mode,
                   restore_native_mode,
-                  restore_dof);
+                  restore_dof,
+                  restore_display_size);
     }
 
     viture_saved_display_mode = -1;
     viture_saved_native_mode = -1;
     viture_saved_dof = -1;
+    viture_saved_display_size = -1;
 }
 
 static void viture_publish_pose(imu_quat_type orientation, bool has_position,
@@ -487,7 +531,7 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
         float pose[9] = {0};
         int pose_status = 0;
         int result = xr_device_provider_get_gl_pose_carina(viture_provider, pose, 0.0, &pose_status);
-        if (result == 0 && pose_status == 0) {
+        if (result == 0) {
             // pose received in EUS (GL) coordinate system, convert to NWU
             imu_quat_type quat = {.x = -pose[6], .y = -pose[4], .z = pose[5], .w = pose[3]};
 
@@ -517,6 +561,143 @@ static void viture_carina_imu_callback(float* imu, double timestamp) {
         }
     }
     device_checkin(device);
+}
+
+static bool viture_bridge_open(device_imu_type* dev, const imu_hid_info* info) {
+    (void)info;
+    if (!dev) return false;
+    dev->handle = &viture_fusion_imu;
+    return true;
+}
+
+static void viture_bridge_close(device_imu_type* dev) {
+    if (dev) dev->handle = NULL;
+}
+
+static bool viture_bridge_start_stream(device_imu_type* dev) {
+    (void)dev;
+    return true;
+}
+
+static bool viture_bridge_stop_stream(device_imu_type* dev) {
+    (void)dev;
+    return true;
+}
+
+static bool viture_bridge_get_static_id(device_imu_type* dev, uint32_t* out_id) {
+    (void)dev;
+    if (out_id) *out_id = 0x56495455;
+    return true;
+}
+
+static bool viture_bridge_load_calibration_json(device_imu_type* dev, uint32_t* len, char** data) {
+    (void)dev;
+    if (len) *len = 0;
+    if (data) *data = NULL;
+    return false;
+}
+
+static int viture_bridge_next_sample(device_imu_type* dev, imu_sample* out, int timeout_ms) {
+    (void)timeout_ms;
+    if (!dev || !out) return -1;
+    if (!viture_raw_pending) return 0;
+    *out = viture_raw_sample;
+    viture_raw_pending = false;
+    return 1;
+}
+
+static const imu_protocol viture_imu_bridge_protocol = {
+    .open                  = viture_bridge_open,
+    .close                 = viture_bridge_close,
+    .start_stream          = viture_bridge_start_stream,
+    .stop_stream           = viture_bridge_stop_stream,
+    .get_static_id         = viture_bridge_get_static_id,
+    .load_calibration_json = viture_bridge_load_calibration_json,
+    .next_sample           = viture_bridge_next_sample,
+};
+
+static void viture_fusion_event(uint64_t timestamp, device_imu_event_type event,
+                                const device_imu_ahrs_type* ahrs) {
+    if (event != DEVICE_IMU_EVENT_UPDATE || !connected || driver_disabled()) return;
+
+    device_imu_quat_type q = device_imu_get_orientation(ahrs);
+    imu_quat_type fused = {.w = q.w, .x = q.x, .y = q.y, .z = q.z};
+    imu_quat_type nwu = multiply_quaternions(fused, viture_nwu_conversion_quat);
+
+    uint32_t timestamp_ms = (uint32_t)(timestamp / 1000000ULL);
+    viture_publish_pose(nwu, false, (imu_vec3_type){0}, timestamp_ms);
+}
+
+// data: [gx, gy, gz, ax, ay, az, mx, my, mz, temperature], each triad in EDN order.
+// Remap EDN -> the pre-image of NED so device_imu's fusion sees a proper NED frame.
+static void viture_imu_raw_callback(float* data, uint64_t timestamp, uint64_t vsync) {
+    (void)vsync;
+    if (!connected || driver_disabled() || data == NULL || !viture_fusion_open) return;
+
+    imu_sample s = {0};
+    s.gx = -data[0] * VITURE_RAW_GYRO_TO_DPS;
+    s.gy = -data[2] * VITURE_RAW_GYRO_TO_DPS;
+    s.gz = -data[1] * VITURE_RAW_GYRO_TO_DPS;
+    s.ax = -data[3] * VITURE_RAW_ACCEL_TO_G;
+    s.ay = -data[5] * VITURE_RAW_ACCEL_TO_G;
+    s.az = -data[4] * VITURE_RAW_ACCEL_TO_G;
+    s.mx = -data[6];
+    s.my = -data[8];
+    s.mz = -data[7];
+    s.temperature_c = data[9];
+    s.timestamp_ns = timestamp;
+    s.flags = 0;
+
+    viture_raw_sample = s;
+    viture_raw_pending = true;
+    device_imu_read(&viture_fusion_imu, 0);
+}
+
+static bool viture_fusion_start_locked() {
+    if (viture_fusion_open) return true;
+
+    memset(&viture_fusion_imu, 0, sizeof(viture_fusion_imu));
+    viture_raw_pending = false;
+
+    const imu_hid_info info = {
+        .product_id = viture_last_product_id,
+        .interface_number = -1,
+        .path = NULL,
+    };
+    if (!viture_imu_bridge_protocol.open(&viture_fusion_imu, &info)) {
+        log_error("VITURE: Failed to open IMU fusion bridge\n");
+        return false;
+    }
+    viture_fusion_imu.protocol = &viture_imu_bridge_protocol;
+    viture_fusion_imu.sample_rate = viture_frequency_hz[viture_requested_frequency];
+
+    device_imu_error_type err = device_imu_open(&viture_fusion_imu, viture_fusion_event);
+    if (err != DEVICE_IMU_ERROR_NO_ERROR) {
+        log_error("VITURE: device_imu_open failed for fusion bridge (%d)\n", err);
+        device_imu_close(&viture_fusion_imu);
+        return false;
+    }
+
+    viture_fusion_open = true;
+    if (config()->debug_device) {
+        log_debug("VITURE: IMU fusion bridge started\n");
+    }
+    return true;
+}
+
+static void viture_fusion_stop_locked() {
+    if (!viture_fusion_open) return;
+
+    device_imu_close(&viture_fusion_imu);
+    viture_fusion_open = false;
+    viture_raw_pending = false;
+    if (config()->debug_device) {
+        log_debug("VITURE: IMU fusion bridge stopped\n");
+    }
+}
+
+static uint8_t viture_active_imu_mode() {
+    return viture_use_raw_fusion ? VITURE_IMU_MODE_RAW : VITURE_IMU_MODE_POSE;
 }
 
 // static const char* viture_get_model_name(uint16_t product_id) {
@@ -626,15 +807,24 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
     }
 
     int register_result = -1;
+    viture_use_raw_fusion = false;
     if (viture_device_type == XR_DEVICE_TYPE_VITURE_CARINA) {
         if (config()->debug_device)
             log_debug("VITURE: Registering Carina callback\n");
         register_result =
             xr_device_provider_register_callbacks_carina(viture_provider, NULL, NULL, viture_carina_imu_callback, NULL);
     } else if (viture_device_type == XR_DEVICE_TYPE_VITURE_GEN1 || viture_device_type == XR_DEVICE_TYPE_VITURE_GEN2) {
-        if (config()->debug_device)
-            log_debug("VITURE: Registering IMU pose callback for device type %d\n", viture_device_type);
-        register_result = xr_device_provider_register_imu_pose_callback(viture_provider, viture_legacy_pose_callback);
+        if (viture_supports_native_dof()) {
+            if (config()->debug_device)
+                log_debug("VITURE: Registering raw IMU callback for native-DoF device 0x%04x\n",
+                          viture_last_product_id);
+            register_result = xr_device_provider_register_imu_raw_callback(viture_provider, viture_imu_raw_callback);
+            viture_use_raw_fusion = (register_result == 0);
+        } else {
+            if (config()->debug_device)
+                log_debug("VITURE: Registering IMU pose callback for device type %d\n", viture_device_type);
+            register_result = xr_device_provider_register_imu_pose_callback(viture_provider, viture_legacy_pose_callback);
+        }
     } else {
         if (config()->debug_device) 
             log_debug("VITURE: Other device type %d, skipping callback registration\n", viture_device_type);
@@ -673,8 +863,16 @@ static bool viture_open_imu_locked() {
         return true;
     }
 
-    int open_result = xr_device_provider_open_imu(viture_provider, VITURE_IMU_MODE_POSE, viture_requested_frequency);
+    if (viture_use_raw_fusion && !viture_fusion_start_locked()) {
+        log_error("VITURE: Failed to start IMU fusion bridge\n");
+        return false;
+    }
+
+    int open_result = xr_device_provider_open_imu(viture_provider, viture_active_imu_mode(), viture_requested_frequency);
     viture_imu_open = open_result == 0;
+    if (!viture_imu_open && viture_use_raw_fusion) {
+        viture_fusion_stop_locked();
+    }
     if (viture_imu_open) {
         return true;
     } else {
@@ -706,9 +904,8 @@ static bool viture_start_stream_locked() {
         return false;
     }
 
-    // viture_capture_and_override_display_mode_locked();
+    viture_capture_and_override_display_mode_locked();
     connected = true;
-    // viture_refresh_sbs_state_locked();
     return true;
 }
 
@@ -716,15 +913,17 @@ static void viture_stop_stream_locked() {
     if (viture_provider == NULL) return;
 
     // viture_unregister_state_callback_locked();
-    // viture_restore_display_mode_locked();
+    viture_restore_display_mode_locked();
 
     if (viture_imu_open) {
-        xr_device_provider_close_imu(viture_provider, VITURE_IMU_MODE_POSE);
+        xr_device_provider_close_imu(viture_provider, viture_active_imu_mode());
         viture_imu_open = false;
         if (config()->debug_device) {
             log_debug("VITURE: Closed IMU stream\n");
         }
     }
+
+    viture_fusion_stop_locked();
 
     if (connected) {
         int stop_result = xr_device_provider_stop(viture_provider);
@@ -740,17 +939,21 @@ static void viture_stop_stream_locked() {
 static void viture_shutdown_provider_locked() {
     if (!initialized || viture_provider == NULL) return;
 
+    viture_fusion_stop_locked();
+
     if (xr_device_provider_shutdown(viture_provider) != 0 && config()->debug_device) {
         log_debug("VITURE: xr_device_provider_shutdown reported an error\n");
     }
     xr_device_provider_destroy(viture_provider);
     viture_provider = NULL;
     initialized = false;
+    viture_use_raw_fusion = false;
     viture_device_type = XR_DEVICE_TYPE_VITURE_GEN1;
     viture_state_callback_registered = false;
     viture_saved_display_mode = -1;
     viture_saved_native_mode = -1;
     viture_saved_dof = -1;
+    viture_saved_display_size = -1;
     if (config()->debug_device) {
         log_debug("VITURE: Provider shutdown complete\n");
     }
