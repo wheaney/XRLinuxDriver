@@ -54,7 +54,7 @@ static const float VITURE_LUMA_FOV = 48.5;
 static const float VITURE_LUMA_PRO_FOV = 50.0;
 static const float VITURE_LUMA_ULTRA_FOV = 52.0;
 static const float VITURE_LUMA_CYBER_FOV = 52.0;
-static const float VITURE_BEAST_FOV = 54.0;
+static const float VITURE_BEAST_FOV = 53.0;
 
 static const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
     0x1011, // One
@@ -182,8 +182,6 @@ static bool viture_state_callback_registered = false;
 static bool viture_imu_open = false;
 static bool viture_use_raw_fusion = false;
 static uint8_t viture_requested_frequency = VITURE_IMU_FREQUENCY_MEDIUM_HIGH;
-
-static const imu_quat_type viture_nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
 static device_imu_type viture_fusion_imu;
 static bool viture_fusion_open = false;
@@ -420,10 +418,10 @@ static void viture_capture_and_override_display_mode_locked() {
     success &= status == 0;
 
     status = xr_device_provider_native_set_mode(viture_provider, 0);
-    success &= status == 0;
     if (status != 0 && config()->debug_device) {
         log_debug("VITURE: Failed to set native mode to 0 (error %d)\n", status);
     }
+    success &= status == 0;
 
     if (success) {
         sbs_mode_enabled = viture_native_display_mode_is_sbs(mode);
@@ -621,8 +619,7 @@ static void viture_fusion_event(uint64_t timestamp, device_imu_event_type event,
     if (event != DEVICE_IMU_EVENT_UPDATE || !connected || driver_disabled()) return;
 
     device_imu_quat_type q = device_imu_get_orientation(ahrs);
-    imu_quat_type fused = {.w = q.w, .x = q.x, .y = q.y, .z = q.z};
-    imu_quat_type nwu = multiply_quaternions(fused, viture_nwu_conversion_quat);
+    imu_quat_type nwu = {.w = -q.x, .x = q.w, .y = q.z, .z = -q.y};
 
     uint32_t timestamp_ms = (uint32_t)(timestamp / 1000000ULL);
     viture_publish_pose(nwu, false, (imu_vec3_type){0}, timestamp_ms);
