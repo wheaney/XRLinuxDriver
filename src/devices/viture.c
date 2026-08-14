@@ -85,7 +85,7 @@ static const int viture_resolution_heights[VITURE_MODEL_COUNT] = {
     RESOLUTION_1080P_H, // One
     RESOLUTION_1080P_H, // Lite
     RESOLUTION_1080P_H, // Pro
-    RESOLUTION_1080P_H, // Pro 2 (TBD)
+    RESOLUTION_1080P_H, // Pro 2
     RESOLUTION_1200P_H, // Luma
     RESOLUTION_1200P_H, // Luma Pro
     RESOLUTION_1200P_H, // Luma Ultra
@@ -97,7 +97,7 @@ static const int viture_calibration_wait_s[VITURE_MODEL_COUNT] = {
     1,  // One
     1,  // Lite
     1,  // Pro
-    1,  // Pro 2 (TBD)
+    1,  // Pro 2
     1,  // Luma
     5,  // Luma Pro
     10, // Luma Ultra
