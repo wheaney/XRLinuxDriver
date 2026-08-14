@@ -29,6 +29,7 @@
 #define VITURE_MODEL_COUNT 9
 #define VITURE_MODEL_NONE -1
 #define VITURE_MARKET_NAME_MAX 64
+#define VITURE_GLASSES_VERSION_MAX 64
 #define VITURE_ID_VENDOR 0x35ca
 #define VITURE_DRIVER_ID "viture"
 #define VITURE_IMU_FREQUENCY_COUNT 6
@@ -73,7 +74,7 @@ static const float viture_fovs[VITURE_MODEL_COUNT] = {
     40.0, // One
     40.0, // Lite
     43.0, // Pro
-    43.0, // Pro 2 (TBD)
+    48.5, // Pro 2 (TBD)
     48.5, // Luma
     50.0, // Luma Pro
     52.0, // Luma Ultra
@@ -749,6 +750,18 @@ static device_properties_type* viture_supported_device(uint16_t vendor_id, uint1
     return device;
 };
 
+static void viture_log_glasses_version_locked() {
+    char version[VITURE_GLASSES_VERSION_MAX] = {0};
+    int length = VITURE_GLASSES_VERSION_MAX;
+    int result = xr_device_provider_get_glasses_version(viture_provider, version, &length);
+    if (result == VITURE_GLASSES_SUCCESS) {
+        version[VITURE_GLASSES_VERSION_MAX - 1] = '\0';
+        log_debug("VITURE: Glasses firmware version %s\n", version);
+    } else {
+        log_debug("VITURE: Failed to read glasses firmware version (%d)\n", result);
+    }
+}
+
 static bool viture_initialize_provider_locked(uint16_t product_id) {
     xr_device_provider_set_log_level(VITURE_LOG_LEVEL_ERROR);
 
@@ -812,7 +825,10 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         return false;
     }
 
-    if (config()->debug_device) log_debug("VITURE: SDK provider initialized\n");
+    if (config()->debug_device) {
+        log_debug("VITURE: SDK provider initialized\n");
+        viture_log_glasses_version_locked();
+    }
 
     initialized = true;
     return true;
