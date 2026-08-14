@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.10.0 LANGUAGES C)
+project(xrDriver VERSION 2.11.0 LANGUAGES C)
 
 # Emit compile_commands.json for IDEs (VS Code IntelliSense)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -62,6 +62,10 @@ execute_process(COMMAND git submodule update --init modules/xreal_one_driver
 
 set(XRDEVICEKIT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/modules/xrDeviceKit")
 set(XREAL_AIR_DRIVER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLibrary")
+
+# Link the vendored submodules (notably hidapi) statically
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build vendored submodules as static libraries" FORCE)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_subdirectory(modules/xrealAirDeviceKit)
 add_subdirectory(modules/xrealOneDeviceKit)
@@ -134,6 +138,7 @@ set(SOURCES
     src/files.c
     src/logging.c
     src/imu.c
+    src/imu_rate.c
     src/ipc.c
     src/multitap.c
     src/outputs.c

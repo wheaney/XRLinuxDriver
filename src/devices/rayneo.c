@@ -21,9 +21,7 @@
 
 #define TS_TO_MS_FACTOR 1000000
 #define EXPECTED_CYCLES_PER_S 500
-#define FORCED_CYCLES_PER_S 250 // let's force 250Hz cycle time so we're doing fewer computations
-#define CYCLE_TIME_CHECK_ERROR_FACTOR 0.95 // cycle times won't be exact, check within a 5% margin
-#define FORCED_CYCLE_TIME_MS 1000.0 / FORCED_CYCLES_PER_S * CYCLE_TIME_CHECK_ERROR_FACTOR
+#define EXPECTED_CYCLE_TIME_MS (1000.0 / EXPECTED_CYCLES_PER_S)
 #define BUFFER_SIZE_TARGET_MS 10 // smooth IMU data over this period of time
 
 #define RAYNEO_ID_VENDOR 0x1bbb
@@ -52,8 +50,8 @@ const device_properties_type rayneo_properties = {
     .fov                                = 43.0,
     .lens_distance_ratio                = 0.05,
     .calibration_wait_s                 = 5,
-    .imu_cycles_per_s                   = FORCED_CYCLES_PER_S,
-    .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / FORCED_CYCLE_TIME_MS),
+    .imu_cycles_per_s                   = EXPECTED_CYCLES_PER_S,
+    .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / EXPECTED_CYCLE_TIME_MS),
     .look_ahead_constant                = 15.0,
     .look_ahead_frametime_multiplier    = 0.45,
     .look_ahead_scanline_adjust         = 12.0,
@@ -63,8 +61,6 @@ const device_properties_type rayneo_properties = {
     .provides_orientation               = true,
     .provides_position                  = false
 };
-
-static uint32_t last_utilized_event_ts = 0;
 
 // hardware connection - device is physically plugged in
 static bool hard_connected = false;
@@ -76,23 +72,18 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
     if (!soft_connected || driver_disabled()) return;
 
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
-    uint32_t elapsed_from_last_utilized = ts - last_utilized_event_ts;
-    if (elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
-        float rotation[4];
-        float position[3];
-        uint64_t time;
-        GetHeadTrackerPose(rotation, position, &time);
+    float rotation[4];
+    float position[3];
+    uint64_t time;
+    GetHeadTrackerPose(rotation, position, &time);
 
-        imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
-        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
-        imu_pose_type pose = (imu_pose_type){0};
-        pose.orientation = nwu_quat;
-        pose.has_orientation = true;
-        pose.timestamp_ms = ts;
-        connection_pool_ingest_pose(RAYNEO_DRIVER_ID, pose);
-
-        last_utilized_event_ts = ts;
-    }
+    imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
+    imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
+    imu_pose_type pose = (imu_pose_type){0};
+    pose.orientation = nwu_quat;
+    pose.has_orientation = true;
+    pose.timestamp_ms = ts;
+    connection_pool_ingest_pose(RAYNEO_DRIVER_ID, pose);
 }
 
 static pthread_mutex_t device_name_mutex = PTHREAD_MUTEX_INITIALIZER;

@@ -7,6 +7,7 @@
 #include "connection_pool.h"
 #include "files.h"
 #include "imu.h"
+#include "imu_rate.h"
 #include "ipc.h"
 #include "logging.h"
 #include "memory.h"
@@ -97,6 +98,8 @@ void driver_handle_pose(imu_pose_type pose) {
 
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
+        if (imu_rate_observe_pose(device)) init_multi_tap(device->imu_cycles_per_s);
+
         if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
             log_debug("driver_handle_pose_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
             
@@ -302,6 +305,14 @@ void *block_on_device_thread_func(void *arg) {
 
             if (connection_pool_connect_active()) {
                 log_message("Device connected, redirecting input to %s...\n", config()->output_mode);
+
+                // drivers may only learn their true IMU rate at connect time
+                imu_rate_reset();
+                device_properties_type* connected_device = device_checkout();
+                if (connected_device != NULL) {
+                    init_multi_tap(connected_device->imu_cycles_per_s);
+                    device_checkin(connected_device);
+                }
 
                 setup_ipc();
                 reset_calibration(false);
@@ -623,7 +634,6 @@ void handle_device_connection_changed(bool is_added, connected_device_type* devi
         if (new_primary) {
             state()->calibration_state = NOT_CALIBRATED;
             set_device_and_checkout(new_primary);
-            init_multi_tap(new_primary->imu_cycles_per_s);
             primary_device_ref = new_primary;
         }
     }

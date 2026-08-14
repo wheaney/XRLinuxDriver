@@ -299,7 +299,7 @@ void refresh_license(bool force, char** requested_features, int requested_featur
                     curl_init();
                     curl = curl_easy_init();
                     if(curl) {
-                        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+                        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
                         file = get_or_create_file(file_path, 0777, "w", NULL);
                         if (file == NULL) {
                             log_error("Error opening file (%s): %d\n", file_path, errno);
