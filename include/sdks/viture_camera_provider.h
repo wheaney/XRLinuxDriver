@@ -12,7 +12,7 @@
  * - Luma Pro, Luma Cyber, Luma Ultra: VID=0x0C45, PID=0x636B
  * - Beast: VID=0x0C45, PID=0x6368
  * - Luma: No camera support
- * - One, Lite, Pro: No camera support
+ * - One, Lite, Pro, Pro 2: No camera support
  */
 
 #ifndef VITURE_CAMERA_PROVIDER_H
@@ -78,7 +78,7 @@ VITURE_API int xr_camera_provider_get_camera_vid(int glasses_product_id);
  * - Luma Pro, Luma Cyber: Camera PID 0x636B
  * - Luma Ultra: Camera PID 0x636B
  * - Beast: Camera PID 0x6368
- * - Luma, One, Lite, Pro: No camera (returns 0)
+ * - Luma, One, Lite, Pro, Pro 2: No camera (returns 0)
  */
 VITURE_API int xr_camera_provider_get_camera_pid(int glasses_product_id);
 

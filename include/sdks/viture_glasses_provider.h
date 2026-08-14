@@ -176,6 +176,17 @@ VITURE_API int xr_device_provider_is_product_id_valid(int product_id);
 VITURE_API int xr_device_provider_is_product_support_native_dof(int product_id);
 
 /**
+ * Check if product supports the given IMU report frequency in the given IMU mode.
+ * Frequency support can differ between raw and pose modes on some products.
+ * VITURE_IMU_FREQUENCY_ULTRA_HIGH (1000Hz) is only available on select products.
+ * @param product_id Product id to check
+ * @param imu_mode IMU mode to check (VITURE_IMU_MODE_RAW / VITURE_IMU_MODE_POSE)
+ * @param imu_report_frequency Frequency to check (VITURE_IMU_FREQUENCY_* constants)
+ * @return 1 if support, 0 if not
+ */
+VITURE_API int xr_device_provider_is_product_support_imu_frequency(int product_id, int imu_mode, int imu_report_frequency);
+
+/**
  * Get glasses market name
  * @param product_id Viture product id
  * @param market_name Buffer to store market name

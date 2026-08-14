@@ -23,9 +23,7 @@
 
 #define TS_TO_MS_FACTOR 1000000
 #define EXPECTED_CYCLES_PER_S 1000
-#define FORCED_CYCLES_PER_S 250 // glasses may operate at a reduced frequency, let's force a reduced cycle time
-#define CYCLE_TIME_CHECK_ERROR_FACTOR 0.95 // cycle times won't be exact, check within a 5% margin
-#define FORCED_CYCLE_TIME_MS 1000.0 / FORCED_CYCLES_PER_S * CYCLE_TIME_CHECK_ERROR_FACTOR
+#define EXPECTED_CYCLE_TIME_MS (1000.0 / EXPECTED_CYCLES_PER_S)
 #define BUFFER_SIZE_TARGET_MS 10 // smooth IMU data over this period of time
 
 #define MAPPED_DISPLAY_MODE_COUNT 5
@@ -154,8 +152,8 @@ const device_properties_type xreal_air_properties = {
     .fov                                = 45.0,
     .lens_distance_ratio                = 0.03125,
     .calibration_wait_s                 = 15,
-    .imu_cycles_per_s                   = FORCED_CYCLES_PER_S,
-    .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / FORCED_CYCLE_TIME_MS),
+    .imu_cycles_per_s                   = EXPECTED_CYCLES_PER_S,
+    .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / EXPECTED_CYCLE_TIME_MS),
     .look_ahead_constant                = 10.0,
     .look_ahead_frametime_multiplier    = 0.3,
     .look_ahead_scanline_adjust         = 8.0,
@@ -171,7 +169,6 @@ static pthread_cond_t device_driver_mcu_exited_cond = PTHREAD_COND_INITIALIZER;
 static bool device_driver_mcu_exited = false;
 
 static imu_quat_type device_conversion_quat = nwu_conversion_quat;
-static uint32_t last_utilized_event_ts = 0;
 static bool connected = false;
 static bool mcu_enabled = false;
 static bool use_hid_transport = true;
@@ -181,8 +178,7 @@ void handle_xreal_event(uint64_t timestamp,
     if (!connected || driver_disabled()) return;
 
     uint32_t ts = (uint32_t) (timestamp / TS_TO_MS_FACTOR);
-    uint32_t elapsed_from_last_utilized = ts - last_utilized_event_ts;
-    if (event == DEVICE_IMU_EVENT_UPDATE && elapsed_from_last_utilized > FORCED_CYCLE_TIME_MS) {
+    if (event == DEVICE_IMU_EVENT_UPDATE) {
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
         imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
@@ -191,8 +187,6 @@ void handle_xreal_event(uint64_t timestamp,
         pose.has_orientation = true;
         pose.timestamp_ms = ts;
         connection_pool_ingest_pose(XREAL_DRIVER_ID, pose);
-
-        last_utilized_event_ts = ts;
     }
 }
 

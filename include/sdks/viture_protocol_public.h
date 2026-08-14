@@ -47,6 +47,7 @@ typedef void* XRDeviceProviderHandle;
 #define VITURE_MARKET_NAME_LUMA_ULTRA "Luma Ultra"
 #define VITURE_MARKET_NAME_LUMA_CYBER "Luma Cyber"
 #define VITURE_MARKET_NAME_BEAST      "Beast"
+#define VITURE_MARKET_NAME_PRO2       "Pro 2"
 
 // ============================================================================
 // Display Configuration Constants
@@ -157,6 +158,7 @@ typedef void* XRDeviceProviderHandle;
 #define VITURE_IMU_FREQUENCY_MEDIUM      2 /**< 120Hz reporting rate */
 #define VITURE_IMU_FREQUENCY_MEDIUM_HIGH 3 /**< 240Hz reporting rate */
 #define VITURE_IMU_FREQUENCY_HIGH        4 /**< 500Hz reporting rate */
+#define VITURE_IMU_FREQUENCY_ULTRA_HIGH  5 /**< 1000Hz reporting rate (select products only) */
 
 // ============================================================================
 // Callback Identifiers
@@ -178,6 +180,8 @@ typedef void* XRDeviceProviderHandle;
 #define VITURE_CALLBACK_ID_ELECTROCHROMIC_FILM 3
 /**< Native DOF mode change. See VITURE_NATIVE_DOF_* constants for valid values. */
 #define VITURE_CALLBACK_ID_NATIVE_DOF 4
+/**< Wear status change (0 = not worn, 1 = worn). Gen2 devices only. */
+#define VITURE_CALLBACK_ID_WEAR_STATUS 5
 
 // ============================================================================
 // Value Ranges
@@ -190,6 +194,7 @@ typedef void* XRDeviceProviderHandle;
  * |--------------------|-------------|
  * | Viture One         | [0, 6]      |
  * | Viture Pro         | [0, 8]      |
+ * | Viture Pro 2       | [0, 8]      |
  * | Viture Luma Series | [0, 8]      |
  * | Viture Beast       | [0, 8]      |
  */
@@ -202,6 +207,7 @@ typedef void* XRDeviceProviderHandle;
  * |--------------------|-------------|
  * | Viture One         | [0, 7]      |
  * | Viture Pro         | [0, 8]      |
+ * | Viture Pro 2       | [0, 8]      |
  * | Viture Luma Series | [0, 8]      |
  * | Viture Beast       | [0, 15]     |
  */
@@ -210,11 +216,12 @@ typedef void* XRDeviceProviderHandle;
 /**
  * @brief Electrochromic film value ranges by device model.
  *
- * | Device Model            | Value Range |
- * |-------------------------|-------------|
- * | Viture One & Viture Pro | [0, 1]      |
- * | Viture Luma Series      | [0, 1]      |
- * | Viture Beast            | [0, 8]      |
+ * | Device Model            | Value Range   |
+ * |-------------------------|---------------|
+ * | Viture One & Viture Pro | [0, 1]        |
+ * | Viture Pro 2            | Not supported |
+ * | Viture Luma Series      | [0, 1]        |
+ * | Viture Beast            | [0, 8]        |
  */
 #define VITURE_CALLBACK_ELECTROCHROMIC_FILM_VALUE_RANGE
 
@@ -296,10 +303,29 @@ VITURE_API int xr_device_provider_get_duty_cycle(XRDeviceProviderHandle handle);
 VITURE_API int xr_device_provider_set_duty_cycle(XRDeviceProviderHandle handle, int duty_cycle);
 
 /**
+ * @brief Retrieve the current wear status (Gen2 devices only).
+ *
+ * Reports whether the glasses are currently being worn, based on the wear
+ * detection sensor. Wear status changes are also reported through the state
+ * callback with VITURE_CALLBACK_ID_WEAR_STATUS.
+ *
+ * @param handle Valid XRDeviceProvider handle.
+ * @param wear_status Output parameter: 0 = not worn, 1 = worn.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or null wear_status pointer
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   device is not a Gen2 device
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_DEVICE_REJECTED device returned error status
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_get_wear_status(XRDeviceProviderHandle handle, uint8_t* wear_status);
+
+/**
  * @brief Retrieve the current display mode.
  *
  * Display mode determines both the resolution and refresh rate of the device output.
- * For Gen2 devices (Beast), use this interface when in bypass mode.
+ * On devices with native DOF support (e.g., Viture Beast), use this interface when in bypass mode.
  * See VITURE_DISPLAY_MODE_* constants for valid mode values.
  *
  * @param handle Valid XRDeviceProvider handle.
@@ -318,7 +344,7 @@ VITURE_API int xr_device_provider_get_display_mode(XRDeviceProviderHandle handle
  * @brief Set the display mode.
  *
  * Display mode determines both the resolution and refresh rate of the device output.
- * For Gen2 devices (Beast), use this interface when in bypass mode.
+ * On devices with native DOF support (e.g., Viture Beast), use this interface when in bypass mode.
  * See VITURE_DISPLAY_MODE_* constants for valid mode values.
  *
  * @param handle Valid XRDeviceProvider handle.
@@ -333,13 +359,53 @@ VITURE_API int xr_device_provider_get_display_mode(XRDeviceProviderHandle handle
 VITURE_API int xr_device_provider_set_display_mode(XRDeviceProviderHandle handle, int display_mode);
 
 /**
+ * @brief Set the default display mode applied when the glasses power on.
+ *
+ * The configured mode is stored in the device and persists across power cycles.
+ * See VITURE_DISPLAY_MODE_* constants for valid mode values.
+ *
+ * Supported on Viture Luma / Luma Pro only. Other devices (including Luma Ultra)
+ * return VITURE_GLASSES_ERROR_NOT_SUPPORTED.
+ *
+ * @param handle       Valid XRDeviceProvider handle.
+ * @param display_mode Display mode value (see VITURE_DISPLAY_MODE_* constants).
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or invalid mode value
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   not supported on this device
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_set_default_display_mode(XRDeviceProviderHandle handle, int display_mode);
+
+/**
+ * @brief Enable or disable the physical 2D/3D display mode switch button on the glasses.
+ *
+ * When disabled, pressing the hardware button has no effect. The setting is
+ * not persistent and resets to enabled on the next power cycle.
+ *
+ * Supported on Viture Luma / Luma Pro only. Other devices (including Luma Ultra)
+ * return VITURE_GLASSES_ERROR_NOT_SUPPORTED.
+ *
+ * @param handle  Valid XRDeviceProvider handle.
+ * @param enabled 1 to enable the button, 0 to disable it.
+ * @return VITURE_GLASSES_SUCCESS on success, or:
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM   null handle or invalid enabled value
+ *         - VITURE_GLASSES_ERROR_USB_UNAVAILABLE USB not available
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED   not supported on this device
+ *         - VITURE_GLASSES_ERROR_USB_EXEC        USB execution error
+ *         - VITURE_GLASSES_ERROR_UNKNOWN         other error
+ */
+VITURE_API int xr_device_provider_set_display_mode_button_enabled(XRDeviceProviderHandle handle, int enabled);
+
+/**
  * @brief Switch between 2D and 3D display modes (Gen1 and Gen2 bypass mode only).
  *
  * This is a convenience function that switches between:
  * - 2D mode: 1920x1080 @ 60Hz
  * - 3D mode: 3840x1080 @ 60Hz
  *
- * For Gen2 devices (Beast) in native mode, use xr_device_provider_native_switch_dimension()
+ * On devices with native DOF support (e.g., Viture Beast) in native mode, use xr_device_provider_native_switch_dimension()
  * instead. Calling this function in such state returns VITURE_GLASSES_ERROR_NOT_SUPPORTED.
  *
  * @note If the device is already in the requested mode, the function returns

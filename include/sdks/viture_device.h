@@ -25,10 +25,10 @@
  *                              accelerometer_raw_x, accelerometer_raw_y, accelerometer_raw_z,
  *                              0, 0, 0,
  *                              temperature]
- * 2. Viture Luma / Luma Pro / Beast:  [gyroscope_raw_x, gyroscope_raw_y, gyroscope_raw_z,
- *                                      accelerometer_raw_x, accelerometer_raw_y, accelerometer_raw_z,
- *                                      magnetometer_raw_x, magnetometer_raw_y, magnetometer_raw_z,
- *                                      temperature]
+ * 2. Viture Luma / Luma Pro / Beast / Pro 2: [gyroscope_raw_x, gyroscope_raw_y, gyroscope_raw_z,
+ *                                             accelerometer_raw_x, accelerometer_raw_y, accelerometer_raw_z,
+ *                                             magnetometer_raw_x, magnetometer_raw_y, magnetometer_raw_z,
+ *                                             temperature]
  */
 typedef void (*VitureImuRawCallback)(float* data, uint64_t timestamp, uint64_t vsync);
 
@@ -80,11 +80,12 @@ VITURE_API int xr_device_provider_register_imu_pose_callback(XRDeviceProviderHan
  * @brief Open imu (no effect for carina device)
  * @param handle Handle to the XRDeviceProvider instance
  * @param imu_mode viture::protocol::imu::Mode
- * @param imu_report_frequency viture::protocol::imu::Frequency
+ * @param imu_report_frequency viture::protocol::imu::Frequency. Not all products support all
+ *        frequencies; check with xr_device_provider_is_product_support_imu_frequency.
  * @return VITURE_GLASSES_SUCCESS on success, or:
- *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle
+ *         - VITURE_GLASSES_ERROR_INVALID_PARAM null handle or frequency out of range
  *         - VITURE_GLASSES_ERROR_USB_EXEC      USB execution error
- *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED device type not supported
+ *         - VITURE_GLASSES_ERROR_NOT_SUPPORTED device type or frequency not supported
  *         - VITURE_GLASSES_ERROR_UNKNOWN       other error
  */
 VITURE_API int xr_device_provider_open_imu(XRDeviceProviderHandle handle, uint8_t imu_mode, uint8_t imu_report_frequency);

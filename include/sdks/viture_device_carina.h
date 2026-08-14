@@ -135,12 +135,34 @@ VITURE_API int xr_device_provider_reset_origin_carina(XRDeviceProviderHandle han
  * @brief Get IMU pose data with prediction time (Twb matrix in OpenGL coordinate system: x -> right, y -> up, z -> backward)
  * @param handle Handle to the XRDeviceProvider instance
  * @param pose Array to store pose data (7 floats for position and quaternion)
- * @param predict_time Prediction time in nanoseconds, 0 for current pose data
+ * @param predict_time Prediction time in seconds, 0 for current pose data
  * @param pose_status Output pose status: 0 = stable, 1 = unstable (may occur briefly after device start). Can be null.
  * @return VITURE_GLASSES_SUCCESS on success, VITURE_GLASSES_ERROR_INVALID_PARAM on failure
  */
 VITURE_API int xr_device_provider_get_gl_pose_carina(XRDeviceProviderHandle handle,
                                                      float *pose, double predict_time, int *pose_status);
+
+/**
+ * @brief Enable automatic exposure for the Carina camera.
+ *
+ * @param handle Handle to the XRDeviceProvider instance
+ * @return VITURE_GLASSES_SUCCESS on success, error code on failure
+ */
+VITURE_API int xr_device_provider_set_auto_exposure_carina(XRDeviceProviderHandle handle);
+
+/**
+ * @brief Set manual (fixed) exposure for the Carina camera.
+ *
+ * Disables automatic exposure and applies the given exposure time and gain.
+ * Out-of-range values are clamped to the accepted ranges.
+ *
+ * @param handle           Handle to the XRDeviceProvider instance
+ * @param exposure_time_ms Exposure time in milliseconds, range [0.01, 8.0].
+ * @param exposure_gain    Sensor gain, range [0, 15].
+ * @return VITURE_GLASSES_SUCCESS on success, error code on failure
+ */
+VITURE_API int xr_device_provider_set_manual_exposure_carina(XRDeviceProviderHandle handle,
+                                                             float exposure_time_ms, int exposure_gain);
 
 #ifdef __cplusplus
 }

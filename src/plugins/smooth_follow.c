@@ -381,9 +381,15 @@ bool smooth_follow_modify_reference_pose_func(imu_pose_type pose, imu_pose_type*
             ref_pose->position = pose.position;
         }
 
-        if (!smooth_follow_imu_buffer) {
+        {
             device_properties_type* device = device_checkout();
-            if (device != NULL) smooth_follow_imu_buffer = create_imu_buffer(device->imu_buffer_size);
+            if (device != NULL) {
+                if (smooth_follow_imu_buffer && imu_buffer_size(smooth_follow_imu_buffer) != device->imu_buffer_size) {
+                    free_imu_buffer(smooth_follow_imu_buffer);
+                    smooth_follow_imu_buffer = NULL;
+                }
+                if (!smooth_follow_imu_buffer) smooth_follow_imu_buffer = create_imu_buffer(device->imu_buffer_size);
+            }
             device_checkin(device);
         }
 

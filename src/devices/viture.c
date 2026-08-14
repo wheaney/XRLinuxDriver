@@ -29,7 +29,8 @@
 #define VITURE_ID_PRODUCT_COUNT 14
 #define VITURE_ID_VENDOR 0x35ca
 #define VITURE_DRIVER_ID "viture"
-#define VITURE_IMU_FREQUENCY_COUNT 5
+#define VITURE_IMU_FREQUENCY_COUNT 6
+#define VITURE_IMU_FREQUENCY_DEFAULT VITURE_IMU_FREQUENCY_MEDIUM_HIGH
 #define VITURE_CARINA_CYCLES_PER_S 1000
 #define VITURE_CARINA_POLL_INTERVAL_US (1000000 / VITURE_CARINA_CYCLES_PER_S)
 #define VITURE_FLOAT_EXACT_MS_LIMIT 16777216.0 // 2^24, largest consecutive int in float
@@ -168,7 +169,7 @@ static const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
     10, // Luma Ultra
     10, // Luma Ultra
     10, // Luma Cyber (TBD)
-    30  // Beast
+    20  // Beast
 };
 
 static imu_quat_type adjustment_quat;
@@ -181,7 +182,7 @@ static bool initialized = false;
 static bool viture_state_callback_registered = false;
 static bool viture_imu_open = false;
 static bool viture_use_raw_fusion = false;
-static uint8_t viture_requested_frequency = VITURE_IMU_FREQUENCY_MEDIUM_HIGH;
+static uint8_t viture_requested_frequency = VITURE_IMU_FREQUENCY_DEFAULT;
 
 static device_imu_type viture_fusion_imu;
 static bool viture_fusion_open = false;
@@ -194,7 +195,32 @@ static int viture_saved_dof = -1;
 static int viture_saved_display_size = -1;
 static int viture_callback_logs_remaining = 10;
 
-static const int viture_frequency_hz[VITURE_IMU_FREQUENCY_COUNT] = {60, 90, 120, 240, 500};
+static const int viture_frequency_hz[VITURE_IMU_FREQUENCY_COUNT] = {60, 90, 120, 240, 500, 1000};
+
+// highest frequency the SDK reports for this product/mode, defaulting to the previous behavior
+static uint8_t viture_best_frequency(uint16_t product_id, uint8_t imu_mode) {
+    if (product_id == 0) return VITURE_IMU_FREQUENCY_DEFAULT;
+
+    for (int frequency = VITURE_IMU_FREQUENCY_COUNT - 1; frequency >= 0; frequency--) {
+        if (xr_device_provider_is_product_support_imu_frequency(product_id, imu_mode, frequency) == 1) {
+            return (uint8_t)frequency;
+        }
+    }
+
+    if (config()->debug_device) {
+        log_debug("VITURE: SDK reported no supported IMU frequencies for 0x%04x mode %d, using %dHz\n",
+                  product_id,
+                  imu_mode,
+                  viture_frequency_hz[VITURE_IMU_FREQUENCY_DEFAULT]);
+    }
+    return VITURE_IMU_FREQUENCY_DEFAULT;
+}
+
+static void viture_apply_imu_rate(device_properties_type* device, int cycles_per_s) {
+    device->imu_cycles_per_s = cycles_per_s;
+    device->imu_buffer_size = cycles_per_s / 60;
+    if (device->imu_buffer_size < 1) device->imu_buffer_size = 1;
+}
 
 static const char* viture_open_imu_error_reason(int code) {
     switch (code) {
@@ -770,6 +796,12 @@ static device_properties_type* viture_supported_device(uint16_t vendor_id, uint1
 
                 adjustment_quat = device_pitch_adjustment(*viture_pitch_adjustments[i]);
 
+                uint8_t predicted_mode = xr_device_provider_is_product_support_native_dof(product_id) == 1
+                                             ? VITURE_IMU_MODE_RAW
+                                             : VITURE_IMU_MODE_POSE;
+                viture_requested_frequency = viture_best_frequency(product_id, predicted_mode);
+                viture_apply_imu_rate(device, viture_frequency_hz[viture_requested_frequency]);
+
                 viture_last_product_id = product_id;
 
                 return device;
@@ -860,24 +892,45 @@ static bool viture_open_imu_locked() {
         return true;
     }
 
+    uint8_t imu_mode = viture_active_imu_mode();
+    viture_requested_frequency = viture_best_frequency(viture_last_product_id, imu_mode);
+    if (config()->debug_device) {
+        log_debug("VITURE: Using IMU frequency %dHz (index %d) in mode %d\n",
+                  viture_frequency_hz[viture_requested_frequency],
+                  viture_requested_frequency,
+                  imu_mode);
+    }
+
+    int open_result = VITURE_GLASSES_ERROR_UNKNOWN;
+    while (true) {
+        open_result = xr_device_provider_open_imu(viture_provider, imu_mode, viture_requested_frequency);
+        if (open_result == 0) {
+            if (config()->debug_device) {
+                log_debug("VITURE: open_imu succeeded at %dHz (mode %d)\n",
+                          viture_frequency_hz[viture_requested_frequency],
+                          imu_mode);
+            }
+            break;
+        }
+
+        log_error("VITURE: open_imu failed at %dHz (%d: %s)\n",
+                  viture_frequency_hz[viture_requested_frequency],
+                  open_result,
+                  viture_open_imu_error_reason(open_result));
+
+        if (viture_requested_frequency == 0) return false;
+        viture_requested_frequency--;
+    }
+    viture_imu_open = true;
+
     if (viture_use_raw_fusion && !viture_fusion_start_locked()) {
         log_error("VITURE: Failed to start IMU fusion bridge\n");
+        xr_device_provider_close_imu(viture_provider, imu_mode);
+        viture_imu_open = false;
         return false;
     }
 
-    int open_result = xr_device_provider_open_imu(viture_provider, viture_active_imu_mode(), viture_requested_frequency);
-    viture_imu_open = open_result == 0;
-    if (!viture_imu_open && viture_use_raw_fusion) {
-        viture_fusion_stop_locked();
-    }
-    if (viture_imu_open) {
-        return true;
-    } else {
-        log_error("VITURE: open_imu failed (%d: %s)\n", open_result,
-                    viture_open_imu_error_reason(open_result));
-    }
-
-    return false;
+    return true;
 }
 
 static bool viture_start_stream_locked() {
@@ -968,9 +1021,7 @@ static void viture_update_device_properties(device_properties_type* device) {
         cycles_per_s = viture_frequency_hz[viture_requested_frequency];
     }
 
-    device->imu_cycles_per_s = cycles_per_s;
-    device->imu_buffer_size = cycles_per_s / 60;
-    if (device->imu_buffer_size < 1) device->imu_buffer_size = 1;
+    viture_apply_imu_rate(device, cycles_per_s);
     device->provides_position = provides_position;
     device->sbs_mode_supported = true;
     device->firmware_update_recommended = false;
