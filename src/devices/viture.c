@@ -26,7 +26,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#define VITURE_ID_PRODUCT_COUNT 14
+#define VITURE_MODEL_COUNT 9
+#define VITURE_MODEL_NONE -1
+#define VITURE_MARKET_NAME_MAX 64
 #define VITURE_ID_VENDOR 0x35ca
 #define VITURE_DRIVER_ID "viture"
 #define VITURE_IMU_FREQUENCY_COUNT 6
@@ -45,128 +47,70 @@
 #define VITURE_RAW_GYRO_TO_DPS 57.29577951308232f // 180/pi
 #define VITURE_RAW_ACCEL_TO_G 1.0f
 
-static const float VITURE_ONE_PITCH_ADJUSTMENT = 6.0;
-static const float VITURE_PRO_PITCH_ADJUSTMENT = 3.0;
-static const float VITURE_LUMA_PITCH_ADJUSTMENT = -8.5;
-static const float VITURE_BEAST_PITCH_ADJUSTMENT = 7.0;
-static const float VITURE_ONE_FOV = 40.0;
-static const float VITURE_PRO_FOV = 43.0;
-static const float VITURE_LUMA_FOV = 48.5;
-static const float VITURE_LUMA_PRO_FOV = 50.0;
-static const float VITURE_LUMA_ULTRA_FOV = 52.0;
-static const float VITURE_LUMA_CYBER_FOV = 52.0;
-static const float VITURE_BEAST_FOV = 53.0;
-
-static const int viture_supported_id_product[VITURE_ID_PRODUCT_COUNT] = {
-    0x1011, // One
-    0x1013, // One
-    0x1017, // One
-    0x1015, // One Lite
-    0x101b, // One Lite
-    0x1019, // Pro
-    0x101d, // Pro
-    0x1131, // Luma
-    0x1121, // Luma Pro
-    0x1141, // Luma Pro
-    0x1101, // Luma Ultra
-    0x1104, // Luma Ultra
-    0x1151, // Luma Cyber
-    0x1201  // Viture Beast
-};
-static const char* viture_supported_models[VITURE_ID_PRODUCT_COUNT] = {
-    VITURE_MARKET_NAME_ONE,
-    VITURE_MARKET_NAME_ONE,
+static const char* viture_model_names[VITURE_MODEL_COUNT] = {
     VITURE_MARKET_NAME_ONE,
     VITURE_MARKET_NAME_LITE,
-    VITURE_MARKET_NAME_LITE,
     VITURE_MARKET_NAME_PRO,
-    VITURE_MARKET_NAME_PRO,
+    VITURE_MARKET_NAME_PRO2,
     VITURE_MARKET_NAME_LUMA,
     VITURE_MARKET_NAME_LUMA_PRO,
-    VITURE_MARKET_NAME_LUMA_PRO,
-    VITURE_MARKET_NAME_LUMA_ULTRA,
     VITURE_MARKET_NAME_LUMA_ULTRA,
     VITURE_MARKET_NAME_LUMA_CYBER,
     VITURE_MARKET_NAME_BEAST
 };
-static const float* viture_pitch_adjustments[VITURE_ID_PRODUCT_COUNT] = {
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One Lite
-    &VITURE_ONE_PITCH_ADJUSTMENT,  // One Lite
-    &VITURE_PRO_PITCH_ADJUSTMENT,  // Pro
-    &VITURE_PRO_PITCH_ADJUSTMENT,  // Pro
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Pro
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Ultra
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Ultra
-    &VITURE_LUMA_PITCH_ADJUSTMENT, // Luma Cyber
-    &VITURE_BEAST_PITCH_ADJUSTMENT // Beast
+static const float viture_pitch_adjustments[VITURE_MODEL_COUNT] = {
+    2.0,  // One
+    2.0,  // Lite
+    3.0,  // Pro
+    3.0,  // Pro 2 (TBD)
+    -8.5, // Luma
+    -8.5, // Luma Pro
+    -8.5, // Luma Ultra
+    -8.5, // Luma Cyber
+    7.0   // Beast
 };
-static const float* viture_fovs[VITURE_ID_PRODUCT_COUNT] = {
-    &VITURE_ONE_FOV,        // One
-    &VITURE_ONE_FOV,        // One
-    &VITURE_ONE_FOV,        // One
-    &VITURE_ONE_FOV,        // One Lite
-    &VITURE_ONE_FOV,        // One Lite
-    &VITURE_PRO_FOV,        // Pro
-    &VITURE_PRO_FOV,        // Pro
-    &VITURE_LUMA_FOV,       // Luma
-    &VITURE_LUMA_PRO_FOV,   // Luma Pro
-    &VITURE_LUMA_PRO_FOV,   // Luma Pro
-    &VITURE_LUMA_ULTRA_FOV, // Luma Ultra
-    &VITURE_LUMA_ULTRA_FOV, // Luma Ultra
-    &VITURE_LUMA_CYBER_FOV, // Luma Cyber
-    &VITURE_BEAST_FOV       // Beast
+static const float viture_fovs[VITURE_MODEL_COUNT] = {
+    40.0, // One
+    40.0, // Lite
+    43.0, // Pro
+    43.0, // Pro 2 (TBD)
+    48.5, // Luma
+    50.0, // Luma Pro
+    52.0, // Luma Ultra
+    52.0, // Luma Cyber
+    53.0  // Beast
 };
-static const int viture_resolution_heights[VITURE_ID_PRODUCT_COUNT] = {
+static const int viture_resolution_heights[VITURE_MODEL_COUNT] = {
     RESOLUTION_1080P_H, // One
-    RESOLUTION_1080P_H, // One
-    RESOLUTION_1080P_H, // One
-    RESOLUTION_1080P_H, // One Lite
-    RESOLUTION_1080P_H, // One Lite
+    RESOLUTION_1080P_H, // Lite
     RESOLUTION_1080P_H, // Pro
-    RESOLUTION_1080P_H, // Pro
+    RESOLUTION_1080P_H, // Pro 2 (TBD)
     RESOLUTION_1200P_H, // Luma
     RESOLUTION_1200P_H, // Luma Pro
-    RESOLUTION_1200P_H, // Luma Pro
-    RESOLUTION_1200P_H, // Luma Ultra
     RESOLUTION_1200P_H, // Luma Ultra
     RESOLUTION_1200P_H, // Luma Cyber
     RESOLUTION_1200P_H  // Beast
 };
 
-static const int viture_calibration_wait_s[VITURE_ID_PRODUCT_COUNT] = {
-    1, // One
-    1, // One
-    1, // One
-    1, // One Lite
-    1, // One Lite
-    1, // Pro
-    1, // Pro
-    1, // Luma
-    5, // Luma Pro
-    5, // Luma Pro
-    10, // Luma Ultra
+static const int viture_calibration_wait_s[VITURE_MODEL_COUNT] = {
+    1,  // One
+    1,  // Lite
+    1,  // Pro
+    1,  // Pro 2 (TBD)
+    1,  // Luma
+    5,  // Luma Pro
     10, // Luma Ultra
     5,  // Luma Cyber (TBD)
     15  // Beast
 };
 
-static const int viture_look_ahead_constant[VITURE_ID_PRODUCT_COUNT] = {
+static const int viture_look_ahead_constant[VITURE_MODEL_COUNT] = {
     20, // One
-    20, // One
-    20, // One
-    20, // One Lite
-    20, // One Lite
+    20, // Lite
     20, // Pro
-    20, // Pro
+    20, // Pro 2 (TBD)
     20, // Luma
     20, // Luma Pro
-    20, // Luma Pro
-    10, // Luma Ultra
     10, // Luma Ultra
     10, // Luma Cyber (TBD)
     20  // Beast
@@ -199,8 +143,6 @@ static const int viture_frequency_hz[VITURE_IMU_FREQUENCY_COUNT] = {60, 90, 120,
 
 // highest frequency the SDK reports for this product/mode, defaulting to the previous behavior
 static uint8_t viture_best_frequency(uint16_t product_id, uint8_t imu_mode) {
-    if (product_id == 0) return VITURE_IMU_FREQUENCY_DEFAULT;
-
     for (int frequency = VITURE_IMU_FREQUENCY_COUNT - 1; frequency >= 0; frequency--) {
         if (xr_device_provider_is_product_support_imu_frequency(product_id, imu_mode, frequency) == 1) {
             return (uint8_t)frequency;
@@ -236,17 +178,12 @@ static const char* viture_open_imu_error_reason(int code) {
 static const device_properties_type viture_properties = {
     .brand                              = "VITURE",
     .model                              = NULL,
-    .hid_vendor_id                      = 0x35ca,
-    .hid_product_id                     = 0x1011,
+    .hid_vendor_id                      = VITURE_ID_VENDOR,
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
     .resolution_w                       = RESOLUTION_1080P_W,
-    .resolution_h                       = RESOLUTION_1080P_H,
-    .fov                                = VITURE_ONE_FOV,
     .lens_distance_ratio                = 0.05,
-    .calibration_wait_s                 = 1,
     .imu_cycles_per_s                   = 60,
     .imu_buffer_size                    = 1,
-    .look_ahead_constant                = 20.0,
     .look_ahead_frametime_multiplier    = 0.6,
     .look_ahead_scanline_adjust         = 10.0,
     .look_ahead_ms_cap                  = 40.0,
@@ -258,7 +195,6 @@ static const device_properties_type viture_properties = {
 
 static bool viture_supports_native_dof(void) {
     return viture_device_type == XR_DEVICE_TYPE_VITURE_GEN2 &&
-           viture_last_product_id != 0 &&
            xr_device_provider_is_product_support_native_dof(viture_last_product_id) == 1;
 }
 
@@ -723,17 +659,6 @@ static uint8_t viture_active_imu_mode() {
     return viture_use_raw_fusion ? VITURE_IMU_MODE_RAW : VITURE_IMU_MODE_POSE;
 }
 
-// static const char* viture_get_model_name(uint16_t product_id) {
-//     char* model_name = calloc(VITURE_MARKET_NAME_MAX, sizeof(char));
-//     int requested_len = VITURE_MARKET_NAME_MAX;
-//     int result = xr_device_provider_get_market_name(product_id, model_name, &requested_len);
-//     if (result != 0) {
-//         snprintf(model_name, VITURE_MARKET_NAME_MAX, "VITURE 0x%04X", product_id);
-//     }
-
-//     return model_name;
-// }
-
 // TODO - the SDK doesn't actually reliably call this yet
 static void viture_state_callback(int glass_state_id, int glass_value) {
     if (glass_state_id == VITURE_CALLBACK_ID_DISPLAY_MODE) {
@@ -774,47 +699,57 @@ static void viture_unregister_state_callback_locked() {
     viture_state_callback_registered = false;
 }
 
-static device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id,
-                                                uint8_t usb_bus, uint8_t usb_address) {
-    if (vendor_id == VITURE_ID_VENDOR) {
-        for (int i = 0; i < VITURE_ID_PRODUCT_COUNT; i++) {
-            if (product_id == viture_supported_id_product[i]) {
-                if (!xr_device_provider_is_product_id_valid(product_id)) {
-                    log_message("VITURE: Product ID 0x%04x rejected by SDK\n", product_id);
-                    continue;
-                }
+// index into the device detail arrays for the model the SDK reports for this product,
+// VITURE_MODEL_NONE for a model we have no properties for
+static int viture_model_index(uint16_t product_id) {
+    char market_name[VITURE_MARKET_NAME_MAX] = {0};
+    int length = VITURE_MARKET_NAME_MAX - 1;
+    if (xr_device_provider_get_market_name(product_id, market_name, &length) != VITURE_GLASSES_SUCCESS) {
+        log_message("VITURE: SDK reported no market name for product ID 0x%04x\n", product_id);
+        return VITURE_MODEL_NONE;
+    }
+    market_name[VITURE_MARKET_NAME_MAX - 1] = '\0';
 
-                device_properties_type* device = calloc(1, sizeof(device_properties_type));
-                *device = viture_properties;
-                device->hid_vendor_id = vendor_id;
-                device->hid_product_id = product_id;
-                device->model = (char *)viture_supported_models[i];
-                device->resolution_h = viture_resolution_heights[i];
-                device->fov = *viture_fovs[i];
-                device->calibration_wait_s = viture_calibration_wait_s[i];
-                device->look_ahead_constant = (float)viture_look_ahead_constant[i];
-
-                adjustment_quat = device_pitch_adjustment(*viture_pitch_adjustments[i]);
-
-                uint8_t predicted_mode = xr_device_provider_is_product_support_native_dof(product_id) == 1
-                                             ? VITURE_IMU_MODE_RAW
-                                             : VITURE_IMU_MODE_POSE;
-                viture_requested_frequency = viture_best_frequency(product_id, predicted_mode);
-                viture_apply_imu_rate(device, viture_frequency_hz[viture_requested_frequency]);
-
-                viture_last_product_id = product_id;
-
-                return device;
-            }
-        }
+    for (int i = 0; i < VITURE_MODEL_COUNT; i++) {
+        if (equal(market_name, viture_model_names[i])) return i;
     }
 
-    return NULL;
+    log_error("VITURE: No device properties for model '%s' (product ID 0x%04x)\n", market_name, product_id);
+
+    return VITURE_MODEL_NONE;
+}
+
+static device_properties_type* viture_supported_device(uint16_t vendor_id, uint16_t product_id,
+                                                uint8_t usb_bus, uint8_t usb_address) {
+    if (vendor_id != VITURE_ID_VENDOR || xr_device_provider_is_product_id_valid(product_id) != 1) return NULL;
+
+    int model_index = viture_model_index(product_id);
+    if (model_index == VITURE_MODEL_NONE) return NULL;
+
+    device_properties_type* device = calloc(1, sizeof(device_properties_type));
+    *device = viture_properties;
+    device->hid_vendor_id = vendor_id;
+    device->hid_product_id = product_id;
+    device->model = (char *)viture_model_names[model_index];
+    device->resolution_h = viture_resolution_heights[model_index];
+    device->fov = viture_fovs[model_index];
+    device->calibration_wait_s = viture_calibration_wait_s[model_index];
+    device->look_ahead_constant = (float)viture_look_ahead_constant[model_index];
+
+    adjustment_quat = device_pitch_adjustment(viture_pitch_adjustments[model_index]);
+
+    uint8_t predicted_mode = xr_device_provider_is_product_support_native_dof(product_id) == 1
+                                 ? VITURE_IMU_MODE_RAW
+                                 : VITURE_IMU_MODE_POSE;
+    viture_requested_frequency = viture_best_frequency(product_id, predicted_mode);
+    viture_apply_imu_rate(device, viture_frequency_hz[viture_requested_frequency]);
+
+    viture_last_product_id = product_id;
+
+    return device;
 };
 
 static bool viture_initialize_provider_locked(uint16_t product_id) {
-    if (product_id == 0) return false;
-
     xr_device_provider_set_log_level(VITURE_LOG_LEVEL_ERROR);
 
     viture_provider = xr_device_provider_create(product_id);
