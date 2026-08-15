@@ -31,6 +31,8 @@
 #define VITURE_MARKET_NAME_MAX 64
 #define VITURE_GLASSES_VERSION_MAX 64
 #define VITURE_ID_VENDOR 0x35ca
+
+#define VITURE_ID_PRODUCT_BEAST_LARGE 0x1211
 #define VITURE_DRIVER_ID "viture"
 #define VITURE_IMU_FREQUENCY_COUNT 6
 #define VITURE_IMU_FREQUENCY_DEFAULT VITURE_IMU_FREQUENCY_MEDIUM_HIGH
@@ -46,7 +48,6 @@
 
 // gyro raw is rad/s, convert to deg/s for the xrDeviceKit
 #define VITURE_RAW_GYRO_TO_DPS 57.29577951308232f // 180/pi
-#define VITURE_RAW_ACCEL_TO_G 1.0f
 
 static const char* viture_model_names[VITURE_MODEL_COUNT] = {
     VITURE_MARKET_NAME_ONE,
@@ -596,14 +597,24 @@ static void viture_imu_raw_callback(float* data, uint64_t timestamp, uint64_t vs
 
     imu_sample s = {0};
     s.gx = -data[0] * VITURE_RAW_GYRO_TO_DPS;
-    s.gy = -data[2] * VITURE_RAW_GYRO_TO_DPS;
-    s.gz = -data[1] * VITURE_RAW_GYRO_TO_DPS;
-    s.ax = -data[3] * VITURE_RAW_ACCEL_TO_G;
-    s.ay = -data[5] * VITURE_RAW_ACCEL_TO_G;
-    s.az = -data[4] * VITURE_RAW_ACCEL_TO_G;
+    s.ax = -data[3];
     s.mx = -data[6];
-    s.my = -data[8];
-    s.mz = -data[7];
+    if (viture_last_product_id == VITURE_ID_PRODUCT_BEAST_LARGE) {
+        // this product reports east/down flipped, which reverses pitch and yaw
+        s.gy = data[2] * VITURE_RAW_GYRO_TO_DPS;
+        s.gz = data[1] * VITURE_RAW_GYRO_TO_DPS;
+        s.ay = data[5];
+        s.az = data[4];
+        s.my = data[8];
+        s.mz = data[7];
+    } else {
+        s.gy = -data[2] * VITURE_RAW_GYRO_TO_DPS;
+        s.gz = -data[1] * VITURE_RAW_GYRO_TO_DPS;
+        s.ay = -data[5];
+        s.az = -data[4];
+        s.my = -data[8];
+        s.mz = -data[7];
+    }
     s.temperature_c = data[9];
     s.timestamp_ns = timestamp;
     s.flags = 0;
