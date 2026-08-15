@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.11.0 LANGUAGES C)
+project(xrDriver VERSION 2.11.1 LANGUAGES C)
 
 # Emit compile_commands.json for IDEs (VS Code IntelliSense)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -103,6 +103,13 @@ if(EXISTS ${VITURE_LIB_DIR})
     file(GLOB VITURE_SHARED_LIBS ${VITURE_LIB_DIR}/*.so)
     list(APPEND SHARED_LIBS ${VITURE_SHARED_LIBS})
 endif()
+
+# The RayNeo SDK re-exports ~100 libusb_* symbols, which would interpose the real libusb for every
+# other library in the process (see include/sdks/rayneo.h). Keep it out of the link entirely; it's
+# dlopen'd with RTLD_LOCAL|RTLD_DEEPBIND when a RayNeo device shows up.
+set(RAYNEO_LIB ${LIB_DIR}/libRayNeoXRMiniSDK.so)
+list(REMOVE_ITEM SHARED_LIBS ${RAYNEO_LIB})
+
 message(STATUS "SHARED_LIBS: ${SHARED_LIBS}")
 
 # Add all shared libraries
@@ -119,7 +126,6 @@ endforeach()
 
 # Define the mapping of binary names to source files
 set(DEVICE_MAPPINGS
-    "libRayNeoXRMiniSDK.so:src/devices/rayneo.c"
     "libGlassSDK.so:src/devices/rokid.c"
 )
 
@@ -202,6 +208,13 @@ if(EXISTS ${VITURE_LIB_DIR})
     message(STATUS "VITURE support enabled, added src/devices/viture.c")
 endif()
 
+# RayNeo is dlopen'd rather than linked, so it has no imported target to drive DEVICE_MAPPINGS
+if(EXISTS ${RAYNEO_LIB})
+    list(APPEND SOURCES src/devices/rayneo.c)
+    add_definitions(-DRAYNEOXRMINISDK_SUPPORTED)
+    message(STATUS "RayNeo support enabled, added src/devices/rayneo.c")
+endif()
+
 add_executable(xrDriver ${SOURCES})
 
 # Improve crash backtraces and line number resolution
@@ -264,5 +277,10 @@ target_link_libraries(xrDriver
         ${ALL_IMPORTED_LIBS}
         ${LIBUSB_LIBRARIES}
         ${LIBWAYLAND_CLIENT_LIBRARIES}
+        ${CMAKE_DL_LIBS}
 )
+
+# dlopen("libRayNeoXRMiniSDK.so") consults the executable's RUNPATH, so keep LIB_DIR on it even
+# though nothing in LIB_DIR is linked directly any more
+set_target_properties(xrDriver PROPERTIES BUILD_RPATH "${LIB_DIR}")
 add_dependencies(xrDriver run_python_script)

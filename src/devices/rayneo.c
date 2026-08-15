@@ -10,6 +10,7 @@
 #include "sdks/rayneo.h"
 #include "strings.h"
 
+#include <dlfcn.h>
 #include <math.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -29,6 +30,79 @@
 
 #define STATE_EVENT_DEVICE_INFO 0x4000
 #define RAYNEO_DRIVER_ID "rayneo"
+
+// bare soname, so ld.so resolves it exactly as it did when this was a DT_NEEDED
+#define RAYNEO_SDK_SONAME "libRayNeoXRMiniSDK.so"
+
+#define RAYNEO_SDK_SYMBOLS \
+    X(RegisterIMUEventCallback) X(UnregisterIMUEventCallback) \
+    X(RegisterStateEventCallback) X(UnregisterStateEventCallback) \
+    X(EstablishUsbConnection) X(ResetUsbConnection) \
+    X(NotifyDeviceConnected) X(NotifyDeviceDisconnected) \
+    X(StartXR) X(StopXR) X(SwitchTo2D) X(SwitchTo3D) X(OpenIMU) X(CloseIMU) X(Recenter) \
+    X(GetHeadTrackerPose) X(ConvertHostTime2DeviceTime) \
+    X(GetDeviceType) X(AcquireDeviceInfo) X(GetSideBySideStatus)
+
+void (*RegisterIMUEventCallback)(IMUEventCallback callback) = NULL;
+void (*UnregisterIMUEventCallback)(IMUEventCallback callback) = NULL;
+void (*RegisterStateEventCallback)(StateEventCallback callback) = NULL;
+void (*UnregisterStateEventCallback)(StateEventCallback callback) = NULL;
+int (*EstablishUsbConnection)(int32_t vid, int32_t pid) = NULL;
+int (*ResetUsbConnection)() = NULL;
+void (*NotifyDeviceConnected)() = NULL;
+void (*NotifyDeviceDisconnected)() = NULL;
+void (*StartXR)() = NULL;
+void (*StopXR)() = NULL;
+void (*SwitchTo2D)() = NULL;
+void (*SwitchTo3D)() = NULL;
+void (*OpenIMU)() = NULL;
+void (*CloseIMU)() = NULL;
+void (*Recenter)() = NULL;
+void (*GetHeadTrackerPose)(float rotation[4], float position[3], uint64_t* timeNsInDevice) = NULL;
+uint64_t (*ConvertHostTime2DeviceTime)(uint64_t timeNsInHost) = NULL;
+void (*GetDeviceType)(char* device) = NULL;
+void (*AcquireDeviceInfo)() = NULL;
+int8_t (*GetSideBySideStatus)() = NULL;
+
+static void* sdk_handle = NULL;
+static bool sdk_loaded = false;
+static bool sdk_load_attempted = false;
+static pthread_mutex_t sdk_load_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// see include/sdks/rayneo.h for why this is dlopen'd rather than linked. Idempotent, thread-safe;
+// on failure the entry points stay NULL and the device is reported unsupported.
+bool rayneo_sdk_load(void) {
+    pthread_mutex_lock(&sdk_load_mutex);
+    if (!sdk_load_attempted) {
+        sdk_load_attempted = true;
+
+        sdk_handle = dlopen(RAYNEO_SDK_SONAME, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+        if (sdk_handle == NULL) {
+            log_error("RayNeo driver, failed to load " RAYNEO_SDK_SONAME ": %s\n", dlerror());
+        } else {
+            const char* missing = NULL;
+
+            #define X(name) if (!missing) { *(void**)(&name) = dlsym(sdk_handle, #name); if (!name) missing = #name; }
+            RAYNEO_SDK_SYMBOLS
+            #undef X
+
+            if (missing == NULL) {
+                sdk_loaded = true;
+                if (config()->debug_device) log_debug("RayNeo driver, loaded " RAYNEO_SDK_SONAME "\n");
+            } else {
+                log_error("RayNeo driver, " RAYNEO_SDK_SONAME " is missing symbol %s\n", missing);
+
+                #define X(name) *(void**)(&name) = NULL;
+                RAYNEO_SDK_SYMBOLS
+                #undef X
+            }
+        }
+    }
+    bool loaded = sdk_loaded;
+    pthread_mutex_unlock(&sdk_load_mutex);
+
+    return loaded;
+}
 
 // RayNeo SDK is returning rotations relative to an east-up-south coordinate system,
 // this converts to to north-west-up, and applies a 15-degree offset based on factory device calibration
@@ -133,6 +207,8 @@ static void rayneo_mcu_callback(uint32_t state, uint64_t timestamp, size_t lengt
 
 static pthread_mutex_t device_connection_mutex = PTHREAD_MUTEX_INITIALIZER;
 bool rayneo_device_connect() {
+    if (!rayneo_sdk_load()) return false;
+
     pthread_mutex_lock(&device_connection_mutex);
     if (!soft_connected) {
         if (!hard_connected) {
@@ -183,6 +259,8 @@ void rayneo_device_disconnect(bool soft, bool is_device_present) {
 
 device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     if (vendor_id == RAYNEO_ID_VENDOR && product_id == RAYNEO_ID_PRODUCT) {
+        if (!rayneo_sdk_load()) return NULL;
+
         device_properties_type* device = calloc(1, sizeof(device_properties_type));
         *device = rayneo_properties;
 
@@ -228,6 +306,8 @@ bool rayneo_device_is_sbs_mode() {
 };
 
 bool rayneo_device_set_sbs_mode(bool enabled) {
+    if (!rayneo_sdk_load()) return false;
+
     // don't explicitly change the is_sbs_mode value here, wait for it to come back around from the MCU deviceinfo response
     if (enabled) {
         SwitchTo3D();

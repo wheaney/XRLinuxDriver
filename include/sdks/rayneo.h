@@ -5,43 +5,57 @@
 #include "base/FXRMacro.h"
 #include "device/usb/XRDeviceState.h"
 
-void RegisterIMUEventCallback(IMUEventCallback callback);
+#include <stdbool.h>
+#include <stdint.h>
 
-void UnregisterIMUEventCallback(IMUEventCallback callback);
+// libRayNeoXRMiniSDK.so statically links libusb and re-exports ~100 libusb_* symbols with default
+// visibility. Linking it puts those ahead of the real libusb-1.0.so.0 in the global scope, so other
+// libraries bind to RayNeo's copy: VITURE's libcarina_vio.so then hands a libusb_context to the
+// wrong implementation and segfaults in libusb_ref_device, with no RayNeo device attached at all.
+//
+// So it's dlopen'd on demand instead. RTLD_LOCAL keeps its libusb_* out of the global scope, so
+// nothing else can bind to them whatever the hot-plug order. RTLD_DEEPBIND keeps the blob's own
+// libusb calls (interposable via its PLT) on its bundled copy, which would otherwise fail in
+// reverse. Entry points below are therefore dlsym'd pointers; call rayneo_sdk_load() first.
+bool rayneo_sdk_load(void);
 
-void RegisterStateEventCallback(StateEventCallback callback);
+extern void (*RegisterIMUEventCallback)(IMUEventCallback callback);
 
-void UnregisterStateEventCallback(StateEventCallback callback);
+extern void (*UnregisterIMUEventCallback)(IMUEventCallback callback);
 
-int EstablishUsbConnection(int32_t vid, int32_t pid);
+extern void (*RegisterStateEventCallback)(StateEventCallback callback);
 
-int ResetUsbConnection();
+extern void (*UnregisterStateEventCallback)(StateEventCallback callback);
 
-void NotifyDeviceConnected();
+extern int (*EstablishUsbConnection)(int32_t vid, int32_t pid);
 
-void NotifyDeviceDisconnected();
+extern int (*ResetUsbConnection)();
 
-void StartXR();
+extern void (*NotifyDeviceConnected)();
 
-void StopXR();
+extern void (*NotifyDeviceDisconnected)();
 
-void SwitchTo2D();
+extern void (*StartXR)();
 
-void SwitchTo3D();
+extern void (*StopXR)();
 
-void OpenIMU();
+extern void (*SwitchTo2D)();
 
-void CloseIMU();
+extern void (*SwitchTo3D)();
 
-void Recenter();
+extern void (*OpenIMU)();
 
-void GetHeadTrackerPose(float rotation[4], float position[3], uint64_t* timeNsInDevice);
+extern void (*CloseIMU)();
 
-uint64_t ConvertHostTime2DeviceTime(uint64_t timeNsInHost);
+extern void (*Recenter)();
 
-void GetDeviceType(char* device);
+extern void (*GetHeadTrackerPose)(float rotation[4], float position[3], uint64_t* timeNsInDevice);
 
-void AcquireDeviceInfo();
+extern uint64_t (*ConvertHostTime2DeviceTime)(uint64_t timeNsInHost);
 
-int8_t GetSideBySideStatus();
+extern void (*GetDeviceType)(char* device);
+
+extern void (*AcquireDeviceInfo)();
+
+extern int8_t (*GetSideBySideStatus)();
 #endif
