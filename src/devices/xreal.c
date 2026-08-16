@@ -2,6 +2,7 @@
 #include "connection_pool.h"
 #include "device_imu.h"
 #include "device_mcu.h"
+#include "hid_ids.h"
 #include "mcu_hid.h"
 #include "xreal_air_devices.h"
 #include "xreal_one_devices.h"
@@ -49,8 +50,9 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
     DEVICE_MCU_DISPLAY_MODE_1920x1080_60   // this duplicates index 0, so the sbs mode mapping here will get remapped
 };
 
-#define XREAL_ID_PRODUCT_COUNT 10
+#define XREAL_ID_PRODUCT_COUNT 12
 #define XREAL_ID_VENDOR 0x3318
+
 const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0424, // XREAL Air
     0x0428, // XREAL Air 2
@@ -61,7 +63,9 @@ const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0437, // XREAL One
     0x0438, // XREAL One
     0x043e, // XREAL One S
-    0x043d  // XREAL One S
+    0x043d, // XREAL One S
+    0x0440, // XREAL xbx a01
+    0x0442  // XREAL xbx a01+
 };
 const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     45.0, // XREAL Air
@@ -73,7 +77,9 @@ const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     50.0, // XREAL One
     50.0, // XREAL One
     52.0, // XREAL One S
-    52.0  // XREAL One S
+    52.0, // XREAL One S
+    50.0, // XREAL xbx a01
+    50.0  // XREAL xbx a01+
 };
 const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     10.0, // XREAL Air
@@ -85,7 +91,9 @@ const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     25.0, // XREAL One
     25.0, // XREAL One
     25.0, // XREAL One S
-    25.0  // XREAL One S
+    25.0, // XREAL One S
+    10.0, // XREAL xbx a01
+    10.0  // XREAL xbx a01+
 };
 const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     15, // XREAL Air
@@ -97,7 +105,9 @@ const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     5,  // XREAL One
     5,  // XREAL One
     5,  // XREAL One S
-    5   // XREAL One S
+    5,  // XREAL One S
+    15, // XREAL xbx a01
+    15  // XREAL xbx a01+
 };
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "Air",
@@ -109,7 +119,9 @@ const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "One",
     "One",
     "1S",
-    "1S"
+    "1S",
+    "xbx a01",
+    "xbx a01+"
 };
 
 
@@ -123,7 +135,24 @@ static const bool xreal_uses_hid_transport[XREAL_ID_PRODUCT_COUNT] = {
     false, // XREAL One
     false, // XREAL One
     false, // XREAL One S
-    false  // XREAL One S
+    false, // XREAL One S
+    true,  // XREAL xbx a01
+    true   // XREAL xbx a01+
+};
+
+static const bool xreal_sbs_mode_supported[XREAL_ID_PRODUCT_COUNT] = {
+    true,  // XREAL Air
+    true,  // XREAL Air 2
+    true,  // XREAL Air 2 Pro
+    true,  // XREAL Air 2 Ultra
+    true,  // XREAL One Pro
+    true,  // XREAL One Pro
+    true,  // XREAL One
+    true,  // XREAL One
+    true,  // XREAL One S
+    true,  // XREAL One S
+    false, // XREAL xbx a01
+    false  // XREAL xbx a01+
 };
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
@@ -138,7 +167,9 @@ const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
     0.0,  // XREAL One
     0.0,  // XREAL One
     0.0,  // XREAL One S
-    0.0   // XREAL One S
+    0.0,  // XREAL One S
+    0.0,  // XREAL xbx a01
+    0.0   // XREAL xbx a01+
 };
 
 const device_properties_type xreal_air_properties = {
@@ -172,6 +203,8 @@ static imu_quat_type device_conversion_quat = nwu_conversion_quat;
 static bool connected = false;
 static bool mcu_enabled = false;
 static bool use_hid_transport = true;
+static bool mcu_heartbeat_required = false;
+
 void handle_xreal_event(uint64_t timestamp,
                         device_imu_event_type event,
                         const device_imu_ahrs_type* ahrs) {
@@ -203,20 +236,26 @@ device_imu_type* glasses_imu;
 device_mcu_type* glasses_controller;
 bool xreal_device_connect() {
     sleep(1);
-    
-    glasses_imu = calloc(1, sizeof(device_imu_type));
-    device_imu_error_type imu_error = use_hid_transport ?
-        device_imu_open_hid(glasses_imu, handle_xreal_event) :
-        device_imu_open_xreal_one(glasses_imu, handle_xreal_event);
-    connected = imu_error == DEVICE_IMU_ERROR_NO_ERROR;
-    if (connected) {
-        device_imu_clear(glasses_imu);
-        device_imu_calibrate(glasses_imu, 1000, true, true, false);
 
-        if (use_hid_transport) {
-            glasses_controller = calloc(1, sizeof(device_mcu_type));
-            mcu_enabled = device_mcu_open_hid(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
+    glasses_imu = NULL;
+    if (use_hid_transport) {
+        glasses_controller = calloc(1, sizeof(device_mcu_type));
+        mcu_enabled = device_mcu_open_hid(glasses_controller, handle_xreal_controller_event) == DEVICE_MCU_ERROR_NO_ERROR;
+        if (mcu_enabled) {
             device_mcu_clear(glasses_controller);
+        }
+    }
+
+    connected = mcu_enabled || !mcu_heartbeat_required;
+    if (connected) {
+        glasses_imu = calloc(1, sizeof(device_imu_type));
+        device_imu_error_type imu_error = use_hid_transport ?
+            device_imu_open_hid(glasses_imu, handle_xreal_event) :
+            device_imu_open_xreal_one(glasses_imu, handle_xreal_event);
+        connected = imu_error == DEVICE_IMU_ERROR_NO_ERROR;
+        if (connected) {
+            device_imu_clear(glasses_imu);
+            device_imu_calibrate(glasses_imu, 1000, true, true, false);
         }
     }
 
@@ -254,7 +293,10 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->look_ahead_constant = xreal_look_ahead_constants[i];
                 device->calibration_wait_s = xreal_calibration_wait_s[i];
                 device_conversion_quat = multiply_quaternions(nwu_conversion_quat, device_pitch_adjustment(xreal_pitch_adjustments[i]));
+                device->sbs_mode_supported = xreal_sbs_mode_supported[i];
                 use_hid_transport = xreal_uses_hid_transport[i];
+
+                mcu_heartbeat_required = xreal_mcu_requires_heartbeat(product_id);
 
                 return device;
             }
@@ -287,14 +329,17 @@ void *poll_controller_func(void *arg) {
     if (config()->debug_threads) log_debug("poll_controller_func, starting\n");
     device_driver_mcu_exited = false;
 
-    while (connected && glasses_imu && mcu_enabled && device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR) {
-        if (sbs_mode_change_requested) {
-            device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
-            if (error == DEVICE_MCU_ERROR_NO_ERROR) {
-                sbs_mode_change_requested = false;
+    while (connected && glasses_imu && mcu_enabled &&
+           (mcu_heartbeat_required || device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR)) {
+        if (!mcu_heartbeat_required) {
+            if (sbs_mode_change_requested) {
+                device_mcu_error_type error = device_mcu_update_display_mode(glasses_controller);
+                if (error == DEVICE_MCU_ERROR_NO_ERROR) {
+                    sbs_mode_change_requested = false;
+                }
+            } else {
+                device_mcu_poll_display_mode(glasses_controller);
             }
-        } else {
-            device_mcu_poll_display_mode(glasses_controller);
         }
 
         sleep(1);
