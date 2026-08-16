@@ -143,6 +143,21 @@ static const bool xreal_uses_hid_transport[XREAL_ID_PRODUCT_COUNT] = {
     true   // XREAL XBX A01 Plus
 };
 
+static const bool xreal_sbs_mode_supported[XREAL_ID_PRODUCT_COUNT] = {
+    true,  // XREAL Air
+    true,  // XREAL Air 2
+    true,  // XREAL Air 2 Pro
+    true,  // XREAL Air 2 Ultra
+    true,  // XREAL One Pro
+    true,  // XREAL One Pro
+    true,  // XREAL One
+    true,  // XREAL One
+    true,  // XREAL One S
+    true,  // XREAL One S
+    false, // XREAL XBX A01
+    false  // XREAL XBX A01 Plus
+};
+
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
 
 const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
@@ -191,10 +206,6 @@ static imu_quat_type device_conversion_quat = nwu_conversion_quat;
 static bool connected = false;
 static bool mcu_enabled = false;
 static bool use_hid_transport = true;
-
-// Some products (currently just XBX) gate their IMU stream behind an MCU SDK handshake and a
-// continuous heartbeat; for those, device_connect must fail outright if the MCU doesn't open,
-// rather than falling back to IMU-only like other devices do when their MCU fails to open.
 static bool mcu_heartbeat_required = false;
 
 void handle_xreal_event(uint64_t timestamp,
@@ -229,10 +240,6 @@ device_mcu_type* glasses_controller;
 bool xreal_device_connect() {
     sleep(1);
 
-    // Always open the MCU before the IMU (rather than conditionally ordering per-device): some
-    // products, like XBX, gate their IMU stream behind an MCU SDK handshake + continuous
-    // heartbeat, so their MCU has to be open and bootstrapped first. Devices whose MCU doesn't
-    // gate the IMU stream this way tolerate the same ordering just fine.
     glasses_imu = NULL;
     if (use_hid_transport) {
         glasses_controller = calloc(1, sizeof(device_mcu_type));
@@ -242,8 +249,6 @@ bool xreal_device_connect() {
         }
     }
 
-    // Only devices that require the MCU heartbeat to unlock their IMU stream should fail here;
-    // everyone else still gets a shot at an IMU-only connection even if their MCU didn't open.
     connected = mcu_enabled || !mcu_heartbeat_required;
     if (connected) {
         glasses_imu = calloc(1, sizeof(device_imu_type));
@@ -291,15 +296,10 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->look_ahead_constant = xreal_look_ahead_constants[i];
                 device->calibration_wait_s = xreal_calibration_wait_s[i];
                 device_conversion_quat = multiply_quaternions(nwu_conversion_quat, device_pitch_adjustment(xreal_pitch_adjustments[i]));
+                device->sbs_mode_supported = xreal_sbs_mode_supported[i];
                 use_hid_transport = xreal_uses_hid_transport[i];
 
                 mcu_heartbeat_required = xreal_mcu_requires_heartbeat(product_id);
-                if (mcu_heartbeat_required) {
-                    // Heartbeat-mode devices (currently XBX) use a display-mode encoding that
-                    // isn't implemented yet, so SBS/display-mode control is disabled; only IMU
-                    // head tracking is supported.
-                    device->sbs_mode_supported = false;
-                }
 
                 return device;
             }
@@ -332,9 +332,6 @@ void *poll_controller_func(void *arg) {
     if (config()->debug_threads) log_debug("poll_controller_func, starting\n");
     device_driver_mcu_exited = false;
 
-    // Heartbeat-mode devices (currently XBX) don't support the display-mode read/poll protocol
-    // below, so this thread just stays alive until disconnect (detected via the IMU) without
-    // touching the MCU; the heartbeat itself is driven internally by the open MCU handle.
     while (connected && glasses_imu && mcu_enabled &&
            (mcu_heartbeat_required || device_mcu_read(glasses_controller, 100) == DEVICE_MCU_ERROR_NO_ERROR)) {
         if (!mcu_heartbeat_required) {
