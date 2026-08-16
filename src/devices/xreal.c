@@ -53,9 +53,6 @@ const int non_sbs_display_modes[MAPPED_DISPLAY_MODE_COUNT] = {
 #define XREAL_ID_PRODUCT_COUNT 12
 #define XREAL_ID_VENDOR 0x3318
 
-#define XREAL_XBX_A01_ID_PRODUCT 0x0440
-#define XREAL_XBX_A01_PLUS_ID_PRODUCT 0x0442
-
 const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0424, // XREAL Air
     0x0428, // XREAL Air 2
@@ -67,8 +64,8 @@ const uint16_t xreal_supported_id_product[XREAL_ID_PRODUCT_COUNT] = {
     0x0438, // XREAL One
     0x043e, // XREAL One S
     0x043d, // XREAL One S
-    XREAL_XBX_A01_ID_PRODUCT,      // XREAL XBX A01
-    XREAL_XBX_A01_PLUS_ID_PRODUCT  // XREAL XBX A01 Plus
+    0x0440, // XREAL xbx a01
+    0x0442  // XREAL xbx a01+
 };
 const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     45.0, // XREAL Air
@@ -81,8 +78,8 @@ const float xreal_fovs[XREAL_ID_PRODUCT_COUNT] = {
     50.0, // XREAL One
     52.0, // XREAL One S
     52.0, // XREAL One S
-    45.0, // XREAL XBX A01
-    45.0  // XREAL XBX A01 Plus
+    50.0, // XREAL xbx a01
+    50.0  // XREAL xbx a01+
 };
 const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     10.0, // XREAL Air
@@ -95,8 +92,8 @@ const float xreal_look_ahead_constants[XREAL_ID_PRODUCT_COUNT] = {
     25.0, // XREAL One
     25.0, // XREAL One S
     25.0, // XREAL One S
-    10.0, // XREAL XBX A01
-    10.0  // XREAL XBX A01 Plus
+    10.0, // XREAL xbx a01
+    10.0  // XREAL xbx a01+
 };
 const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     15, // XREAL Air
@@ -109,8 +106,8 @@ const int xreal_calibration_wait_s[XREAL_ID_PRODUCT_COUNT] = {
     5,  // XREAL One
     5,  // XREAL One S
     5,  // XREAL One S
-    15, // XREAL XBX A01
-    15  // XREAL XBX A01 Plus
+    15, // XREAL xbx a01
+    15  // XREAL xbx a01+
 };
 const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "Air",
@@ -123,8 +120,8 @@ const char* xreal_supported_models[XREAL_ID_PRODUCT_COUNT] = {
     "One",
     "1S",
     "1S",
-    "XBX A01",
-    "XBX A01+"
+    "xbx a01",
+    "xbx a01+"
 };
 
 
@@ -139,8 +136,8 @@ static const bool xreal_uses_hid_transport[XREAL_ID_PRODUCT_COUNT] = {
     false, // XREAL One
     false, // XREAL One S
     false, // XREAL One S
-    true,  // XREAL XBX A01
-    true   // XREAL XBX A01 Plus
+    true,  // XREAL xbx a01
+    true   // XREAL xbx a01+
 };
 
 static const bool xreal_sbs_mode_supported[XREAL_ID_PRODUCT_COUNT] = {
@@ -154,8 +151,8 @@ static const bool xreal_sbs_mode_supported[XREAL_ID_PRODUCT_COUNT] = {
     true,  // XREAL One
     true,  // XREAL One S
     true,  // XREAL One S
-    false, // XREAL XBX A01
-    false  // XREAL XBX A01 Plus
+    false, // XREAL xbx a01
+    false  // XREAL xbx a01+
 };
 
 const imu_quat_type nwu_conversion_quat = {.x = 1, .y = 0, .z = 0, .w = 0};
@@ -171,8 +168,8 @@ const float xreal_pitch_adjustments[XREAL_ID_PRODUCT_COUNT] = {
     0.0,  // XREAL One
     0.0,  // XREAL One S
     0.0,  // XREAL One S
-    0.0,  // XREAL XBX A01
-    0.0   // XREAL XBX A01 Plus
+    0.0,  // XREAL xbx a01
+    0.0   // XREAL xbx a01+
 };
 
 const device_properties_type xreal_air_properties = {
