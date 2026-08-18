@@ -156,6 +156,8 @@ Options:
     --invert-x, --no-invert-x
     --invert-y, --no-invert-y
     --invert-z, --no-invert-z
+    --vr-lite-invert-x, --no-vr-lite-invert-x
+    --vr-lite-invert-y, --no-vr-lite-invert-y
     --gamescope-reshade-wayland, --no-gamescope-reshade-wayland
     -ms, --mouse-sensitivity [sensitivity_value]
     --look-ahead-ms [milliseconds]
@@ -227,7 +229,7 @@ if [ -n "$1" ]; then
         esac
     done
 
-    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,invert-x,no-invert-x,invert-y,no-invert-y,invert-z,no-invert-z,gamescope-reshade-wayland,no-gamescope-reshade-wayland,mouse-sensitivity:,look-ahead-ms:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,opentrack-app,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,curved-display,no-curved-display,smooth-follow-track-roll,no-smooth-follow-track-roll,smooth-follow-track-pitch,no-smooth-follow-track-pitch,smooth-follow-track-yaw,no-smooth-follow-track-yaw,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,recenter,neck-saver-horizontal:,neck-saver-vertical:,opentrack-app-ip:,opentrack-app-port:,opentrack-listener,no-opentrack-listener,opentrack-listen-ip:,opentrack-listen-port:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
+    PARSED=$(getopt -o hldesjm --long help,view-log,disable,enable,status,use-joystick,use-mouse,invert-x,no-invert-x,invert-y,no-invert-y,invert-z,no-invert-z,vr-lite-invert-x,no-vr-lite-invert-x,vr-lite-invert-y,no-vr-lite-invert-y,gamescope-reshade-wayland,no-gamescope-reshade-wayland,mouse-sensitivity:,look-ahead-ms:,deadzone-threshold-degrees:,debug:,display-size:,display-distance:,external-mode,disable-external,virtual-display,breezy-desktop,opentrack-app,sideview,sideview-position:,smooth-follow,no-smooth-follow,smooth-follow-threshold:,curved-display,no-curved-display,smooth-follow-track-roll,no-smooth-follow-track-roll,smooth-follow-track-pitch,no-smooth-follow-track-pitch,smooth-follow-track-yaw,no-smooth-follow-track-yaw,sbs-mode-stretched,no-sbs-mode-stretched,sbs-content-3d,no-sbs-content-3d,multi-tap,no-multi-tap,recenter,neck-saver-horizontal:,neck-saver-vertical:,opentrack-app-ip:,opentrack-app-port:,opentrack-listener,no-opentrack-listener,opentrack-listen-ip:,opentrack-listen-port:,metrics,no-metrics,request-token:,verify-token:,refresh-license,get-hardware-id -- "${normalized_args[@]}")
     if [ $? -ne 0 ]; then
         exit 1
     fi
@@ -289,6 +291,22 @@ if [ -n "$1" ]; then
                 ;;
             --no-invert-z)
                 process_config "$default_config_file" "invert_z" "false"
+                shift
+                ;;
+            --vr-lite-invert-x)
+                process_config "$default_config_file" "vr_lite_invert_x" "true"
+                shift
+                ;;
+            --no-vr-lite-invert-x)
+                process_config "$default_config_file" "vr_lite_invert_x" "false"
+                shift
+                ;;
+            --vr-lite-invert-y)
+                process_config "$default_config_file" "vr_lite_invert_y" "true"
+                shift
+                ;;
+            --no-vr-lite-invert-y)
+                process_config "$default_config_file" "vr_lite_invert_y" "false"
                 shift
                 ;;
             --gamescope-reshade-wayland)

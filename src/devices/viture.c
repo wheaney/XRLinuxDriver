@@ -110,7 +110,7 @@ static const int viture_look_ahead_constant[VITURE_MODEL_COUNT] = {
     20, // One
     20, // Lite
     20, // Pro
-    20, // Pro 2 (TBD)
+    20, // Pro 2
     20, // Luma
     20, // Luma Pro
     10, // Luma Ultra

@@ -12,6 +12,8 @@ struct driver_config_t {
     bool invert_x;
     bool invert_y;
     bool invert_z;
+    bool vr_lite_invert_x;
+    bool vr_lite_invert_y;
     int mouse_sensitivity;
     char *output_mode;
     bool multi_tap_enabled;
