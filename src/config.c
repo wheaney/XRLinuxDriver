@@ -25,8 +25,9 @@ driver_config_type *default_config() {
     config->joystick_mode = false;
     config->external_mode = false;
     config->use_roll_axis = false;
-    config->vr_lite_invert_x = false;
-    config->vr_lite_invert_y = false;
+    config->invert_x = false;
+    config->invert_y = false;
+    config->invert_z = false;
     config->mouse_sensitivity = 30;
     config->output_mode = strdup(mouse_output_mode);
     config->multi_tap_enabled = false;
@@ -119,10 +120,13 @@ driver_config_type* parse_config_file(FILE *fp) {
             }
         } else if (equal(key, "use_roll_axis")) {
             config->use_roll_axis = true;
-        } else if (equal(key, "vr_lite_invert_x")) {
-            boolean_config(key, value, &config->vr_lite_invert_x);
-        } else if (equal(key, "vr_lite_invert_y")) {
-            boolean_config(key, value, &config->vr_lite_invert_y);
+        } else if (equal(key, "invert_x")) {
+            boolean_config(key, value, &config->invert_x);
+        } else if (equal(key, "vr_lite_invert_y") || equal(key, "invert_y")) {
+            boolean_config(key, value, &config->invert_y);
+        } else if (equal(key, "vr_lite_invert_x") || equal(key, "invert_z")) {
+            // for VR-Lite mode, "x" meant "yaw," controlled by the z-axis in NWU
+            boolean_config(key, value, &config->invert_z);
         } else if (equal(key, "mouse_sensitivity")) {
             int_config(key, value, &config->mouse_sensitivity);
         } else if (equal(key, "output_mode")) {

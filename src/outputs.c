@@ -557,10 +557,12 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
             }
         }
 
-        int x_velocity;
-        int y_velocity;
+        int x_velocity = -velocities.yaw;
+        int y_velocity = velocities.pitch;
+        int z_velocity = -velocities.roll;
         int next_joystick_x;
         int next_joystick_y;
+        int next_joystick_z;
         bool do_joystick_debug = config()->debug_joystick && (imu_counter % joystick_debug_imu_cycles) == 0;
         if (uinput || do_joystick_debug) {
             // tracking head movements in euler (roll, pitch, yaw) against 2d joystick/mouse (x,y) coordinates means that yaw
@@ -568,15 +570,13 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
             // coordinate system, positive yaw/pitch values move left/down, respectively, and the mouse/joystick coordinate
             // systems are right-down, so a positive yaw should result in a negative x, and a positive pitch should result in a
             // positive y.
-            x_velocity = config()->vr_lite_invert_x ? velocities.yaw : -velocities.yaw;
-            y_velocity = config()->vr_lite_invert_y ? -velocities.pitch : velocities.pitch;
             next_joystick_x = joystick_value(x_velocity, joystick_max_degrees_per_s);
             next_joystick_y = joystick_value(y_velocity, joystick_max_degrees_per_s);
+            next_joystick_z = joystick_value(z_velocity, joystick_max_degrees_per_s);
         }
 
         if (uinput) {
             if (config()->joystick_mode) {
-                int next_joystick_z = joystick_value(-velocities.roll, joystick_max_degrees_per_s);
                 libevdev_uinput_write_event(uinput, EV_ABS, ABS_RX, next_joystick_x);
                 libevdev_uinput_write_event(uinput, EV_ABS, ABS_RY, next_joystick_y);
                 if (config()->use_roll_axis)
@@ -597,7 +597,7 @@ void handle_imu_update(imu_pose_type pose, imu_euler_type velocities, bool imu_c
                 int next_y_int = round(next_y);
                 mouse_y_remainder = next_y - next_y_int;
 
-                float next_z = -velocities.roll * mouse_sensitivity_seconds + mouse_z_remainder;
+                float next_z = z_velocity * mouse_sensitivity_seconds + mouse_z_remainder;
                 int next_z_int = round(next_z);
                 mouse_z_remainder = next_z - next_z_int;
 

@@ -64,7 +64,7 @@ static const float viture_pitch_adjustments[VITURE_MODEL_COUNT] = {
     2.0,  // One
     2.0,  // Lite
     3.0,  // Pro
-    3.0,  // Pro 2 (TBD)
+    -8.5, // Pro 2
     -8.5, // Luma
     -8.5, // Luma Pro
     -8.5, // Luma Ultra
@@ -75,7 +75,7 @@ static const float viture_fovs[VITURE_MODEL_COUNT] = {
     40.0, // One
     40.0, // Lite
     43.0, // Pro
-    48.5, // Pro 2 (TBD)
+    44.5, // Pro 2 (TBD)
     48.5, // Luma
     50.0, // Luma Pro
     52.0, // Luma Ultra
@@ -476,7 +476,7 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
     connection_pool_ingest_pose(VITURE_DRIVER_ID, pose);
 }
 
-static void viture_legacy_pose_callback(float* pose, uint64_t ts) {
+static void viture_pose_callback(float* pose, uint64_t ts) {
     if (!connected || driver_disabled() || pose == NULL) return;
 
     // pose received in NWU coordinate system
@@ -597,24 +597,14 @@ static void viture_imu_raw_callback(float* data, uint64_t timestamp, uint64_t vs
 
     imu_sample s = {0};
     s.gx = -data[0] * VITURE_RAW_GYRO_TO_DPS;
+    s.gy = -data[2] * VITURE_RAW_GYRO_TO_DPS;
+    s.gz = -data[1] * VITURE_RAW_GYRO_TO_DPS;
     s.ax = -data[3];
+    s.ay = -data[5];
+    s.az = -data[4];
     s.mx = -data[6];
-    if (viture_last_product_id == VITURE_ID_PRODUCT_BEAST_LARGE) {
-        // this product reports east/down flipped, which reverses pitch and yaw
-        s.gy = data[2] * VITURE_RAW_GYRO_TO_DPS;
-        s.gz = data[1] * VITURE_RAW_GYRO_TO_DPS;
-        s.ay = data[5];
-        s.az = data[4];
-        s.my = data[8];
-        s.mz = data[7];
-    } else {
-        s.gy = -data[2] * VITURE_RAW_GYRO_TO_DPS;
-        s.gz = -data[1] * VITURE_RAW_GYRO_TO_DPS;
-        s.ay = -data[5];
-        s.az = -data[4];
-        s.my = -data[8];
-        s.mz = -data[7];
-    }
+    s.my = -data[8];
+    s.mz = -data[7];
     s.temperature_c = data[9];
     s.timestamp_ns = timestamp;
     s.flags = 0;
@@ -749,6 +739,15 @@ static device_properties_type* viture_supported_device(uint16_t vendor_id, uint1
     device->look_ahead_constant = (float)viture_look_ahead_constant[model_index];
 
     adjustment_quat = device_pitch_adjustment(viture_pitch_adjustments[model_index]);
+    if (equal(VITURE_MARKET_NAME_PRO2, device->model)) {
+        imu_quat_type eus_to_nwu_adjustment = {
+            .w = 0.5,
+            .x = -0.5,
+            .y = 0.5,
+            .z = 0.5
+        };
+        adjustment_quat = multiply_quaternions(eus_to_nwu_adjustment, adjustment_quat);
+    }
 
     uint8_t predicted_mode = xr_device_provider_is_product_support_native_dof(product_id) == 1
                                  ? VITURE_IMU_MODE_RAW
@@ -811,7 +810,7 @@ static bool viture_initialize_provider_locked(uint16_t product_id) {
         } else {
             if (config()->debug_device)
                 log_debug("VITURE: Registering IMU pose callback for device type %d\n", viture_device_type);
-            register_result = xr_device_provider_register_imu_pose_callback(viture_provider, viture_legacy_pose_callback);
+            register_result = xr_device_provider_register_imu_pose_callback(viture_provider, viture_pose_callback);
         }
     } else {
         if (config()->debug_device) 

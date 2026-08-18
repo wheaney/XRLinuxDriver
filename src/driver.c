@@ -170,6 +170,12 @@ void driver_handle_pose(imu_pose_type pose) {
 
             if (pose.has_orientation) {
                 pose.orientation = multiply_quaternions(reference_orientation_conj, pose.orientation);
+
+                // invert after adjusting for the reference orientation to better match user expectations
+                if (config()->invert_x) pose.orientation.x = -pose.orientation.x;
+                if (config()->invert_y) pose.orientation.y = -pose.orientation.y;
+                if (config()->invert_z) pose.orientation.z = -pose.orientation.z;
+                
                 pose.euler = quaternion_to_euler_zyx(pose.orientation);
             }
             // interpret all positions relative to the reference orientation
@@ -353,11 +359,12 @@ void update_config_from_file(FILE *fp) {
     if (driver_reenabled)
         log_message("Driver has been re-enabled\n");
 
-    if (config()->vr_lite_invert_x != new_config->vr_lite_invert_x)
-        log_message("VR-Lite invert X-axis has been %s\n", new_config->vr_lite_invert_x ? "enabled" : "disabled");
-    if (config()->vr_lite_invert_y != new_config->vr_lite_invert_y)
-        log_message("VR-Lite invert Y-axis has been %s\n", new_config->vr_lite_invert_y ? "enabled" : "disabled");
-
+    if (config()->invert_x != new_config->invert_x)
+        log_message("X-axis has been %s\n", new_config->invert_x ? "inverted" : "not inverted");
+    if (config()->invert_y != new_config->invert_y)
+        log_message("Y-axis has been %s\n", new_config->invert_y ? "inverted" : "not inverted");
+    if (config()->invert_z != new_config->invert_z)
+        log_message("Z-axis has been %s\n", new_config->invert_z ? "inverted" : "not inverted");
     if (!config()->use_roll_axis && new_config->use_roll_axis)
         log_message("VR-Lite roll axis has been enabled\n");
     if (config()->use_roll_axis && !new_config->use_roll_axis)

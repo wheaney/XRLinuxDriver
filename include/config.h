@@ -9,8 +9,9 @@ struct driver_config_t {
     bool joystick_mode;
     bool external_mode;
     bool use_roll_axis;
-    bool vr_lite_invert_x;
-    bool vr_lite_invert_y;
+    bool invert_x;
+    bool invert_y;
+    bool invert_z;
     int mouse_sensitivity;
     char *output_mode;
     bool multi_tap_enabled;
