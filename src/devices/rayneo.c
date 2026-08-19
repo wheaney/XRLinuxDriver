@@ -104,21 +104,13 @@ bool rayneo_sdk_load(void) {
     return loaded;
 }
 
-// RayNeo SDK is returning rotations relative to an east-up-south coordinate system,
-// this converts to to north-west-up, and applies a 15-degree offset based on factory device calibration
-static const imu_quat_type adjustment_quat = {
-    .w = 0.561,
-    .x = -0.430,
-    .y = 0.430,
-    .z = 0.561
-};
-
 const device_properties_type rayneo_properties = {
     .brand                              = "",
     .model                              = "",
     .hid_vendor_id                      = RAYNEO_ID_VENDOR,
     .hid_product_id                     = RAYNEO_ID_PRODUCT,
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
+    .pitch_adjustment_degrees           = -14.0,
     .resolution_w                       = RESOLUTION_1080P_W,
     .resolution_h                       = RESOLUTION_1080P_H,
     .fov                                = 43.0,
@@ -126,9 +118,9 @@ const device_properties_type rayneo_properties = {
     .calibration_wait_s                 = 5,
     .imu_cycles_per_s                   = EXPECTED_CYCLES_PER_S,
     .imu_buffer_size                    = ceil(BUFFER_SIZE_TARGET_MS / EXPECTED_CYCLE_TIME_MS),
-    .look_ahead_constant                = 15.0,
+    .look_ahead_constant                = 10.0,
     .look_ahead_frametime_multiplier    = 0.45,
-    .look_ahead_scanline_adjust         = 12.0,
+    .look_ahead_scanline_adjust         = 7.0,
     .look_ahead_ms_cap                  = 40.0,
     .sbs_mode_supported                 = true,
     .firmware_update_recommended        = false,
@@ -152,9 +144,8 @@ void rayneo_imu_callback(const float acc[3], const float gyro[3], const float ma
     GetHeadTrackerPose(rotation, position, &time);
 
     imu_quat_type imu_quat = { .w = rotation[3], .x = rotation[0], .y = rotation[1], .z = rotation[2] };
-    imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
     imu_pose_type pose = (imu_pose_type){0};
-    pose.orientation = nwu_quat;
+    pose.orientation = quaternion_eus_to_nwu(imu_quat);
     pose.has_orientation = true;
     pose.timestamp_ms = ts;
     connection_pool_ingest_pose(RAYNEO_DRIVER_ID, pose);

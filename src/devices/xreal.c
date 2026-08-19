@@ -199,7 +199,6 @@ static pthread_mutex_t device_driver_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t device_driver_mcu_exited_cond = PTHREAD_COND_INITIALIZER;
 static bool device_driver_mcu_exited = false;
 
-static imu_quat_type device_conversion_quat = nwu_conversion_quat;
 static bool connected = false;
 static bool mcu_enabled = false;
 static bool use_hid_transport = true;
@@ -214,7 +213,7 @@ void handle_xreal_event(uint64_t timestamp,
     if (event == DEVICE_IMU_EVENT_UPDATE) {
         device_imu_quat_type quat = device_imu_get_orientation(ahrs);
         imu_quat_type imu_quat = { .w = quat.w, .x = quat.x, .y = quat.y, .z = quat.z };
-        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, device_conversion_quat);
+        imu_quat_type nwu_quat = multiply_quaternions(imu_quat, nwu_conversion_quat);
         imu_pose_type pose = {0};
         pose.orientation = nwu_quat;
         pose.has_orientation = true;
@@ -292,7 +291,7 @@ device_properties_type* xreal_supported_device(uint16_t vendor_id, uint16_t prod
                 device->fov = xreal_fovs[i];
                 device->look_ahead_constant = xreal_look_ahead_constants[i];
                 device->calibration_wait_s = xreal_calibration_wait_s[i];
-                device_conversion_quat = multiply_quaternions(nwu_conversion_quat, device_pitch_adjustment(xreal_pitch_adjustments[i]));
+                device->pitch_adjustment_degrees = xreal_pitch_adjustments[i];
                 device->sbs_mode_supported = xreal_sbs_mode_supported[i];
                 use_hid_transport = xreal_uses_hid_transport[i];
 

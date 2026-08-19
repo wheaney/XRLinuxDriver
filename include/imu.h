@@ -44,6 +44,7 @@ float radian_to_degree(float rad);
 imu_quat_type normalize_quaternion(imu_quat_type q);
 imu_quat_type conjugate(imu_quat_type q);
 imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2);
+imu_quat_type quaternion_eus_to_nwu(imu_quat_type q);
 imu_quat_type euler_to_quaternion_xyz(imu_euler_type euler);
 imu_quat_type euler_to_quaternion_zyx(imu_euler_type euler);
 imu_quat_type euler_to_quaternion_zxy(imu_euler_type euler);

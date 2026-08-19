@@ -57,6 +57,10 @@ imu_quat_type multiply_quaternions(imu_quat_type q1, imu_quat_type q2) {
     return normalize_quaternion(q);
 }
 
+imu_quat_type quaternion_eus_to_nwu(imu_quat_type q) {
+    return (imu_quat_type){.w = q.w, .x = -q.z, .y = -q.x, .z = q.y};
+}
+
 imu_quat_type euler_to_quaternion_xyz(imu_euler_type euler) {
     // Convert degrees to radians
     float roll = degree_to_radian(euler.roll);

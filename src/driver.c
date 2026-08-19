@@ -96,13 +96,23 @@ void driver_handle_pose(imu_pose_type pose) {
     static int imu_counter = 0;
     static int multi_tap = 0;
 
+    static float cached_pitch_adjustment_degrees = NAN;
+    static imu_quat_type pitch_adjustment_quat = { .w = 1.0f, .x = 0.0f, .y = 0.0f, .z = 0.0f };
+
     device_properties_type* device = device_checkout();
     if (is_driver_connected() && device != NULL) {
         if (imu_rate_observe_pose(device)) init_multi_tap(device->imu_cycles_per_s);
 
+        if (device->pitch_adjustment_degrees != cached_pitch_adjustment_degrees) {
+            cached_pitch_adjustment_degrees = device->pitch_adjustment_degrees;
+            pitch_adjustment_quat = device_pitch_adjustment(cached_pitch_adjustment_degrees);
+        }
+        if (pose.has_orientation && device->pitch_adjustment_degrees != 0.0f) 
+            pose.orientation = multiply_quaternions(pose.orientation, pitch_adjustment_quat);
+
         if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
             log_debug("driver_handle_pose_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
-            
+
         if (glasses_calibrated) {
             if (!captured_reference_pose || multi_tap == MT_RECENTER_SCREEN || control_flags->recenter_screen) {
                 if (multi_tap == MT_RECENTER_SCREEN) log_message("Double-tap detected.\n");

@@ -118,7 +118,7 @@ static const int viture_look_ahead_constant[VITURE_MODEL_COUNT] = {
     20  // Beast
 };
 
-static imu_quat_type adjustment_quat;
+static bool requires_coordinate_adjustment = false;
 static XRDeviceProviderHandle viture_provider = NULL;
 static XRDeviceType viture_device_type = XR_DEVICE_TYPE_VITURE_GEN1;
 static uint16_t viture_last_product_id = 0;
@@ -465,10 +465,8 @@ static void viture_publish_pose(imu_quat_type orientation, bool has_position,
                                 imu_vec3_type position, uint32_t timestamp_ms) {
     if (driver_disabled()) return;
 
-    orientation = multiply_quaternions(orientation, adjustment_quat);
-
     imu_pose_type pose = {0};
-    pose.orientation = orientation;
+    pose.orientation = requires_coordinate_adjustment ? quaternion_eus_to_nwu(orientation) : orientation;
     pose.position = has_position ? position : (imu_vec3_type){0};
     pose.has_orientation = true;
     pose.has_position = has_position;
@@ -737,17 +735,9 @@ static device_properties_type* viture_supported_device(uint16_t vendor_id, uint1
     device->fov = viture_fovs[model_index];
     device->calibration_wait_s = viture_calibration_wait_s[model_index];
     device->look_ahead_constant = (float)viture_look_ahead_constant[model_index];
+    device->pitch_adjustment_degrees = viture_pitch_adjustments[model_index];
 
-    adjustment_quat = device_pitch_adjustment(viture_pitch_adjustments[model_index]);
-    if (equal(VITURE_MARKET_NAME_PRO2, device->model)) {
-        imu_quat_type eus_to_nwu_adjustment = {
-            .w = 0.5,
-            .x = -0.5,
-            .y = 0.5,
-            .z = 0.5
-        };
-        adjustment_quat = multiply_quaternions(eus_to_nwu_adjustment, adjustment_quat);
-    }
+    requires_coordinate_adjustment = equal(VITURE_MARKET_NAME_PRO2, device->model);
 
     uint8_t predicted_mode = xr_device_provider_is_product_support_native_dof(product_id) == 1
                                  ? VITURE_IMU_MODE_RAW

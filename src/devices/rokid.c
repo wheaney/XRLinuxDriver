@@ -30,21 +30,13 @@ const int rokid_supported_id_product[ROKID_ID_PRODUCT_COUNT] = {
 
 #define ROKID_DRIVER_ID "rokid"
 
-// Rokid SDK is returning rotations relative to an east-up-south coordinate system,
-// this converts to to north-west-up, and applies a 5-degree offset based on factory device calibration
-static const imu_quat_type adjustment_quat = {
-    .w = 0.521,
-    .x = -0.478,
-    .y = 0.478,
-    .z = 0.521
-};
-
 const device_properties_type rokid_one_properties = {
     .brand                              = "", // replaced by the supported_device() function
     .model                              = "", // replaced by the supported_device() function
     .hid_vendor_id                      = ROKID_GLASS_VID,
     .hid_product_id                     = -1, // replaced by the supported_device() function
     .calibration_setup                  = CALIBRATION_SETUP_AUTOMATIC,
+    .pitch_adjustment_degrees           = -5.0,
     .resolution_w                       = RESOLUTION_1080P_W,
     .resolution_h                       = RESOLUTION_1080P_H,
     .fov                                = 45,
@@ -200,7 +192,6 @@ void rokid_block_on_device() {
                     .y = rd.Q[1],
                     .z = rd.Q[2]
                 };
-                imu_quat_type nwu_quat = multiply_quaternions(imu_quat, adjustment_quat);
 
                 if (++imu_counter % device->imu_cycles_per_s == 0) {
                     imu_counter = 0;
@@ -211,7 +202,7 @@ void rokid_block_on_device() {
                 }
 
                 imu_pose_type pose = (imu_pose_type){0};
-                pose.orientation = nwu_quat;
+                pose.orientation = quaternion_eus_to_nwu(imu_quat);
                 pose.has_orientation = true;
                 pose.timestamp_ms = timestamp;
                 connection_pool_ingest_pose(ROKID_DRIVER_ID, pose);
