@@ -51,6 +51,37 @@ Otherwise, just rerun the `xr_driver_setup` file. No need to redownload this scr
 
 If you wish to completely remove the installation, run the following script as root: `~/.local/bin/xr_driver_uninstall`. For Steam Deck users, you can uninstall the plugin via the Decky interface.
 
+## Nix
+
+A flake is available with a single package, `xrlinuxdriver`. See [docs/nix.md](docs/nix.md) for maintaining the flake itself.
+
+**As a flake input:**
+```nix
+inputs.xrlinuxdriver.url = "git+https://github.com/wheaney/XRLinuxDriver?submodules=1";
+```
+The `git+https://...?submodules=1` form is required (not the `github:` shorthand) because this
+repo vendors several dependencies as git submodules, and only the `git+` fetcher knows how to
+pull those in. See [docs/nix.md](docs/nix.md#inputs) for details.
+
+Then either install it imperatively with `nix profile`/`nix-env`:
+```bash
+nix profile install "git+https://github.com/wheaney/XRLinuxDriver?submodules=1#xrlinuxdriver"
+```
+or pull it into your own `pkgs` via the overlay:
+```nix
+nixpkgs.overlays = [ inputs.xrlinuxdriver.overlays.default ];
+```
+
+**As a tarball** (no flakes required):
+```bash
+nix-env -f https://github.com/wheaney/XRLinuxDriver/archive/main.tar.gz -iA packages.x86_64-linux.xrlinuxdriver
+```
+or as an overlay:
+```nix
+self: super:
+  (import (fetchTarball "https://github.com/wheaney/XRLinuxDriver/archive/main.tar.gz") { }).overlays.default self super
+```
+
 ## Data Privacy Notice
 
 Your right to privacy and the protection of your personal data are baked into every decision around how your personal data is collected, handled and stored. Your personal data will never be shared, sold, or distributed in any form.
