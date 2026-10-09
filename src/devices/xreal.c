@@ -272,7 +272,7 @@ bool xreal_device_connect() {
         }
 
         device_properties_type* device = device_checkout();
-        device->sbs_mode_supported = false;
+        if (device != NULL) device->sbs_mode_supported = false;
         device_checkin(device);
     }
 
