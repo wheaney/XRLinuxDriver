@@ -185,7 +185,7 @@ static bool is_sbs_mode = false;
 // rotation about the pitch (y) axis; this rotates the roll/yaw axes into place while leaving pitch
 // untouched.
 static imu_quat_type rayneo_imu_frame_y_rotated(imu_quat_type q) {
-    const float half_angle = -45.0f * (float) M_PI / 360.0f;
+    const float half_angle = -49.0f * (float) M_PI / 360.0f;
     const float c = cosf(half_angle), s = sinf(half_angle);
     const imu_quat_type p     = { .w = c, .x = 0.0f, .y =  s, .z = 0.0f };
     const imu_quat_type p_inv = { .w = c, .x = 0.0f, .y = -s, .z = 0.0f };
