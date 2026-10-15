@@ -10,6 +10,18 @@
 
 static connection_pool_type* pool = NULL;
 
+static pthread_cond_t connection_finished = PTHREAD_COND_INITIALIZER;
+
+static void retain_connection_locked(connection_t* c) {
+    if (c) c->references++;
+}
+
+static void release_connection_locked(connection_t* c) {
+    if (!c) return;
+    c->references--;
+    if (c->references == 0) free(c);
+}
+
 static void ensure_capacity() {
     if (pool->count >= pool->capacity) {
         int newcap = pool->capacity == 0 ? 2 : pool->capacity + 1;
@@ -79,15 +91,42 @@ static void* block_thread_func(void* arg) {
     connection_t* c = (connection_t*)arg;
     if (config()->debug_connections) log_debug("block_thread_func %s\n", c->driver->id);
     c->driver->block_on_device_func();
+    pthread_mutex_lock(&pool->mutex);
     c->thread_running = false;
+    pthread_cond_broadcast(&connection_finished);
+    release_connection_locked(c);
+    pthread_mutex_unlock(&pool->mutex);
     return NULL;
 }
 
 static void connection_pool_start_connection_thread(connection_t* c) {
     if (c && !c->thread_running) {
+        pthread_attr_t attr;
+        int rc = pthread_attr_init(&attr);
+        if (rc != 0) {
+            log_debug("pthread_attr_init failed: %d\n", rc);
+            return;
+        }
+        rc = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        if (rc != 0) {
+            log_debug("pthread_attr_setdetachstate failed: %d\n", rc);
+            pthread_attr_destroy(&attr);
+            return;
+        }
+
         c->active = true;
         c->thread_running = true;
-        pthread_create(&c->thread, NULL, block_thread_func, c);
+        retain_connection_locked(c);
+
+        rc = pthread_create(&c->thread, &attr, block_thread_func, c);
+        pthread_attr_destroy(&attr);
+
+        if (rc != 0) {
+            log_debug("pthread_create failed: %d\n", rc);
+            c->active = false;
+            c->thread_running = false;
+            release_connection_locked(c);
+        }
     }
 }
 
@@ -131,11 +170,18 @@ bool connection_pool_connect_active() {
     pthread_mutex_lock(&pool->mutex);
     connection_t* p = primary();
     connection_t* s = supplemental();
+    retain_connection_locked(p);
+    retain_connection_locked(s);
     pthread_mutex_unlock(&pool->mutex);
 
     bool pr_ok = false;
     if (p) pr_ok = p->driver->device_connect_func();
     if (pr_ok && s) (void)s->driver->device_connect_func();
+
+    pthread_mutex_lock(&pool->mutex);
+    release_connection_locked(p);
+    release_connection_locked(s);
+    pthread_mutex_unlock(&pool->mutex);
     return pr_ok;
 }
 
@@ -143,28 +189,30 @@ void connection_pool_block_on_active() {
     if (config()->debug_connections) log_debug("connection_pool_block_on_active\n");
 
     pthread_mutex_lock(&pool->mutex);
-
     connection_t* p = primary();
-    connection_pool_start_connection_thread(p);
-
     connection_t* s = supplemental();
+    retain_connection_locked(p);
+    retain_connection_locked(s);
+    connection_pool_start_connection_thread(p);
     if (s && s->driver->is_connected_func()) connection_pool_start_connection_thread(s);
 
-    pthread_mutex_unlock(&pool->mutex);
-
-    // Join the primary thread; when it exits, we stop. Supplemental will be joined afterwards.
-    if (p && p->thread_running) pthread_join(p->thread, NULL);
-
-    pthread_mutex_lock(&pool->mutex);
-    if (s && s->thread_running) {
-        s->driver->disconnect_func(true);
-        pthread_mutex_unlock(&pool->mutex);
-        pthread_join(s->thread, NULL);
-        pthread_mutex_lock(&pool->mutex);
-        s->thread_running = false;
-        s->active = false;
+    while (p && p->thread_running) {
+        pthread_cond_wait(&connection_finished, &pool->mutex);
     }
-    if (p) { p->thread_running = false; p->active = false; }
+
+    if (s && s->thread_running) {
+        pthread_mutex_unlock(&pool->mutex);
+        s->driver->disconnect_func(true);
+        pthread_mutex_lock(&pool->mutex);
+        while (s->thread_running) {
+            pthread_cond_wait(&connection_finished, &pool->mutex);
+        }
+    }
+
+    if (p) p->active = false;
+    if (s) s->active = false;
+    release_connection_locked(p);
+    release_connection_locked(s);
     pthread_mutex_unlock(&pool->mutex);
 }
 
@@ -213,6 +261,7 @@ void connection_pool_handle_device_added(const device_driver_type* driver, devic
 
     ensure_capacity(pool);
     connection_t* c = (connection_t*)calloc(1, sizeof(*c));
+    c->references = 1;
     c->driver = driver;
     c->device = device;
     c->supplemental = device->can_be_supplemental;
@@ -281,7 +330,7 @@ void connection_pool_handle_device_removed(const char* driver_id) {
 
     if (remove_index >= 0) {
         connection_t* c = pool->list[remove_index];
-        free(c);
+        release_connection_locked(c);
 
         // Remove from array and free the connection wrapper (device is managed externally)
         for (int j = remove_index + 1; j < pool->count; ++j) pool->list[j - 1] = pool->list[j];

@@ -13,6 +13,7 @@ typedef struct connection_t {
     bool active;
     pthread_t thread;
     bool thread_running;
+    unsigned int references; // guarded by the pool mutex
 } connection_t;
 
 struct connection_pool_t {
