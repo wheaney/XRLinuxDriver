@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xrDriver VERSION 2.11.9 LANGUAGES C)
+project(xrDriver VERSION 2.12.0 LANGUAGES C CXX)
 
 # Emit compile_commands.json for IDEs (VS Code IntelliSense)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -13,6 +13,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
 set(CMAKE_C_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package(PkgConfig REQUIRED)
@@ -48,6 +50,7 @@ pkg_check_modules(CURL REQUIRED libcurl)
 pkg_check_modules(LIBWAYLAND_CLIENT REQUIRED wayland-client)
 
 execute_process(COMMAND git submodule update --init
+                    modules/RayNeo-Air-3S-Pro-OpenVR
                     modules/xrealInterfaceLibrary
                     modules/xrDeviceKit
                     modules/xrealAirDeviceKit
@@ -66,7 +69,11 @@ set(XREAL_AIR_DRIVER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/modules/xrealInterfaceLib
 # Link the vendored submodules (notably hidapi) statically
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build vendored submodules as static libraries" FORCE)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(RAYNEO_BUILD_SHARED OFF CACHE BOOL "Build RayNeoSDK as a static library" FORCE)
+set(RAYNEO_BUILD_EXAMPLES OFF CACHE BOOL "Disable RayNeo examples in parent build" FORCE)
+set(RAYNEO_BUILD_OPENVR_DRIVER OFF CACHE BOOL "Disable RayNeo OpenVR driver in parent build" FORCE)
 
+add_subdirectory(modules/RayNeo-Air-3S-Pro-OpenVR)
 add_subdirectory(modules/xrealAirDeviceKit)
 add_subdirectory(modules/xrealOneDeviceKit)
 
@@ -103,12 +110,6 @@ if(EXISTS ${VITURE_LIB_DIR})
     file(GLOB VITURE_SHARED_LIBS ${VITURE_LIB_DIR}/*.so)
     list(APPEND SHARED_LIBS ${VITURE_SHARED_LIBS})
 endif()
-
-# The RayNeo SDK re-exports ~100 libusb_* symbols, which would interpose the real libusb for every
-# other library in the process (see include/sdks/rayneo.h). Keep it out of the link entirely; it's
-# dlopen'd with RTLD_LOCAL|RTLD_DEEPBIND when a RayNeo device shows up.
-set(RAYNEO_LIB ${LIB_DIR}/libRayNeoXRMiniSDK.so)
-list(REMOVE_ITEM SHARED_LIBS ${RAYNEO_LIB})
 
 message(STATUS "SHARED_LIBS: ${SHARED_LIBS}")
 
@@ -208,12 +209,9 @@ if(EXISTS ${VITURE_LIB_DIR})
     message(STATUS "VITURE support enabled, added src/devices/viture.c")
 endif()
 
-# RayNeo is dlopen'd rather than linked, so it has no imported target to drive DEVICE_MAPPINGS
-if(EXISTS ${RAYNEO_LIB})
-    list(APPEND SOURCES src/devices/rayneo.c)
-    add_definitions(-DRAYNEOXRMINISDK_SUPPORTED)
-    message(STATUS "RayNeo support enabled, added src/devices/rayneo.c")
-endif()
+list(APPEND SOURCES src/devices/rayneo.c)
+add_definitions(-DRAYNEO_SUPPORTED)
+message(STATUS "RayNeo support enabled, added src/devices/rayneo.c")
 
 add_executable(xrDriver ${SOURCES})
 
@@ -246,7 +244,6 @@ target_include_directories(xrDriver
 		${LIBEVDEV_INCLUDE_DIRS}
 		${JSONC_INCLUDE_DIRS}
 		${CMAKE_CURRENT_SOURCE_DIR}/include
-		${CMAKE_CURRENT_SOURCE_DIR}/modules/rayneoSDKHeaders
 		${XREALAIRDEVICEKIT_INCLUDE_DIR}
 		${XREALONEDEVICEKIT_INCLUDE_DIR}
 		${LIBUSB_INCLUDE_DIRS}
@@ -268,6 +265,7 @@ target_link_libraries(xrDriver
     PRIVATE
         ${LIBEVDEV_LIBRARIES}
         ${JSONC_LIBRARIES}
+        RayNeo::SDK
         xrealAirDeviceKit
         xrealOneDeviceKit
         Threads::Threads
@@ -280,7 +278,5 @@ target_link_libraries(xrDriver
         ${CMAKE_DL_LIBS}
 )
 
-# dlopen("libRayNeoXRMiniSDK.so") consults the executable's RUNPATH, so keep LIB_DIR on it even
-# though nothing in LIB_DIR is linked directly any more
 set_target_properties(xrDriver PROPERTIES BUILD_RPATH "${LIB_DIR}")
 add_dependencies(xrDriver run_python_script)

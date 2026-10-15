@@ -10,3 +10,6 @@
 [submodule "modules/xrealOneDeviceKit"]
 	path = modules/xrealOneDeviceKit
 	url = https://github.com/wheaney/xrealOneDeviceKit.git
+[submodule "modules/RayNeo-Air-3S-Pro-OpenVR"]
+	path = modules/RayNeo-Air-3S-Pro-OpenVR
+	url = https://github.com/wheaney/RayNeo-Air-3S-Pro-OpenVR.git

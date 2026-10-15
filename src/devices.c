@@ -13,10 +13,11 @@
 #include <sys/time.h>
 
 #if defined(__aarch64__)
-    #define DEVICE_DRIVER_COUNT 2
+    #define DEVICE_DRIVER_COUNT 3
     const device_driver_type* device_drivers[DEVICE_DRIVER_COUNT] = {
         &xreal_driver,
-        &viture_driver
+        &viture_driver,
+        &rayneo_driver
     };
 #elif defined(__x86_64__)
     #define DEVICE_DRIVER_COUNT 4

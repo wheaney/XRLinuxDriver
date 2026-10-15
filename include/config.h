@@ -28,6 +28,7 @@ struct driver_config_t {
     bool debug_ipc;
     bool debug_license;
     bool debug_device;
+    bool debug_imu;
     bool debug_connections;
 };
 

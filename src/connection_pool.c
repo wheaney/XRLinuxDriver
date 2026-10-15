@@ -44,7 +44,7 @@ static int pick_supplemental_index() {
 }
 
 // The pool mutex must already be held when calling these helpers.
-static connection_t* find_hid_connection_locked(uint16_t id_vendor, int16_t id_product) {
+static connection_t* find_hid_connection_locked(uint16_t id_vendor, uint16_t id_product) {
     for (int i = 0; i < pool->count; ++i) {
         connection_t* c = pool->list[i];
         if (c && c->device && c->device->hid_vendor_id == id_vendor && c->device->hid_product_id == id_product) return c;
@@ -348,8 +348,8 @@ void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose) {
     pose_handler(pose);
 }
 
-connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product) {
-    if (config()->debug_connections) log_debug("connection_pool_find_hid_connection for vendor %d product %d\n", id_vendor, id_product);
+connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, uint16_t id_product) {
+    if (config()->debug_connections) log_debug("connection_pool_find_hid_connection for vendor 0x%04x product 0x%04x\n", id_vendor, id_product);
     pthread_mutex_lock(&pool->mutex);
     connection_t* c = find_hid_connection_locked(id_vendor, id_product);
     pthread_mutex_unlock(&pool->mutex);

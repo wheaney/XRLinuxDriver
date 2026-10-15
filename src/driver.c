@@ -121,7 +121,7 @@ void driver_handle_pose(imu_pose_type pose) {
         if (pose.has_orientation && cached_pitch_adjustment_degrees != 0.0f) 
             pose.orientation = multiply_quaternions(pose.orientation, pitch_adjustment_quat);
 
-        if (config()->debug_device && imu_counter == 0 && pose.has_orientation)
+        if (config()->debug_imu && imu_counter == 0 && pose.has_orientation)
             log_debug("driver_handle_pose_event - quat: %f %f %f %f; pos: %f %f %f\n", pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w, pose.position.x, pose.position.y, pose.position.z);
 
         if (glasses_calibrated) {
@@ -438,6 +438,9 @@ void update_config_from_file(FILE *fp) {
     if (config()->debug_device != new_config->debug_device)
         log_message("Device debugging has been %s\n", new_config->debug_device ? "enabled" : "disabled");
 
+    if (config()->debug_imu != new_config->debug_imu)
+        log_message("IMU debugging has been %s\n", new_config->debug_imu ? "enabled" : "disabled");
+
     if (config()->dead_zone_threshold_deg != new_config->dead_zone_threshold_deg)
         log_message("IMU dead zone threshold has been changed to %.2f degrees\n", new_config->dead_zone_threshold_deg);
 
@@ -564,7 +567,7 @@ void handle_control_flags_update() {
         if (device != NULL && device->sbs_mode_supported && control_flags->sbs_mode != SBS_CONTROL_UNSET) {
             // glasses can be sensitive to rapid mode changes, so only request a change if necessary
             bool requesting_enabled = control_flags->sbs_mode == SBS_CONTROL_ENABLE;
-            bool is_already_enabled = connection_pool_device_is_sbs_mode();
+            bool is_already_enabled = state()->sbs_mode_enabled;
             bool change_requested = is_already_enabled != requesting_enabled;
 
             if (change_requested && config()->debug_device) 

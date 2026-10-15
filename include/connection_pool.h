@@ -64,7 +64,7 @@ const device_driver_type* connection_pool_primary_driver();
 // removed connection, it will be disconnected; cleanup occurs when the thread exits.
 void connection_pool_handle_device_removed(const char* driver_id);
 
-connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, int16_t id_product);
+connection_t* connection_pool_find_hid_connection(uint16_t id_vendor, uint16_t id_product);
 connection_t* connection_pool_find_driver_connection(const char* driver_id);
 
 void connection_pool_ingest_pose(const char* driver_id, imu_pose_type pose);
