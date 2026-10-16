@@ -25,6 +25,7 @@
 #define BUFFER_SIZE_TARGET_MS 10
 
 #define RAYNEO_ID_VENDOR 0x1bbb
+#define RAYNEO_GT_ID_VENDOR 0x3941
 #define RAYNEO_ID_PRODUCT 0xaf50
 #define RAYNEO_STATIC_ID 0x5241594e
 
@@ -55,6 +56,8 @@ static const rayneo_model_mapping rayneo_model_mappings[] = {
     {0x40, "GT"},
     {0x41, "GT MAX"},
 };
+
+static uint16_t rayneo_matched_vendor_id = RAYNEO_ID_VENDOR;
 
 static const char* rayneo_unknown_model_name = "Unknown model";
 
@@ -203,7 +206,7 @@ static bool rayneo_fusion_start_locked(void) {
     rayneo_timestamp_origin_ns = 0;
 
     const imu_hid_info info = {
-        .product_id = RAYNEO_ID_PRODUCT,
+        .product_id = 0,
         .interface_number = -1,
         .path = NULL,
     };
@@ -357,7 +360,7 @@ static bool rayneo_start_context_locked(void) {
     if (rayneo_ctx != NULL) return true;
 
     if (!rayneo_command_ok(Rayneo_Create(&rayneo_ctx), "create SDK context")) return false;
-    if (!rayneo_command_ok(Rayneo_SetTargetVidPid(rayneo_ctx, RAYNEO_ID_VENDOR, RAYNEO_ID_PRODUCT),
+    if (!rayneo_command_ok(Rayneo_SetTargetVidPid(rayneo_ctx, rayneo_matched_vendor_id, RAYNEO_ID_PRODUCT),
                            "set VID/PID")) {
         Rayneo_Destroy(rayneo_ctx);
         rayneo_ctx = NULL;
@@ -430,11 +433,13 @@ void rayneo_disconnect(bool soft) {
 device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t product_id, uint8_t usb_bus, uint8_t usb_address) {
     (void)usb_bus;
     (void)usb_address;
-    if (vendor_id != RAYNEO_ID_VENDOR || product_id != RAYNEO_ID_PRODUCT) return NULL;
+    if ((vendor_id != RAYNEO_ID_VENDOR && vendor_id != RAYNEO_GT_ID_VENDOR) || product_id != RAYNEO_ID_PRODUCT) return NULL;
+    rayneo_matched_vendor_id = vendor_id;
 
     device_properties_type* device = calloc(1, sizeof(device_properties_type));
     if (device == NULL) return NULL;
     *device = rayneo_properties;
+    device->hid_vendor_id = vendor_id;
     if (rayneo_model_name == NULL) rayneo_model_name = rayneo_unknown_model_name;
 
     sleep(2);
