@@ -16,6 +16,7 @@ There are two separate OpenTrack-related components:
 - [OpenTrack listener (input)](opentrack-listener.md)
 - [6DoF with any supported 3DoF glasses + a webcam (OpenTrack + NeuralNet)](6dof-from-3dof-opentrack-neuralnet.md)
 - [Development](development.md)
+- [Managing the Nix flake](nix.md)
 
 ## Where settings live
 
