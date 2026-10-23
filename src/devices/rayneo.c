@@ -26,35 +26,38 @@
 
 #define RAYNEO_ID_VENDOR 0x1bbb
 #define RAYNEO_GT_ID_VENDOR 0x3941
+#define RAYNEO_GT_MAX_BOARD_ID 0x41
 #define RAYNEO_ID_PRODUCT 0xaf50
 #define RAYNEO_STATIC_ID 0x5241594e
 
 #define RAYNEO_DRIVER_ID "rayneo"
 
 #define RAYNEO_RAW_ACCEL_TO_G 1.0f / 9.80665f
+#define RAYNEO_DEFAULT_FOV 43.0f
 
 typedef struct {
     uint8_t board_id;
     const char* model_name;
+    float fov;
 } rayneo_model_mapping;
 
 static const rayneo_model_mapping rayneo_model_mappings[] = {
-    {0x21, "Air 1s"},
-    {0x22, "Air Plus"},
-    {0x23, "Air Plus"},
-    {0x24, "Aries 1.8"},
-    {0x29, "Aries LX"},
-    {0x30, "Air 2"},
-    {0x31, "Air 2s"},
-    {0x34, "Air 3s Pro"},
-    {0x38, "Air 3s Pro"},
-    {0x35, "Air 3s"},
-    {0x36, "Air 3"},
-    {0x37, "Air 3 Pro"},
-    {0x39, "Air 4"},
-    {0x3A, "Air 4 Pro"},
-    {0x40, "GT"},
-    {0x41, "GT MAX"},
+    {0x21, "Air 1s", RAYNEO_DEFAULT_FOV},
+    {0x22, "Air Plus", RAYNEO_DEFAULT_FOV},
+    {0x23, "Air Plus", RAYNEO_DEFAULT_FOV},
+    {0x24, "Aries 1.8", RAYNEO_DEFAULT_FOV},
+    {0x29, "Aries LX", RAYNEO_DEFAULT_FOV},
+    {0x30, "Air 2", RAYNEO_DEFAULT_FOV},
+    {0x31, "Air 2s", RAYNEO_DEFAULT_FOV},
+    {0x34, "Air 3s Pro", RAYNEO_DEFAULT_FOV},
+    {0x38, "Air 3s Pro", RAYNEO_DEFAULT_FOV},
+    {0x35, "Air 3s", RAYNEO_DEFAULT_FOV},
+    {0x36, "Air 3", RAYNEO_DEFAULT_FOV},
+    {0x37, "Air 3 Pro", RAYNEO_DEFAULT_FOV},
+    {0x39, "Air 4", RAYNEO_DEFAULT_FOV},
+    {0x3A, "Air 4 Pro", RAYNEO_DEFAULT_FOV},
+    {0x40, "GT", RAYNEO_DEFAULT_FOV},
+    {RAYNEO_GT_MAX_BOARD_ID, "GT MAX", 55.0f},
 };
 
 static uint16_t rayneo_matched_vendor_id = RAYNEO_ID_VENDOR;
@@ -70,7 +73,7 @@ const device_properties_type rayneo_properties = {
     .pitch_adjustment_degrees           = -14.0,
     .resolution_w                       = RESOLUTION_1080P_W,
     .resolution_h                       = RESOLUTION_1080P_H,
-    .fov                                = 43.0,
+    .fov                                = RAYNEO_DEFAULT_FOV,
     .lens_distance_ratio                = 0.05,
     .calibration_wait_s                 = 5,
     .imu_cycles_per_s                   = EXPECTED_CYCLES_PER_S,
@@ -119,13 +122,20 @@ static uint64_t rayneo_relative_time_ns(void) {
     return now_ns - rayneo_timestamp_origin_ns;
 }
 
-static const char* rayneo_model_from_board_id(uint8_t board_id) {
+static const rayneo_model_mapping* rayneo_mapping_from_board_id(uint8_t board_id) {
     const size_t mapping_count = sizeof(rayneo_model_mappings) / sizeof(rayneo_model_mappings[0]);
     for (size_t i = 0; i < mapping_count; i++) {
         if (rayneo_model_mappings[i].board_id == board_id) {
-            return rayneo_model_mappings[i].model_name;
+            return &rayneo_model_mappings[i];
         }
     }
+
+    return NULL;
+}
+
+static const char* rayneo_model_from_board_id(uint8_t board_id) {
+    const rayneo_model_mapping* mapping = rayneo_mapping_from_board_id(board_id);
+    if (mapping != NULL) return mapping->model_name;
 
     return rayneo_unknown_model_name;
 }
@@ -188,8 +198,11 @@ static void rayneo_fusion_event(uint64_t timestamp, device_imu_event_type event,
     if (event != DEVICE_IMU_EVENT_UPDATE || !soft_connected || driver_disabled()) return;
 
     device_imu_quat_type q = device_imu_get_orientation(ahrs);
-    // imu_quat_type nwu = {.w = q.w, .x = q.z, .y = q.y, .z = -q.x};
     imu_quat_type nwu = {.w = q.w, .x = q.y, .y = q.z, .z = q.x};
+    if (rayneo_board_id == RAYNEO_GT_MAX_BOARD_ID) {
+        // GT MAX axes relative to the default NWU mapping: x' = z, y' = y, z' = -x
+        nwu = (imu_quat_type){.w = q.w, .x = q.x, .y = q.z, .z = -q.y};
+    }
 
     imu_pose_type pose = {0};
     pose.orientation = nwu;
@@ -447,6 +460,8 @@ device_properties_type* rayneo_supported_device(uint16_t vendor_id, uint16_t pro
     if (rayneo_device_connect()) {
         rayneo_wait_for_device_info(1500);
         device->model = (char*)rayneo_model_name;
+        const rayneo_model_mapping* mapping = rayneo_mapping_from_board_id(rayneo_board_id);
+        if (mapping != NULL) device->fov = mapping->fov;
 
         if (driver_disabled()) rayneo_disconnect(true);
         return device;
