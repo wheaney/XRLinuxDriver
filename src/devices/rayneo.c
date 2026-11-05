@@ -201,7 +201,7 @@ static void rayneo_fusion_event(uint64_t timestamp, device_imu_event_type event,
     imu_quat_type nwu = {.w = q.w, .x = q.y, .y = q.z, .z = q.x};
     if (rayneo_board_id == RAYNEO_GT_MAX_BOARD_ID) {
         // GT MAX axes relative to the default NWU mapping: x' = z, y' = y, z' = -x
-        nwu = (imu_quat_type){.w = q.w, .x = q.x, .y = q.z, .z = -q.y};
+        nwu = (imu_quat_type){.w = q.w, .x = -q.z, .y = q.x, .z = -q.y};
     }
 
     imu_pose_type pose = {0};
