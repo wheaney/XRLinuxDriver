@@ -3,10 +3,16 @@
 # exit when any command fails
 set -e
 
-# Package libraries for both architectures
-ARCHITECTURES=("x86_64" "aarch64")
+# Package libraries for the architecture given by $ARCH (or the first argument).
+# If neither is set, package all architectures.
+ARCH=${ARCH:-$1}
+if [ -n "$ARCH" ]; then
+  ARCHITECTURES=("$ARCH")
+else
+  ARCHITECTURES=("x86_64" "aarch64")
+fi
 
-echo "Building lib packages for all architectures"
+echo "Building lib packages for: ${ARCHITECTURES[*]}"
 
 # build the lib package
 BUILD_PATH=build

@@ -92,7 +92,7 @@ jobs:
       
       - name: Build x86_64 lib package
         run: |
-          ./bin/package_libs
+          ARCH=x86_64 ./bin/package_libs
       
       - name: Upload x86_64 artifacts
         uses: actions/upload-artifact@v4
@@ -128,7 +128,7 @@ jobs:
       
       - name: Build aarch64 lib package
         run: |
-          ./bin/package_libs
+          ARCH=aarch64 ./bin/package_libs
       
       - name: Upload aarch64 artifacts
         uses: actions/upload-artifact@v4
