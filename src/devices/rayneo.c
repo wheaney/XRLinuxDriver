@@ -337,6 +337,8 @@ static void rayneo_event_callback(const RAYNEO_Event* evt, void* user) {
         return;
     }
     case RAYNEO_EVENT_DEVICE_INFO:
+        if (device_info_received) return;
+
         if (config()->debug_device) log_debug("RayNeo driver, device info received\n");
         pthread_mutex_lock(&device_info_mutex);
         rayneo_board_id = evt->data.info.board_id;
